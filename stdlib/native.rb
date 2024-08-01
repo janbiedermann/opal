@@ -545,7 +545,7 @@ unless Hash.method_defined? :_initialize
             value.constructor === Object ||
             value instanceof Map)) {
          $hash_put(hash, key, #{Hash.new(`value`)});
-       } else if (value && value.$$is_array) {
+       } else if (value && value instanceof Array) {
          value = value.map(function(item) {
            if (item &&
               (item.constructor === undefined ||
