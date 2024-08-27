@@ -7,8 +7,13 @@ module Opal
   module Nodes
     class CallNode
       add_special :require do |compile_default|
-        str = DependencyResolver.new(compiler, arglist.children[0]).resolve
-        compiler.track_require str unless str.nil?
+        sexp = arglist.children[0]
+        if sexp.type == :send && sexp.children[1] == :__dir__
+          compiler.track_require compiler.dir
+        else
+          str = DependencyResolver.new(compiler, sexp).resolve
+          compiler.track_require str unless str.nil?
+        end
         compile_default.call
       end
 
@@ -26,7 +31,8 @@ module Opal
 
       add_special :autoload do |compile_default|
         args = arglist.children
-        if args.length == 2 && args[0].type == :sym
+        sexp = args[0]
+        if args.length == 2 && sexp.type == :sym
           str = DependencyResolver.new(compiler, args[1], :ignore).resolve
           if str.nil?
             compiler.warning "File for autoload of constant '#{args[0].children[0]}' could not be bundled!"
@@ -34,6 +40,9 @@ module Opal
             compiler.track_require str
             compiler.autoloads << str
           end
+        elsif sexp.type == :send && sexp.children[1] == :__dir__
+          compiler.track_require compiler.dir
+          compiler.autoloads << compiler.dir
         end
         compile_default.call
       end
@@ -89,8 +98,6 @@ module Opal
                 when :dirname
                   return expand_path parts[0].split('/')[0...-1].join('/')
                 end
-              elsif meth == :__dir__
-                return File.dirname(Opal::Compiler.module_name(@compiler.file))
               end
             end
           end
