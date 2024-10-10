@@ -104,7 +104,7 @@ module Opal
             # require absolute paths from CLI. For other cases
             # we can expect the module names to be normalized
             # already.
-            line "Opal.load_normalized(#{module_name.inspect});"
+            line "Opal.queue(()=>{ Opal.load_normalized(#{module_name.inspect}) });"
           end
         elsif compiler.eval?
           line "})(Opal, self);"
