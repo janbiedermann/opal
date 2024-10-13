@@ -88,7 +88,7 @@ module Opal
 
         if compiler.requirable?
           unshift "#{async_prefix}function(Opal) {"
-        elsif compiler.eval?
+        elsif compiler.eval? || compiler.irb?
           unshift "(#{async_prefix}function(Opal, self) {"
         else
           unshift "Opal.queue(#{async_prefix}function(Opal) {"
@@ -106,7 +106,7 @@ module Opal
             # already.
             line "Opal.queue(()=>{ Opal.load_normalized(#{module_name.inspect}) });"
           end
-        elsif compiler.eval?
+        elsif compiler.eval? || compiler.irb?
           line "})(Opal, self);"
         else
           line "});\n"
