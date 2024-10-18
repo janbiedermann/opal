@@ -190,7 +190,7 @@ jobs:
       - name: set environment variables GOOGLE_CHROME_BINARY
         if: ${{ matrix.combo.edge }}
         run: |
-          echo "GOOGLE_CHROME_BINARY=\"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe\"" >> $GITHUB_ENV
+          echo "GOOGLE_CHROME_BINARY=\"C:/Program Files \(x86\)/Microsoft/Edge/Application/msedge.exe\"" >> $GITHUB_ENV
       - name: set environment variables MOZILLA_FIREFOX_BINARY
         if: ${{ matrix.combo.firefox }}
         run: |
