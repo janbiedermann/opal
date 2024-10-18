@@ -107,7 +107,8 @@ jobs:
           - name: timezone
             command: bin/rake mspec_nodejs TZ="Pacific/Fiji"
           - name: performance
-            bun: true
+            bun: '1.1.30'
+            node: latest
             permissive: true
             fetchdepth: '0'
             command: bin/rake performance:compare
