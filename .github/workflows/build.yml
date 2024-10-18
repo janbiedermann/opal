@@ -125,14 +125,17 @@ jobs:
         with:
           deno-version: ${{ matrix.combo.deno }}
       - if: ${{ matrix.combo.chrome }}
+        id: setup-chrome
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: ${{ matrix.combo.chrome }}
       - if: ${{ matrix.combo.edge }}
+        id: setup-edge
         uses: browser-actions/setup-edge@v1
         with:
           edge-version: ${{ matrix.combo.edge }}
       - if: ${{ matrix.combo.firefox }}
+        id: setup-firefox
         uses: browser-actions/setup-firefox@v1
         with:
           firefox-version: ${{ matrix.combo.firefox }}
