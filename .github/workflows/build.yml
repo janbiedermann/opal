@@ -91,6 +91,9 @@ jobs:
           - name: macos-mspec-safari
             command: bundle exec rake mspec_safari
             os: 'macos-latest'
+          - name: macos-mspec-osascript
+            command: bundle exec rake mspec_osascript
+            os: 'macos-latest'
           - name: windows-minitest
             chrome: 'stable'
             node: 'latest'
