@@ -20,14 +20,23 @@ jobs:
       fail-fast: false
       matrix:
         combo:
-          - name: mspec-nodejs
-            node: ['18.20.4', 'latest']
+          - name: mspec-nodejs-18
+            node: lts/hydrogen
             command: bin/rake mspec_nodejs
-          - name: mspec-chrome
-            chrome: ['115', 'stable']
+          - name: mspec-nodejs-latest
+            node: latest
+            command: bin/rake mspec_nodejs
+          - name: mspec-chrome-115
+            chrome: '115'
             command: bin/rake mspec_chrome
-          - name: mspec-firefox
-            firefox: ['115.16.1', 'latest']
+          - name: mspec-chrome-stable
+            chrome: stable
+            command: bin/rake mspec_chrome
+          - name: mspec-firefox-115
+            firefox: '115.16.1'
+            command: xvfb-run bin/rake mspec_firefox
+          - name: mspec-firefox-latest
+            firefox: latest
             command: xvfb-run bin/rake mspec_firefox
           - name: mspec-bun
             bun: '1.1.30'
@@ -61,18 +70,21 @@ jobs:
           # probably not enough memory
           # - name: truffleruby
           #   ruby: 'truffleruby'
-          - name: smoke-test
-            node: ['18.20.4', 'latest']
+          - name: smoke-test-node-18
+            node: '18.20.4'
             command: bin/rake smoke_test
-          - name: windows-mspec-nodejs
+          - name: smoke-test-node-latest
+            node: latest
+            command: bin/rake smoke_test
+          - name: windows-mspec-nodejs-latest
             node: 'latest'
             command: bundle exec rake mspec_nodejs
             os: windows-latest
-          - name: windows-mspec-chrome
+          - name: windows-mspec-chrome-stable
             chrome: 'stable'
             command: bundle exec rake mspec_chrome
             os: windows-latest
-          - name: windows-mspec-edge
+          - name: windows-mspec-edge-stable
             edge: 'stable'
             command: bundle exec rake mspec_chrome
             os: windows-latest
