@@ -33,7 +33,7 @@ jobs:
             chrome: stable
             command: bin/rake mspec_chrome
           - name: mspec-firefox-115
-            firefox: '115.16.1'
+            firefox: '115.16.1esr'
             command: xvfb-run bin/rake mspec_firefox
           - name: mspec-firefox
             firefox: latest
