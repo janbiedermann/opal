@@ -23,19 +23,19 @@ jobs:
           - name: mspec-nodejs-18
             node: lts/hydrogen
             command: bin/rake mspec_nodejs
-          - name: mspec-nodejs-latest
+          - name: mspec-nodejs
             node: latest
             command: bin/rake mspec_nodejs
           - name: mspec-chrome-115
             chrome: '115'
             command: bin/rake mspec_chrome
-          - name: mspec-chrome-stable
+          - name: mspec-chrome
             chrome: stable
             command: bin/rake mspec_chrome
           - name: mspec-firefox-115
             firefox: '115.16.1'
             command: xvfb-run bin/rake mspec_firefox
-          - name: mspec-firefox-latest
+          - name: mspec-firefox
             firefox: latest
             command: xvfb-run bin/rake mspec_firefox
           - name: mspec-bun
@@ -73,18 +73,18 @@ jobs:
           - name: smoke-test-node-18
             node: '18.20.4'
             command: bin/rake smoke_test
-          - name: smoke-test-node-latest
+          - name: smoke-test
             node: latest
             command: bin/rake smoke_test
-          - name: windows-mspec-nodejs-latest
+          - name: windows-mspec-nodejs
             node: 'latest'
             command: bundle exec rake mspec_nodejs
             os: windows-latest
-          - name: windows-mspec-chrome-stable
+          - name: windows-mspec-chrome
             chrome: 'stable'
             command: bundle exec rake mspec_chrome
             os: windows-latest
-          - name: windows-mspec-edge-stable
+          - name: windows-mspec-edge
             edge: 'stable'
             command: bundle exec rake mspec_chrome
             os: windows-latest
