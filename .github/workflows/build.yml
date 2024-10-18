@@ -21,21 +21,27 @@ jobs:
       matrix:
         combo:
           - name: mspec-nodejs
+            node: ['18.20.4', 'latest']
             command: bin/rake mspec_nodejs
           - name: mspec-chrome
+            chrome: ['115', 'stable']
             command: bin/rake mspec_chrome
           - name: mspec-firefox
-            firefox: '106.0.4'
+            firefox: ['115.16.1', 'latest']
             command: xvfb-run bin/rake mspec_firefox
           - name: mspec-bun
-            bun: true
+            bun: '1.1.30'
             command: bin/rake mspec_bun
           - name: mspec-deno
-            deno: true
+            deno: 'vx.x.x'
             command: bin/rake mspec_deno
           - name: minitest
+            chrome: '115'
+            node: '18.20.4'
             command: bin/rake minitest
           - name: minitest-strict-mode
+            chrome: 'stable'
+            node: 'latest'
             command: bin/rake minitest
             strict: 'true'
           # - name: head-ruby
@@ -56,21 +62,26 @@ jobs:
           # - name: truffleruby
           #   ruby: 'truffleruby'
           - name: smoke-test
+            node: ['18.20.4', 'latest']
             command: bin/rake smoke_test
           - name: windows-mspec-nodejs
+            node: 'latest'
             command: bundle exec rake mspec_nodejs
             os: windows-latest
           - name: windows-mspec-chrome
+            chrome: 'stable'
             command: bundle exec rake mspec_chrome
             os: windows-latest
-          # - name: windows-mspec-firefox
-          #   firefox: '106.0.4'
-          #   command: bundle exec rake mspec_firefox
-          #   os: windows-latest
+          - name: windows-mspec-edge
+            edge: 'stable'
+            command: bundle exec rake mspec_chrome
+            os: windows-latest
           - name: macos-mspec-safari
             command: bundle exec rake mspec_safari
             os: 'macos-latest'
           - name: windows-minitest
+            chrome: 'stable'
+            node: 'latest'
             command: bundle exec rake minitest
             os: windows-latest
           - name: windows
@@ -96,12 +107,21 @@ jobs:
       - if: ${{ matrix.combo.bun }}
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.1.30
+          bun-version: ${{ matrix.combo.bun }}
       - if: ${{ matrix.combo.deno }}
         uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ matrix.combo.deno }}
+      - if: ${{ matrix.combo.chrome }}
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: ${{ matrix.combo.chrome }}
+      - if: ${{ matrix.combo.edge }}
+        uses: browser-actions/setup-edge@v1
+        with:
+          edge-version: ${{ matrix.combo.edge }}
       - if: ${{ matrix.combo.firefox }}
-        id: setup-firefox
-        uses: browser-actions/setup-firefox@latest
+        uses: browser-actions/setup-firefox@v1
         with:
           firefox-version: ${{ matrix.combo.firefox }}
       - uses: actions/checkout@v4
@@ -142,6 +162,14 @@ jobs:
         if: ${{ matrix.combo.strict == 'true' }}
         run: |
           echo "USE_STRICT=true" >> $GITHUB_ENV
+      - name: set environment variables GOOGLE_CHROME_BINARY
+        if: ${{ matrix.combo.chrome }}
+        run: |
+          echo "GOOGLE_CHROME_BINARY=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+      - name: set environment variables GOOGLE_CHROME_BINARY
+        if: ${{ matrix.combo.edge }}
+        run: |
+          echo "GOOGLE_CHROME_BINARY=${{ steps.setup-edge.outputs.edge-path }}" >> $GITHUB_ENV
       - name: set environment variables MOZILLA_FIREFOX_BINARY
         if: ${{ matrix.combo.firefox }}
         run: |
