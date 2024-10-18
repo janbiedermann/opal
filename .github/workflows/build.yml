@@ -139,6 +139,11 @@ jobs:
         uses: browser-actions/setup-firefox@v1
         with:
           firefox-version: ${{ matrix.combo.firefox }}
+      - if: ${{ matrix.combo.node}}
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.combo.node }}
       - uses: actions/checkout@v4
         with:
           fetch-depth: ${{ fromJSON(matrix.combo.fetchdepth || '1') }}
