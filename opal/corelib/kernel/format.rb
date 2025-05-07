@@ -498,20 +498,7 @@ module ::Kernel
 
       push.(format_string, pi, t - pi)
 
-      if t >= pe # end of format_string string
-        # break
-        #
-        # Bug #2743 in Opal, because the while body gets wrapped in a function the return below
-        # does not return the method but instead the function wrapper causing another loop run.
-        # Overall just using `break` instead here should be sufficient. But due to this bug,
-        # that would lead to 'SyntaxError: Illegal break statement'.
-        # So at this moment we have to set pi to t and return the function, causing another loop
-        # that will not run because the end of format string is reached, doing the return at method end below.
-        # If the bug gets fixed, the return may actually return, so we better call sprint_exit.
-        # So for the moment, sprint exit is called twice, here and below at method end and actual return.
-        pi = t
-        return sprint_exit.()
-      end
+      break if t >= pe # end of format_string string
 
       pi = t + 1 # skip `%'
 
