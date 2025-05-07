@@ -1045,8 +1045,9 @@ module ::Kernel
     %x{
       var body = self[$jsid(name)];
 
-      if (typeof(body) === "function" && !body.$$stub) {
-        return true;
+      if (typeof(body) === "function") {
+        if (body.$$alias_of == self.$__not_implemented__) return false;
+        else if (!body.$$stub) return true;
       }
 
       if (self['$respond_to_missing?'].$$pristine === true) {
