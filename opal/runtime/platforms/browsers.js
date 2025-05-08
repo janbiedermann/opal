@@ -24,7 +24,6 @@ function get_vfs() {
     return vsvfs;
   }
 }
-
 function raise_errno(errno, error) {
     // Errno is autoloaded, to make sure it gets loaded eventually, must use const_get here
     if (Opal.Object.$const_get('Errno').$constants().indexOf(errno) >= 0) {
@@ -74,10 +73,16 @@ platform.exit = function(status) {
   }
 };
 
+// Sleep
+if ((typeof(Opal.global.Atomics) === "object") && (typeof(Opal.global.SharedArrayBuffer) === "function")) {
+  platform.sleep = platform.sleep_atomics;
+}
+
 // ARGV
 platform.argv = [];
 
-// ENV emulation
+// ENV
+// emulation
 const env = { __proto__: null };
 platform.env_keys = ()=>Object.keys(env);
 platform.env_get = (key)=>env[key.toString()];

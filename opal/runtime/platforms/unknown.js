@@ -8,10 +8,10 @@
 // 2. copy this file, name it after the platform
 // 3. make sure its required in runtime.rb
 // 4. start filling the copied file with platform support code
-// Look at the node_compatible.js driver for args and return values.
+//    look at the node_compatible.js driver for args and return values.
 //
 
-// For new platforms uncomment and user proper name
+// For new platforms uncomment and use proper name
 // if ("new platform name" === Opal.platform.name) {
 
 Opal.queue(async function() {
@@ -53,6 +53,10 @@ platform.text_decoder ||= TextDecoder;
 // Exit
 // For new platforms implement accodingly and remove the ||
 platform.exit ||= (status)=>console.log('Exited with status ' + status);
+
+
+// Sleep
+platform.sleep ||= platform.sleep_while;
 
 // ARGV
 // For new platforms implement accodingly and remove the ||
@@ -169,5 +173,5 @@ platform.dir_wd ||= ()=>'/';
 
 });
 
-// For new platform uncomment
+// For new platforms uncomment
 // }

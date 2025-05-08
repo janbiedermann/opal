@@ -95,6 +95,9 @@ if (platform.deno || Opal.platform.name == "bun") {
 // Exit
 platform.exit = process.exit;
 
+// Sleep
+platform.sleep = platform.sleep_atomics;
+
 // ARGV
 platform.argv = process.argv.slice(1)
 

@@ -136,6 +136,20 @@
   if (typeof Opal.global.TextDecoder === "undefined") Opal.global.TextDecoder = Opal.generic_text_decoder;
 
   //
+  // Sleep
+  //
+  // For modern platforms:
+  $platform.sleep_atomics = (seconds)=>{
+    return Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.round(seconds * 1000));
+  }
+  // For older platforms, or when SharedArrayBuffer has been disabled:
+  $platform.sleep_while = (seconds)=>{
+    let get_time = Opal.global.performance ? ()=>performance.now() : ()=>new Date(),
+        t = get_time();
+    while (get_time() - t <= seconds * 1000);
+  }
+
+  //
   // Console
   //
 

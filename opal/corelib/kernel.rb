@@ -20,7 +20,7 @@ module ::Kernel
     $? = ::Process::Status.new(status, pid)
 
     if `out.status == 126 || out.status == 127` ||
-      (`$platform.windows` && `out.stderr.includes("is not recognized as an internal or external command")`)
+       (`$platform.windows` && `out.stderr.includes("is not recognized as an internal or external command")`)
       # Windows sadly returns only status code 1 if the command does not exist, so we need to check stderr
       raise ::Errno::ENOENT, cmdline
     end
@@ -640,16 +640,7 @@ module ::Kernel
       if (seconds < 0) {
         #{::Kernel.raise ::ArgumentError, 'time interval must be positive'}
       }
-      if (typeof(Opal.global.Atomics) === "object") {
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.round(seconds * 1000));
-      } else {
-        var get_time = Opal.global.performance ?
-          function() {return performance.now()} :
-          function() {return new Date()}
-
-        var t = get_time();
-        while (get_time() - t <= seconds * 1000);
-      }
+      $platform.sleep(seconds);
       return Math.round(seconds);
     }
   end
@@ -727,10 +718,8 @@ module ::Kernel
     return nil if `out.error || out.status > 125`
 
     (so || $stdout).write(`out.stdout`) if `out.stdout`
-    if `out.stderr`
-      if (`$platform.windows` && se != 'NUL') || (`!$platform.windows` && se != '/dev/null')
-        (se || $stderr).write(`out.stderr`)
-      end
+    if `out.stderr` && ((`$platform.windows` && se != 'NUL') || (`!$platform.windows` && se != '/dev/null'))
+      (se || $stderr).write(`out.stderr`)
     end
 
     status == 0
@@ -884,7 +873,7 @@ module ::Kernel
       end
     end
     "#<#{self.class}:0x#{id.to_s(16)}#{ivs}>"
-  rescue => e
+  rescue
     "#<#{self.class}:0x#{id.to_s(16)}>"
   ensure
     `inspect_stack`.pop if pushed
