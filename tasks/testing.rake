@@ -39,20 +39,57 @@ module Testing
       ]
     end
 
-    def specs(env = ENV)
+    def specs(platform, env = ENV)
       suite = env['SUITE']
       pattern = env['PATTERN']
       whitelist_pattern = !!env['RUBYSPECS']
       env['OPAL_PLATFORM_NAME'] = RbConfig::CONFIG['host_os'] unless env['OPAL_PLATFORM_NAME']
 
       excepting = []
-      rubyspecs = File.read('spec/ruby_specs').lines.reject do |l|
+      rubyspecs = File.read('spec/selection/common').lines.reject do |l|
         l.strip!
-        l.start_with?('#') || l.empty? || (l.start_with?('!') && excepting.push(l.sub('!', 'spec/') + '.rb'))
+        if l.start_with?('#') || l.empty?
+          true
+        elsif l.start_with?('!')
+          path = l.sub('!', 'spec/')
+          if File.directory?(path)
+            Dir.each_child(path) do |file|
+              excepting.push(path + '/' + file)
+            end
+          else
+            excepting.push(path + '.rb')
+          end
+          true
+        end
       end.flat_map do |path|
         path = "spec/#{path}"
         File.directory?(path) ? Dir[path+'/*.rb'] : "#{path}.rb"
-      end - excepting
+      end
+
+      if File.exist?("spec/selection/#{platform}")
+        rubyspecs += File.read("spec/selection/#{platform}").lines.reject do |l|
+          l.strip!
+          if l.start_with?('#') || l.empty?
+            true
+          elsif l.start_with?('!')
+            path = l.sub('!', 'spec/')
+            if File.directory?(path)
+              Dir.each_child(path) do |file|
+                excepting.push(path + '/' + file)
+              end
+            else
+              excepting.push(path + '.rb')
+            end
+            true
+          end
+        end.flat_map do |path|
+          path = "spec/#{path}"
+          File.directory?(path) ? Dir[path+'/*.rb'] : "#{path}.rb"
+        end
+      end
+
+      rubyspecs -= excepting
+      rubyspecs.uniq! # make sure we don't execute/count too much
 
       opalspecs = Dir['spec/{opal,lib/parser}/**/*_spec.rb']
       userspecs = Dir[pattern] if pattern
@@ -325,7 +362,7 @@ platforms.each do |platform|
         'FORMATTER' => platform, # Use the current platform as the default formatter
         'BM_FILEPATH' => bm_filepath,
       }.merge(ENV.to_hash)
-      Testing::MSpec.write_file filename, Testing::MSpec.filters(suite, platform), Testing::MSpec.specs(specs_env), specs_env
+      Testing::MSpec.write_file filename, Testing::MSpec.filters(suite, platform), Testing::MSpec.specs(platform, specs_env), specs_env
 
       stubs = Testing::MSpec.stubs.map{|s| "-s#{s}"}.join(' ')
 
