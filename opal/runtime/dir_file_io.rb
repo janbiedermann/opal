@@ -8,7 +8,6 @@ module ::Opal
   # used by ::File#fnmatch and ::Dir#glob
   def self.glob_brace_expand(str, func, escape, arg)
     pi = 0
-    si = 0
     nest = 0
     lbrace = nil
     rbrace = nil
@@ -27,7 +26,6 @@ module ::Opal
     end
 
     if lbrace && rbrace
-      shift = lbrace
       pi = lbrace
       while pi < rbrace
         t = `++pi`
@@ -102,7 +100,7 @@ module ::Opal
 
   # just like in ruby/file.c
   def self.bufinit(result)
-    [0, `result.length`, 0, `result.length`]
+    [0, 0, `result.length`]
   end
 
   # just like in ruby/file.c
@@ -233,10 +231,9 @@ module ::Opal
     user = nil
     b = nil
 
-    fend = `fname.length`
     s = 0
 
-    buf, buflen, pi, pend = bufinit(result)
+    buf, pi, pend = bufinit(result)
 
     if !abs_mode && `fname[s] == '~'`
       if is_dirsep(`fname[1]`) || `!fname[1]`
@@ -261,7 +258,7 @@ module ::Opal
         raise(::ArgumentError, "non-absolute home of #{user}") if user
         raise(::ArgumentError, 'non-absolute home')
       end
-      buf, buflen, pi, pend = bufinit(result)
+      buf, pi, pend = bufinit(result)
       pi = pend
     elsif `$platform.windows` && has_drive_letter(fname)
       if is_dirsep(`fname[2]`)
@@ -289,11 +286,11 @@ module ::Opal
     elsif !(::File.absolute_path?(fname) || (`$platform.windows` && is_dirsep(`fname[0]`)))
       if dname
         result = rb_file_expand_path_internal(dname, nil, abs_mode, long_name, result)
-        buf, buflen, pi, pend = bufinit(result)
+        buf, pi, pend = bufinit(result)
         pi = pend
       else
         result, e = append_fspath(result, ::Dir.pwd)
-        buf, buflen, pi, pend = bufinit(result)
+        buf, pi, pend = bufinit(result)
         pi = e
       end
       if `$platform.windows` && is_dirsep(`fname[s]`)
@@ -316,7 +313,7 @@ module ::Opal
     else
       result += '/'
     end
-    root = skipprefix(result, pi + 1)
+    # root = skipprefix(result, pi + 1)
     b = s
     while `fname[s]`
       case `fname[s]`
