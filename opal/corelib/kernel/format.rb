@@ -17,7 +17,6 @@ module ::Kernel
     format_string = ::Opal.coerce_to!(format_string, ::String, :to_str)
     # rb_must_asciicompat(format_string)
     enc = format_string.encoding
-    orig = format_string
     # format_string = format_string.dup.freeze
     pi = -1 # p = RSTRING_PTR(format_string)
     pe = `format_string.length` # pe = pi + RSTRING_LEN(format_string)
@@ -36,7 +35,6 @@ module ::Kernel
     default_float_precision = 6
     retry_exception = ::Opal::RetryException
 
-    scanned = 0
     width = prec = nil
     flags = fnoneC
     nextarg = 1
@@ -138,7 +136,7 @@ module ::Kernel
     push = ->(s, i, e) { `result += (i > 0 || (i + e) < s.length) ? s.slice(i, i + e) : s` }
 
     # this is the label format_s1 from rb_str_format extracted as lambda
-    format_s1 = -> (prec) do
+    format_s1 = ->(prec) do
       len = `str.length`
       if enc != str.encoding
         enc = str.encoding unless enc.ascii_compatible? && str.ascii_only?
@@ -196,7 +194,7 @@ module ::Kernel
       return '.'
     end
 
-    val_str = -> (val, numdigits, numbits, base) do
+    val_str = ->(val, numdigits, numbits, base) do
       if val < 0
         if (flags & fspaceC == fspaceC) || (flags & fplusC == fplusC)
           val.abs.to_s(base)
