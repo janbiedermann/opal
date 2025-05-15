@@ -127,6 +127,18 @@ class TestIOBuffer
   # also check commented lines in RANGES in test_io_buffer.rb
 end
 
+class TestOpalError
+  if %w[deno bun].include?(::Opal.JS[:platform].JS[:name])
+    bug :test_should_get_stack
+    bug :test_should_preserve_stack
+    bug :test_should_set_stack
+  end
+end
+
+class TestOpalFile
+  bug :test_read_binary_utf8_file
+end
+
 class TestPathname
   # ::Find is missing, testing private methods, modifying Strings
   bug :test_atime

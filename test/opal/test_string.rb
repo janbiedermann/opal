@@ -1,7 +1,6 @@
 # backtick_javascript: true
 
 require 'test/unit'
-require 'nodejs'
 
 class TestString < Test::Unit::TestCase
   def test_should_get_bytes

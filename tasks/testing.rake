@@ -46,14 +46,15 @@ module Testing
       env['OPAL_PLATFORM_NAME'] = RbConfig::CONFIG['host_os'] unless env['OPAL_PLATFORM_NAME']
 
       excepting = []
-      rubyspecs = File.read('spec/selection/common').lines.reject do |l|
+
+      reject_check = ->(l) do
         l.strip!
         if l.start_with?('#') || l.empty?
           true
         elsif l.start_with?('!')
           path = l.sub('!', 'spec/')
-          if File.directory?(path)
-            Dir.each_child(path) do |file|
+          if ::File.directory?(path)
+            ::Dir.each_child(path) do |file|
               excepting.push(path + '/' + file)
             end
           else
@@ -61,6 +62,10 @@ module Testing
           end
           true
         end
+      end
+
+      rubyspecs = File.read('spec/selection/common').lines.reject do |l|
+        reject_check.(l)
       end.flat_map do |path|
         path = "spec/#{path}"
         File.directory?(path) ? Dir[path+'/*.rb'] : "#{path}.rb"
@@ -68,20 +73,7 @@ module Testing
 
       if File.exist?("spec/selection/#{platform}")
         rubyspecs += File.read("spec/selection/#{platform}").lines.reject do |l|
-          l.strip!
-          if l.start_with?('#') || l.empty?
-            true
-          elsif l.start_with?('!')
-            path = l.sub('!', 'spec/')
-            if File.directory?(path)
-              Dir.each_child(path) do |file|
-                excepting.push(path + '/' + file)
-              end
-            else
-              excepting.push(path + '.rb')
-            end
-            true
-          end
+          reject_check.(l)
         end.flat_map do |path|
           path = "spec/#{path}"
           File.directory?(path) ? Dir[path+'/*.rb'] : "#{path}.rb"
@@ -339,7 +331,6 @@ Use PATTERN environment variable to manually set the glob for specs:
 DESC
 runners = Opal::CliRunners.to_h.keys.map(&:to_s).reject { |r| r == 'compiler' }
 platforms = (%w[opalopal_nodejs] + runners).sort
-node_platforms = %w[nodejs opalopal_nodejs]
 mspec_suites = %w[ruby opal]
 minitest_suites = %w[cruby]
 
@@ -388,6 +379,7 @@ platforms.each do |platform|
       else
         includes = "-Itest/cruby/test"
         files = %w[
+          opal-parser
           corelib/string/encoding/dummy.rb
           corelib/file_test.rb
           corelib/process/tms
@@ -400,7 +392,6 @@ platforms.each do |platform|
           opal/test_openuri.rb
           opal/test_pathname.rb
           opal/test_uri.rb
-          opal/unsupported_and_bugs.rb
           opal/test_matrix.rb
           opal/promisev2/test_always.rb
           opal/promisev2/test_error.rb
@@ -409,6 +400,16 @@ platforms.each do |platform|
           opal/promisev2/test_trace.rb
           opal/promisev2/test_value.rb
           opal/promisev2/test_when.rb
+          opal/test_dir.rb
+          opal/test_env.rb
+          opal/test_error.rb
+          opal/test_file.rb
+          opal/test_file_encoding.rb
+          opal/test_opal_builder.rb
+          opal/test_string.rb
+          opal/test_await.rb
+          opal/test_yaml.rb
+          opal/unsupported_and_bugs.rb
         ]
       end
       Testing::HTTPServer.new.with_server do |session|
@@ -422,46 +423,11 @@ platforms.each do |platform|
 
         stubs = "-soptparse -sio/console -stimeout -smutex_m -srubygems -stempfile -smonitor"
         includes = "-Itest -Ilib -Ivendored-minitest #{includes}"
-
+        use_strict_opt = ENV['USE_STRICT'] ? ' --use-strict' : ''
         sh "ruby -rbundler/setup "\
-         "exe/opal #{cmdline} #{includes} #{stubs} -R#{platform} -Dwarning -A --enable-source-location #{filename}"
+         "exe/opal #{cmdline} #{includes} #{stubs} -R#{platform} -Dwarning -A --enable-source-location#{use_strict_opt} #{filename}"
       end
     end
-  end
-end
-
-node_platforms.each do |platform|
-  # The name ends with the platform, which is of course mandated in this case
-  desc "Run the Node.js Minitest suite on #{platform}"
-  task :"minitest_node_#{platform}" do
-    if platform.start_with? "opalopal_"
-      platform = platform.split('_').last
-      cmdline = opalopal_cmdline
-    end
-    files = %w[
-      nodejs
-      opal-parser
-      nodejs/test_dir.rb
-      nodejs/test_env.rb
-      nodejs/test_error.rb
-      nodejs/test_file.rb
-      nodejs/test_file_encoding.rb
-      nodejs/test_io.rb
-      nodejs/test_opal_builder.rb
-      nodejs/test_string.rb
-      nodejs/test_await.rb
-      nodejs/test_yaml.rb
-    ]
-
-    filename = "tmp/minitest_node_nodejs.rb"
-    Testing::Minitest.write_file(filename, files, ENV)
-
-    stubs = "-soptparse -sio/console -stimeout -smutex_m -srubygems -stempfile -smonitor"
-    includes = "-Itest -Ilib -Ivendored-minitest"
-
-    use_strict_opt = ENV['USE_STRICT'] ? ' --use-strict' : ''
-    sh "ruby -rbundler/setup "\
-      "exe/opal #{cmdline} #{includes} #{stubs} -R#{platform} -Dwarning -A --enable-source-location#{use_strict_opt} #{filename}"
   end
 end
 

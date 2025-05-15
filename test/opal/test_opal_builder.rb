@@ -1,13 +1,12 @@
 require 'test/unit'
-require 'nodejs'
 require 'opal-builder'
 
-class TestNodejsOpalBuilder < Test::Unit::TestCase
+class TestOpalOpalBuilder < Test::Unit::TestCase
 
   def test_should_build_simple_ruby_file
     builder = Opal::Builder.new
     builder.append_paths('.')
-    result = builder.build('test/nodejs/fixtures/hello.rb')
+    result = builder.build('test/opal/fixtures/hello.rb')
     assert(/self\.\$puts\("Hello world"\)/.match(result.to_s))
   end
 end

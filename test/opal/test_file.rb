@@ -2,16 +2,11 @@
 
 # Copied from cruby and modified to skip unsupported syntaxes
 require 'test/unit'
-require 'nodejs'
-require 'nodejs/file'
+require 'tmpdir'
 
-class TestNodejsFile < Test::Unit::TestCase
-  def tmpdir
-    `require('os').tmpdir()`
-  end
-
+class TestOpalFile < Test::Unit::TestCase
   def self.windows_platform?
-    `process.platform`.start_with?('win')
+    RUBY_PLATFORM.include?('win')
   end
 
   def test_instantiate_without_open_mode
@@ -35,7 +30,7 @@ class TestNodejsFile < Test::Unit::TestCase
   end
 
   def test_write_read
-    path = tmpdir + "/testing_nodejs_file_implementation_#{Time.now.to_i}"
+    path = Dir.tmpdir + "/testing_nodejs_file_implementation_#{Time.now.to_i}"
     contents = 'foobar'
     assert !File.exist?(path)
     File.write path, contents
@@ -49,28 +44,29 @@ class TestNodejsFile < Test::Unit::TestCase
   end
 
   def test_read_binary_image
-    assert_match(/^\u0089PNG\r\n\u001A\n\u0000\u0000\u0000\rIHDR.*/, File.open('./test/nodejs/fixtures/cat.png', 'rb') {|f| f.read })
+    assert_match(/^\u0089PNG\r\n\u001A\n\u0000\u0000\u0000\rIHDR.*/, File.open('./test/opal/fixtures/cat.png', 'rb') {|f| f.read })
   end
 
   def test_read_binary_utf8_file
-    binary_text = ::File.open('./test/nodejs/fixtures/utf8.txt', 'rb') {|f| f.read}
-    assert_equal(binary_text.encoding, Encoding::UTF_8)
-    assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
+    binary_text = ::File.open('./test/opal/fixtures/utf8.txt', 'rb') {|f| f.read}
+    assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
+    assert_match(/^\xC3\xA7\xC3\xA9\xC3\xA0/, binary_text)
+    assert_equal("çéà".bytes, binary_text.bytes)
     utf8_text = binary_text.force_encoding('utf-8')
     assert_equal("çéà", utf8_text)
   end
 
   def test_read_binary_iso88591_file
-    binary_text = ::File.open('./test/nodejs/fixtures/iso88591.txt', 'rb') {|f| f.read}
-    assert_equal(binary_text.encoding, Encoding::UTF_8)
+    binary_text = ::File.open('./test/opal/fixtures/iso88591.txt', 'rb') {|f| f.read}
+    assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
     assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
     utf8_text = binary_text.force_encoding('utf-8')
     assert_equal("çéà", utf8_text)
   end
 
   def test_read_binary_win1258_file
-    binary_text = ::File.open('./test/nodejs/fixtures/win1258.txt', 'rb') {|f| f.read}
-    assert_equal(binary_text.encoding, Encoding::UTF_8)
+    binary_text = ::File.open('./test/opal/fixtures/win1258.txt', 'rb') {|f| f.read}
+    assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
     assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
     utf8_text = binary_text.force_encoding('utf-8')
     assert_equal("çéà", utf8_text)
@@ -126,17 +122,17 @@ class TestNodejsFile < Test::Unit::TestCase
   end
 
   def test_directory_check
-    refute(File.directory?('test/nodejs/fixtures/non-existent'),          'test/nodejs/fixtures/non-existent should not be a directory')
-    assert(File.directory?('test/nodejs/fixtures/'),                      'test/nodejs/fixtures/ should be a directory')
-    assert(File.directory?('test/nodejs/fixtures'),                       'test/nodejs/fixtures should be a directory')
-    refute(File.directory?('test/nodejs/fixtures/hello.rb'),              'test/nodejs/fixtures/hello.rb should not be a directory')
+    refute(File.directory?('test/opal/fixtures/non-existent'),          'test/opal/fixtures/non-existent should not be a directory')
+    assert(File.directory?('test/opal/fixtures/'),                      'test/opal/fixtures/ should be a directory')
+    assert(File.directory?('test/opal/fixtures'),                       'test/opal/fixtures should be a directory')
+    refute(File.directory?('test/opal/fixtures/hello.rb'),              'test/opal/fixtures/hello.rb should not be a directory')
   end
 
   # Let's not ship our repo with symlinks, but create them on the go
   def with_symlinks(&block)
-    dir_symlink = 'test/nodejs/fixtures/symlink-to-directory'
-    file_symlink = 'test/nodejs/fixtures/symlink-to-file'
-    
+    dir_symlink = 'test/opal/fixtures/symlink-to-directory'
+    file_symlink = 'test/opal/fixtures/symlink-to-file'
+
     File.symlink('.', dir_symlink)
     File.symlink('hello.rb', file_symlink)
     block.call(dir_symlink, file_symlink)
@@ -154,10 +150,10 @@ class TestNodejsFile < Test::Unit::TestCase
   end unless windows_platform?
 
   def test_file_check
-    refute(File.file?('test/nodejs/fixtures/non-existent'),          'test/nodejs/fixtures/non-existent should not be a file')
-    refute(File.file?('test/nodejs/fixtures/'),                      'test/nodejs/fixtures/ should not be a file')
-    refute(File.file?('test/nodejs/fixtures'),                       'test/nodejs/fixtures should not be a file')
-    assert(File.file?('test/nodejs/fixtures/hello.rb'),              'test/nodejs/fixtures/hello.rb should be a file')
+    refute(File.file?('test/opal/fixtures/non-existent'),          'test/opal/fixtures/non-existent should not be a file')
+    refute(File.file?('test/opal/fixtures/'),                      'test/opal/fixtures/ should not be a file')
+    refute(File.file?('test/opal/fixtures'),                       'test/opal/fixtures should not be a file')
+    assert(File.file?('test/opal/fixtures/hello.rb'),              'test/opal/fixtures/hello.rb should be a file')
   end
 
   def test_file_check_with_symlinks
@@ -172,8 +168,8 @@ class TestNodejsFile < Test::Unit::TestCase
     with_symlinks do |dir_symlink, file_symlink|
       assert(File.symlink?(file_symlink))
       assert(File.symlink?(dir_symlink))
-      refute(File.symlink?('test/nodejs/fixtures'))
-      refute(File.symlink?('test/nodejs/fixtures/hello.rb'))
+      refute(File.symlink?('test/opal/fixtures'))
+      refute(File.symlink?('test/opal/fixtures/hello.rb'))
     end
   end unless windows_platform?
 

@@ -1,6 +1,5 @@
 require 'test/unit'
-require 'nodejs'
-require 'nodejs/yaml'
+require 'yaml'
 
 class TestYAML < Test::Unit::TestCase
   YAMLDOC = <<~YAML
