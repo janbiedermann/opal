@@ -21,7 +21,8 @@ module ::Errno
     [:ENAMETOOLONG, 'File name too long', 36],
     [:ENOTEMPTY, 'Directory not empty', 39],
     [:ELOOP, 'Too many symbolic links encountered', 40],
-    [:EILSEQ, 'Illegal byte sequence', 84]
+    [:EILSEQ, 'Illegal byte sequence', 84],
+    [:EOPNOTSUPP, 'Operation not supported on transport endpoint', 95]
   ]
 
   klass = nil
