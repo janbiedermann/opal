@@ -1,5 +1,3 @@
-ruby/core/argf
-
 ruby/core/array
 
 ruby/core/array/pack/a_spec
@@ -38,7 +36,6 @@ ruby/core/comparable
 
 ruby/core/complex
 !ruby/core/complex/marshal_dump_spec
-ruby/core/dir
 ruby/core/encoding
 ruby/core/enumerable
 ruby/core/enumerator
@@ -53,15 +50,10 @@ ruby/core/exception
 !ruby/core/exception/load_error_spec
 
 ruby/core/false
-ruby/core/file
-ruby/core/file/stat
-ruby/core/filetest
 
 ruby/core/float
 ruby/core/hash
 ruby/core/integer
-
-ruby/core/io
 
 ruby/core/kernel
 !ruby/core/kernel/binding_spec
@@ -70,6 +62,7 @@ ruby/core/kernel
 !ruby/core/kernel/catch_spec
 !ruby/core/kernel/chomp_spec
 !ruby/core/kernel/chop_spec
+!ruby/core/kernel/exec_spec
 !ruby/core/kernel/fork_spec
 !ruby/core/kernel/load_spec
 !ruby/core/kernel/require_relative_spec
@@ -110,12 +103,14 @@ ruby/core/proc
 
 ruby/core/process
 !ruby/core/process/_fork_spec
+!ruby/core/process/exec_spec
 !ruby/core/process/fork_spec
 !ruby/core/process/setpgid_spec
 !ruby/core/process/setpgrp_spec
 !ruby/core/process/spawn_spec
 !ruby/core/process/wait_spec
 !ruby/core/process/wait2_spec
+!ruby/core/process/waitall_spec
 
 ruby/core/range
 ruby/core/rational
@@ -154,7 +149,7 @@ ruby/core/string/unpack/z_spec
 
 ruby/core/struct
 ruby/core/symbol/to_proc_spec
-
+ruby/core/systemexit
 ruby/core/time
 !ruby/core/time/_dump_spec
 !ruby/core/time/_load_spec
@@ -188,12 +183,12 @@ ruby/library/openstruct
 !ruby/library/openstruct/marshal_load_spec
 !ruby/library/openstruct/marshal_dump_spec
 
-ruby/library/pathname
 ruby/library/matrix
 ruby/library/matrix/eigenvalue_decomposition
 ruby/library/matrix/lup_decomposition
 ruby/library/matrix/scalar
 ruby/library/matrix/vector
+ruby/library/pathname
 ruby/library/pp
 ruby/library/securerandom
 ruby/library/set
@@ -203,7 +198,5 @@ ruby/library/stringio
 ruby/library/stringscanner
 
 ruby/library/time
-
-ruby/library/tmpdir/dir
 
 ruby/library/optionparser

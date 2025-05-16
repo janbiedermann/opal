@@ -1,5 +1,5 @@
 # NOTE: run bin/format-filters after changing this file
-opal_unsupported_filter "Kernel" do
+opal_filter "Kernel" do
   fails "Kernel#exit! exits with the given status" # NotImplementedError: NotImplementedError
   fails "Kernel#exit! skips at_exit handlers" # NotImplementedError: NotImplementedError
   fails "Kernel#exit! skips ensure clauses" # NotImplementedError: NotImplementedError

@@ -384,13 +384,10 @@ platforms.each do |platform|
           corelib/file_test.rb
           corelib/process/tms
           benchmark/test_benchmark.rb
-          etc/test_etc.rb
-          opal/test_fileutils.rb
           opal/test_io_buffer.rb
           opal/test_keyword.rb
           opal/test_base64.rb
           opal/test_openuri.rb
-          opal/test_pathname.rb
           opal/test_uri.rb
           opal/test_matrix.rb
           opal/promisev2/test_always.rb
@@ -400,18 +397,29 @@ platforms.each do |platform|
           opal/promisev2/test_trace.rb
           opal/promisev2/test_value.rb
           opal/promisev2/test_when.rb
-          opal/test_dir.rb
           opal/test_env.rb
           opal/test_error.rb
-          opal/test_file.rb
-          opal/test_file_encoding.rb
-          opal/test_opal_builder.rb
           opal/test_string.rb
           opal/test_await.rb
           opal/test_yaml.rb
-          opal/unsupported_and_bugs.rb
         ]
+        node_files = %w[
+          etc/test_etc.rb
+          opal/test_dir.rb
+          opal/test_opal_builder.rb
+          opal/test_file.rb
+          opal/test_file_encoding.rb
+          opal/test_fileutils.rb
+          opal/test_pathname.rb
+        ]
+        if %w[node nodejs deno bun].include?(platform)
+          files += node_files
+        else
+          warn "Skipping for #{platform}:\n#{node_files.join("\n")}"
+        end
+        files << 'opal/unsupported_and_bugs.rb' # must be last
       end
+
       Testing::HTTPServer.new.with_server do |session|
         filename = "tmp/minitest_#{suite}_#{platform}.rb"
         if platform.start_with? "opalopal_"
