@@ -177,7 +177,9 @@ platform.io_write ||= (fd, io_buffer, buffer_offset, _pos, count)=>{
 // platform.dir_path = not_implemented;
 // platform.dir_rewind = not_implemented;
 // platform.dir_unlink = not_implemented;
-// platform.dir_wd = not_implemented;
+
+// dir_wd must be implemented
+platform.dir_wd ||= ()=>'/';
 
 });
 

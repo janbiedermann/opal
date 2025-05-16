@@ -8,7 +8,6 @@ if (["bun", "deno", "graalnodejs", "node"].includes(Opal.platform.name)) {
 Opal.queue(async function() {
 
 const platform = Opal.platform;
-const not_available = platform.not_available;
 
 // imports
 const child_process = await import("node:child_process");
@@ -16,7 +15,7 @@ const cluster = await import("node:cluster");
 const fs = await import("node:fs");
 const os = await import("node:os");
 const path = await import("node:path");
-const process = await import("node:process");
+const process = Opal.global.process;
 const url = await import("node:url");
 
 // allow access to modules from stdlib, this is node specific and only used by open-uri
@@ -194,12 +193,13 @@ platform.process_spawn = function() {
     return { status: res.exitCode, pid: res.pid, error: null, stdout: '', stderr: '' }
   }
 }
-platform.process_trap = (signal, command, block)=>{
+platform.process_trap = (signal, _command, block)=>{
   if (block == Opal.nil) block = null;
   signal = 'SIG' + signal.toString();
   let last = traps[signal];
-  traps[signal] = block || command;
-  process.on(signal, (_s)=>{ if (block) block.$call(); })
+  if (last) process.off(signal, last);
+  traps[signal] = block;
+  if (block && block != Opal.nil) process.on(signal, traps[signal]);
   return last;
 }
 
@@ -489,12 +489,13 @@ platform.file_set_umask = function(umask) {
 platform.file_link = (path_name, new_path_name)=>action(fs.linkSync, path_name.toString(), new_path_name.toString());
 platform.file_lstat = (file_name)=>action(fs.lstatSync, file_name.toString());
 platform.file_lutime = (file_name, atime, mtime)=>action(fs.lutimesSync, file_name.toString(), atime, mtime);
-platform.file_mkfifo = (file_name, mode)=>{
-  if (platform.windows) return not_available("On Windows File.mkfifo");
-  let mode_s = mode.toString(8);
-  if (mode_s.length > 3) mode_s = mode_s.slice(mode_s.length - 3);
-  let res = child_process.spawnSync('mkfifo', ['-m', mode_s, file_name.toString()]);
-  return res.status;
+if (!platform.windows) {
+  platform.file_mkfifo = (file_name, mode)=>{
+    let mode_s = mode.toString(8);
+    if (mode_s.length > 3) mode_s = mode_s.slice(mode_s.length - 3);
+    let res = child_process.spawnSync('mkfifo', ['-m', mode_s, file_name.toString()]);
+    return res.status;
+  }
 }
 platform.file_readlink = (path_name)=>action(fs.readlinkSync, path_name.toString()).replaceAll(path.sep, '/');
 platform.file_realpath = (path_name, sep)=>{
