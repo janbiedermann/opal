@@ -42,25 +42,7 @@
   //
   // Handle unsupported features
   //
-
-  // helpers to be used by drivers
-  $platform.handle_unsupported_feature = function(message) {
-    if (!message) message = "not implemented";
-    switch (Opal.config.unsupported_features_severity) {
-    case 'error':
-      Opal.Kernel.$raise(Opal.NotImplementedError, message);
-      break;
-    case 'warning':
-      console.warn(message.toString());
-      break;
-    }
-    // otherwise ignore
-  }
-
-  $platform.not_available = function(fun) {
-    $platform.handle_unsupported_feature(fun + " is not available on " + $platform.name);
-    return Opal.nil;
-  }
+  $platform.not_implemented = ()=>Opal.Kernel.$raise(Opal.NotImplementedError);
 
   //
   // TextDecoder
