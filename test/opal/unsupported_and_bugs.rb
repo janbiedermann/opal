@@ -61,7 +61,7 @@ class TestIOBuffer
 end
 
 class TestOpalError
-  if %w[deno bun].include?(::Opal.JS[:platform].JS[:name])
+  if %w[deno bun firefox safari].include?(::Opal.JS[:platform].JS[:name])
     bug :test_should_get_stack
     bug :test_should_preserve_stack
     bug :test_should_set_stack

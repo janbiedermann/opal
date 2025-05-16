@@ -6,7 +6,7 @@ require 'tmpdir'
 
 class TestOpalFile < Test::Unit::TestCase
   def self.windows_platform?
-    RUBY_PLATFORM.include?('win')
+    RUBY_PLATFORM.include?('win') && !RUBY_PLATFORM.include?('darwin')
   end
 
   def test_instantiate_without_open_mode
