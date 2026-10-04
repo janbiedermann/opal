@@ -17,6 +17,8 @@ const compilerFiles = [
   "lib/opal/compiler/**/*.mjs",
   "spec/lib/compiler/**/*.mjs",
   "tasks/compiler/**/*.mjs",
+  "tasks/dist.mjs",
+  "tasks/testing/**/*.mjs",
 ];
 
 export default [

@@ -482,9 +482,17 @@ CLI changes:
   the self-hosted JS compiler replaces it. `stdlib/nodejs/opal-paths.rb.erb`
   (its gem paths) is gone.
 
+* Specs: `spec/lib/compiler/builder.test.mjs` and `cli.test.mjs` port the
+  builder, processor, path reader, project, post-processor, DCE, CLI,
+  runner, server and REPL RSpec specs (`bin/rake compiler`: 245 specs).
+  The builder takes `postProcessors` (functions `(processed, builder) =>
+  processed`; DCE by default) as the counterpart of
+  `Builder::PostProcessor`.
+
 Remaining:
-* The browser runners are ported but untested here (no browser installed).
-* Port the builder/CLI RSpec specs to `spec/lib/compiler/**/*.test.mjs`.
+* The browser runners are ported but untested: no browser here, and Chrome
+  for Testing needs system libraries (atk, at-spi, libX*, mesa-libgbm,
+  libxkbcommon, alsa-lib).
 * opal-builder bundles the compiler twice (once for opal-parser, once in the
   builder's module graph).
 
