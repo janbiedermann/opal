@@ -6,9 +6,10 @@ compiler built on **potch**, a pure-JS port of Prism 1.9.0. The result is an
 Opal that parses and compiles in Node.js or the browser only, builds itself,
 and accepts Ruby 4.0 syntax.
 
-Status: **phase 1 done**; **phase 2 in progress**: the JS compiler covers
-everything the Ruby compiler does and passes Opal's test suites through
-the temporary bridge (see "Phase 2 progress" below). The performance
+Status: **phases 1 and 2 done**: the JS compiler covers everything the
+Ruby compiler does, compiles 99.4 % of a 12,753-file corpus to identical
+output and passes all Node.js test suites through the temporary bridge
+(see "Phase 2 results" below). Phase 3 (JS builder and CLI) is next. The performance
 baseline has been collected in [`BASELINE.md`](BASELINE.md); section 8
 summarises it.
 
@@ -324,7 +325,7 @@ other syntax change gets a spec.
 * The compiler specs and the Ruby 4.0 specs pass.
 * Compiler throughput meets the targets in section 8.
 
-#### Phase 2 progress
+#### Phase 2 results
 
 **How it was built.** The code generators are ports of `lib/opal/nodes/*`
 working on Prism nodes. Where the Ruby compiler depends on the parser gem's
@@ -343,10 +344,15 @@ multi-line literals.
 * `tasks/compiler/compare.mjs` compiles files with both compilers and
   compares the output; `spec/lib/fixtures/compiler` (59 fixtures) keeps
   the Ruby compiler's output as expected results for `bin/rake compiler`.
-* Output comparison over 12,752 files (`lib`, `spec/opal`, `test/opal`,
-  `spec/ruby`, `test/cruby`, `benchmark`, `examples`): 97.5 % identical
-  before the last round of fixes; opal/ and stdlib/ (201 files) are 100 %
-  identical.
+* Output comparison over 12,753 files (`lib`, `spec/opal`, `test/opal`,
+  `spec/ruby`, `test/cruby`, `benchmark`, `examples`): 99.4 % identical
+  (12,665+), the JS compiler fails on none; opal/ and stdlib/ (201 files)
+  are 100 % identical. The rest are the intended differences below, Ruby
+  compiler bugs (e.g. broken JS for `redo` in a `for` loop), sources in
+  non-UTF-8 encodings, and a few exotic tool files.
+* `spec/lib/compiler`: 153 specs, including the port of
+  `spec/lib/compiler_spec.rb` and the source-to-source examples of the
+  rewriter specs.
 * The temporary bridge (`OPAL_JS_COMPILER=1`, `lib/opal/js_compiler_bridge.rb`
   + `tasks/compiler/bridge_server.mjs`) lets the Ruby builder compile with
   the JS compiler. All Node.js suites pass with the same results as with
@@ -365,7 +371,8 @@ multi-line literals.
 
 **Intended differences from the Ruby compiler**
 * `it` (Ruby 3.4) is the implicit block parameter; the Ruby compiler made
-  it a method call.
+  it a method call. `**nil` passes no keywords and `def m(a = a)`
+  defaults `a` to nil (Ruby 3.4).
 * `_1` outside a block is a method call (NameError at runtime), not a
   bare JS variable.
 * Code the parser gem accepted but Ruby rejects (e.g. a variable capture
