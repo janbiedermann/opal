@@ -1,0 +1,5 @@
+foo(*a)
+foo(1, *a, 2, *b)
+foo(&b)
+foo(1, &b)
+a.b(*c, &d)

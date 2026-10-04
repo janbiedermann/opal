@@ -34,4 +34,4 @@ RuboCop::RakeTask.new('lint:rubocop') do |task|
   task.options << '--parallel'
 end
 
-task :lint => %w[lint:eslint lint:potch lint:rubocop]
+task :lint => %w[lint:eslint lint:potch lint:compiler lint:rubocop]

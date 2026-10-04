@@ -9,5 +9,6 @@ import 'tasks/benchmarking.rake'
 import 'tasks/releasing.rake'
 import 'tasks/performance.rake'
 import 'tasks/potch.rake'
+import 'tasks/compiler.rake'
 
-task :default => [:rspec, :potch, :mspec, :minitest]
+task :default => [:rspec, :potch, :compiler, :mspec, :minitest]

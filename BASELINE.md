@@ -9,7 +9,7 @@ it.
 
 * **Machine:** Linux x86_64, 16 cores
 * **Software:** ruby 3.3.12, node v22.23.2, parser gem 3.3.10.1
-* **Opal:** branch `grinding_potch`, at `master` (`f6a715668`)
+* **Opal:** branch `grinding_potch`, at `master` (`abf15821c`)
 * **Corpus:** potch's benchmark samples, generated exactly as
   `potch/bench/run.mjs` builds them:
   * `s0`–`s5`: real files from Prism's own `lib/prism/**`
