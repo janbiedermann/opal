@@ -482,6 +482,9 @@ CLI changes:
   the self-hosted JS compiler replaces it. `stdlib/nodejs/opal-paths.rb.erb`
   (its gem paths) is gone.
 
+* Browser runners: on Chrome 154 (headless shell) and Firefox ESR 128,
+  mspec_opal 684 examples, mspec_ruby 16,292 and minitest_cruby 208 runs
+  pass with 0 failures and 0 errors.
 * Specs: `spec/lib/compiler/builder.test.mjs` and `cli.test.mjs` port the
   builder, processor, path reader, project, post-processor, DCE, CLI,
   runner, server and REPL RSpec specs (`bin/rake compiler`: 245 specs).
@@ -490,9 +493,10 @@ CLI changes:
   `Builder::PostProcessor`.
 
 Remaining:
-* The browser runners are ported but untested: no browser here, and Chrome
-  for Testing needs system libraries (atk, at-spi, libX*, mesa-libgbm,
-  libxkbcommon, alsa-lib).
+* Safari and the applescript runner are untested (macOS only).
+* The Firefox runner talks CDP, which Firefox removed in version 129 (only
+  WebDriver BiDi remains); it works with Firefox ESR 128. Moving it to
+  BiDi is a separate task (the Ruby runner had the same limitation).
 * opal-builder bundles the compiler twice (once for opal-parser, once in the
   builder's module graph).
 

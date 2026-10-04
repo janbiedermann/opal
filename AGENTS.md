@@ -54,6 +54,14 @@ codebase healthy.
 - `exe/opal` (and `bin/opal`) is the Node.js CLI on the JS compiler
   (`lib/opal/compiler/cli`); the Ruby CLI is `bin/opal-rb` until the Ruby
   compiler is removed (POTCH.md). The test tasks use `exe/opal`.
+- Browser runners without a system browser: download one with
+  `npx @puppeteer/browsers install chrome-headless-shell@stable` (or
+  `firefox@esr_128.14.0esr`) and point `GOOGLE_CHROME_BINARY` /
+  `MOZILLA_FIREFOX_BINARY` at it. As root, Chrome needs
+  `CHROME_OPTS=--no-sandbox`. Firefox 129+ dropped CDP, which the Firefox
+  runner uses, so use ESR 128. On a minimal EL10 system the browsers need
+  `dnf install atk at-spi2-atk at-spi2-core libXcomposite libXdamage
+  libXfixes libXrandr mesa-libgbm libxkbcommon alsa-lib gtk3 libXcursor`.
 - `node --test` on Node 22 does not accept a directory; pass the files
   (`node --test spec/lib/potch/*.test.mjs`).
 - If an agent discovers information that required significant setup time, condense

@@ -404,3 +404,18 @@ describe("DCE", () => {
     assert.ok(!output.includes("Removed by DCE: bar"));
   });
 });
+
+describe("source maps", () => {
+  test("data URI comments work without Buffer (browsers)", async () => {
+    const { base64Utf8 } = await import("../../../lib/opal/compiler/source_map/vlq.mjs");
+    const text = "puts 'こんにちは' # ✓".repeat(5000);
+    const expected = Buffer.from(text, "utf8").toString("base64");
+    const saved = globalThis.Buffer;
+    try {
+      delete globalThis.Buffer;
+      assert.equal(base64Utf8(text), expected);
+    } finally {
+      globalThis.Buffer = saved;
+    }
+  });
+});
