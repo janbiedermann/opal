@@ -1,0 +1,137 @@
+[
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "a = 1; a += 2",
+    "to": "a = 1; a = a + 2"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "@a += 1",
+    "to": "@a = @a + 1"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "CONST += 1",
+    "to": "CONST = CONST + 1"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "$g += 1",
+    "to": "$g = $g + 1"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "@@a += 1",
+    "to": "@@a = @@a + 1"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr.meth += rhs",
+    "to": "recvr = 1; recvr.meth = recvr.meth + rhs"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr[idx] += rhs",
+    "to": "recvr = 1; recvr[idx] = recvr[idx] + rhs"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr[idx1, idx2] += rhs",
+    "to": "recvr = 1; recvr[idx1, idx2] = recvr[idx1, idx2] + rhs"
+  },
+  {
+    "file": "binary_operator_assignment_spec.rb",
+    "from": "a = nil; defined?(a += 1)",
+    "to": "a = nil; \"assignment\""
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "a = local; a ||= 1",
+    "to": "a = local; a = a || 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "a = local; a &&= 1",
+    "to": "a = local; a = a && 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "@a ||= 1",
+    "to": "@a = @a || 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "@a &&= 1",
+    "to": "@a = @a && 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "CONST ||= 1",
+    "to": "CONST = defined?(CONST) ? (CONST || 1) : 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "CONST &&= 1",
+    "to": "CONST = CONST && 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "$g ||= 1",
+    "to": "$g = $g || 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "$g &&= 1",
+    "to": "$g = $g && 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "@@a ||= 1",
+    "to": "@@a = defined?(@@a) ? (@@a || 1) : 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "@@a &&= 1",
+    "to": "@@a = @@a && 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr.meth ||= rhs",
+    "to": "recvr = 1; recvr.meth || recvr.meth = rhs"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr.meth &&= rhs",
+    "to": "recvr = 1; recvr.meth && recvr.meth = rhs"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr[idx] ||= rhs",
+    "to": "recvr = 1; recvr[idx] || recvr[idx] = rhs"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr[idx] &&= rhs",
+    "to": "recvr = 1; recvr[idx] && recvr[idx] = rhs"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr[idx1, idx2] ||= rhs",
+    "to": "recvr = 1; recvr[idx1, idx2] || recvr[idx1, idx2] = rhs"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "recvr = 1; recvr[idx1, idx2] &&= rhs",
+    "to": "recvr = 1; recvr[idx1, idx2] && recvr[idx1, idx2] = rhs"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "a = nil; defined?(a ||= 1)",
+    "to": "a = nil; \"assignment\""
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "a = nil; defined?(a &&= 1)",
+    "to": "a = nil; \"assignment\""
+  }
+]
