@@ -87,7 +87,7 @@ ASCIIDOCTOR_PREPARE = OS.bash_c(
   "popd"
 )
 
-ASCIIDOCTOR_BUILD_OPAL = "#{'ruby ' if Gem.win_platform?}bin/opal --no-cache -c " \
+ASCIIDOCTOR_BUILD_OPAL = "#{'node ' if Gem.win_platform?}bin/opal --no-cache -c " \
                          "-Itmp/performance/asciidoctor/lib " \
                          "-Itmp/performance/asciidoctor.js/packages/core/lib " \
                          "-sconcurrent/map -sslim/include " \
@@ -99,7 +99,7 @@ ASCIIDOCTOR_RUN_OPAL = { node: "node tmp/performance/asciidoctor_test.js",
 
 # Generate V8 function optimization status report for corelib methods
 NODE_OPTSTATUS = if Gem.win_platform?
-  "set NODE_OPTS=--allow-natives-syntax && ruby bin/opal tasks/performance/optimization_status.rb"
+  "set NODE_OPTS=--allow-natives-syntax && node bin/opal tasks/performance/optimization_status.rb"
 else
   "env NODE_OPTS=--allow-natives-syntax bin/opal tasks/performance/optimization_status.rb"
 end

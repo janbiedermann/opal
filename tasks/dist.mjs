@@ -17,9 +17,11 @@ const files = process.env.FILES
 const formats = (process.env.FORMATS || "js,min,gz").split(",");
 const width = Math.max(...files.map((f) => f.length));
 
-// terser from node_modules (Opal::Util.uglify)
+// terser from node_modules (Opal::Util.uglify; needs `bin/yarn install`)
+const TERSER = join(OPAL_ROOT, "node_modules", "terser", "bin", "terser");
+
 function uglify(source) {
-  const result = spawnSync("bin/yarn", ["--silent", "run", "terser", "-c"], { cwd: OPAL_ROOT, input: source, maxBuffer: 1 << 30 });
+  const result = spawnSync(process.execPath, [TERSER, "-c"], { cwd: OPAL_ROOT, input: source, maxBuffer: 1 << 30 });
   if (result.status !== 0) throw new Error(`terser exited with status ${result.status}: ${result.stderr}`);
   return result.stdout.toString();
 }

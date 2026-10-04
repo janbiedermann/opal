@@ -18,6 +18,7 @@ const compilerFiles = [
   "spec/lib/compiler/**/*.mjs",
   "tasks/compiler/**/*.mjs",
   "tasks/dist.mjs",
+  "tasks/test.mjs",
   "tasks/testing/**/*.mjs",
 ];
 
