@@ -2,7 +2,7 @@
 // Compares the JS compiler (lib/opal/compiler) with the Ruby compiler
 // (lib/opal/compiler.rb) while both exist (POTCH.md, phase 2).
 //
-//   node tasks/compiler/compare.mjs [--diff[=N]] [--list] [--options=JSON] <file|dir>...
+//   node tasks/compiler/compare.mjs [--diff[=N]] [--list] [--write=DIR] [--options=JSON] <file|dir>...
 //   node tasks/compiler/compare.mjs [--diff] -e 'ruby code'
 //   node tasks/compiler/compare.mjs --update-fixtures [<fixture dir>...]
 //
@@ -10,7 +10,9 @@
 // relative to the load path they were found in (opal/, stdlib/, lib/, or
 // the directory given). The report counts identical outputs, differing
 // outputs and failures of either compiler. --diff prints the first N
-// differences as line diffs; --list prints the file names per category.
+// differences as line diffs; --list prints the file names per category;
+// --write saves both outputs of each differing file to DIR (as
+// <name>.ruby.js and <name>.js.js) for a full diff.
 //
 // --update-fixtures regenerates the expected outputs of the compiler
 // fixtures (spec/lib/fixtures/compiler/**/*.rb -> *.js) with the Ruby
@@ -21,7 +23,7 @@
 // whose JS output matches it are reported as "intended".
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
 import { join, relative, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Compiler } from "../../lib/opal/compiler/index.mjs";
@@ -172,6 +174,13 @@ async function main() {
     else if (ruby.code === js.code) category = "identical";
     else category = input.intended != null && input.intended === js.code ? "intended" : "different";
     categories[category].push(input.name);
+
+    if (flags.write && category === "different") {
+      const base = join(flags.write, input.name.replaceAll("/", "__"));
+      mkdirSync(flags.write, { recursive: true });
+      writeFileSync(`${base}.ruby.js`, ruby.code);
+      writeFileSync(`${base}.js.js`, js.code);
+    }
 
     if (diffLimit && diffs < diffLimit && category !== "identical" && category !== "intended") {
       diffs++;

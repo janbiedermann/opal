@@ -22,6 +22,11 @@ $stdin.each_line do |line|
   request = JSON.parse(line)
   options = request.fetch('options', {}).to_h { |k, v| [k.to_sym, v] }
   options[:dynamic_require_severity] = options[:dynamic_require_severity].to_sym if options[:dynamic_require_severity]
+  # Per-process temp counters ($logical_op_recvr_tmp_N, ...) restart for
+  # every file, as when compiling each file in a fresh process.
+  Opal::Rewriters::LogicalOperatorAssignment.reset_tmp_counter!
+  Opal::Rewriters::BinaryOperatorAssignment.reset_tmp_counter!
+  Opal::Rewriters::ForRewriter.reset_tmp_counter!
   begin
     old_stderr = $stderr
     $stderr = StringIO.new
