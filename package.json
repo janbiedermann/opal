@@ -8,6 +8,7 @@
     "terser": "^5.31.6"
   },
   "devDependencies": {
+    "@ruby/prism": "^1.9.0",
     "eslint": "^9.10.0"
   },
   "repository": {

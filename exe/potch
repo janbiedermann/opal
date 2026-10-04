@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+// potch: parse Ruby source with Opal's built-in parser and print a JSON envelope.
+// See lib/opal/potch/cli.mjs for usage.
+import("../lib/opal/potch/cli.mjs");

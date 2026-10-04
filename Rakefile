@@ -8,5 +8,6 @@ import 'tasks/linting.rake'
 import 'tasks/benchmarking.rake'
 import 'tasks/releasing.rake'
 import 'tasks/performance.rake'
+import 'tasks/potch.rake'
 
-task :default => [:rspec, :mspec, :minitest]
+task :default => [:rspec, :potch, :mspec, :minitest]

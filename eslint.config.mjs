@@ -1,9 +1,21 @@
 import globals from "globals";
 import js from "@eslint/js";
 
+// ES modules of the potch parser and the JS compiler (see POTCH.md). The parts
+// in lib/opal/potch/parts/ are import-less fragments assembled into potch.mjs,
+// so only potch's own style rules apply there.
+const potchFiles = [
+  "lib/opal/potch/**/*.mjs",
+  "spec/lib/potch/**/*.mjs",
+  "tasks/potch/**/*.mjs",
+  "benchmark/potch/**/*.mjs",
+  "exe/potch",
+];
+
 export default [
-  js.configs.recommended,
+  { files: ["**/*.js"], ...js.configs.recommended },
   {
+    files: ["**/*.js"],
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: "commonjs",
@@ -40,5 +52,20 @@ export default [
       "no-regex-spaces": "off",
       "no-control-regex": "off",
     },
-  }
+  },
+  {
+    files: potchFiles,
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+          ...globals.node,
+      },
+    },
+
+    rules: {
+      semi: "error",
+      "prefer-const": "error",
+    },
+  },
 ];
