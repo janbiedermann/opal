@@ -2,10 +2,8 @@ add_load_path "opal"
 add_load_path "stdlib"
 add_load_path "lib"
 
-if RUBY_ENGINE == 'opal'
-  # opalopal with Node has no support for gems, but we can avoid the issue
-  add_load_path(*Opal::GEM_DEPENDENCY_PATHS) if defined? Opal::GEM_DEPENDENCY_PATHS
-else
+# The Ruby compiler's dependencies (until it is removed, see POTCH.md)
+unless RUBY_ENGINE == 'opal'
   add_gem_dependency "ast"
   add_gem_dependency "parser"
 end

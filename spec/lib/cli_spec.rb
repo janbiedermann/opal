@@ -275,7 +275,7 @@ RSpec.describe Opal::CLI do
     it 'runs the provided source' do
       output, = Open3.capture2(
         RbConfig.ruby,
-        'bin/opal',
+        'bin/opal-rb',
         '--no-source-map',
         '-ropal/platform',
         '-e',
@@ -289,7 +289,7 @@ RSpec.describe Opal::CLI do
     it 'compiles the provided source' do
       output, = Open3.capture2(
         RbConfig.ruby,
-        'bin/opal',
+        'bin/opal-rb',
         '--no-source-map',
         '-c',
         '-E',

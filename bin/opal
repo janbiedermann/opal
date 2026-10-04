@@ -1,4 +1,5 @@
-#!/usr/bin/env ruby
-
-require 'bundler/setup'
-load "#{__dir__}/../exe/opal"
+#!/usr/bin/env node
+// Development wrapper for exe/opal.
+import("../lib/opal/compiler/cli/cli.mjs")
+  .then((cli) => cli.main(process.argv.slice(2)))
+  .then((status) => { process.exitCode = status; });

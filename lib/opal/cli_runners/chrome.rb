@@ -47,7 +47,7 @@ module Opal
 
             cmd = [
               RbConfig.ruby,
-              "#{__dir__}/../../../exe/opal",
+              "#{__dir__}/../../../bin/opal-rb",
               '--no-exit',
               '-I', __dir__,
               '-r', 'source-map-support-node',

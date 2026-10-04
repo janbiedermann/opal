@@ -1,77 +1,42 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env node
+// opal-build: build a library with its dependencies (e.g. for preloading).
+//
+// Usage: opal-build [options] -- [libname]
+//   -s, --stub STUB        compile STUB as an empty file
+//   -r, --require LIBRARY  build LIBRARY too (accepted for compatibility)
+//   -o, --output FILE      write the built lib to FILE (defaults to STDOUT)
+//   -I, --include DIR      append a load path
+import("../lib/opal/compiler/builder/builder.mjs").then(({ Builder }) => {
+  const usage = "Usage: opal-build [options] -- [libname]\n\n" +
+    "Options:\n" +
+    "    -h, --help                       Show this message\n" +
+    "    -s, --stub STUB\n" +
+    "    -r, --require LIBRARY            Build the library before your lib\n" +
+    "    -o, --output FILE                Write the built lib to a file (defaults to STDOUT)\n" +
+    "    -I, --include DIR                Append a load path\n";
+  const args = process.argv.slice(2);
+  const options = { stubs: [], requires: [], paths: [], output: null };
+  const libs = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    const value = () => (a.length > 2 && !a.startsWith("--") ? a.slice(2) : args[++i]);
+    if (a === "--") libs.push(...args.slice(i + 1)), (i = args.length);
+    else if (a === "-h" || a === "--help") return process.stdout.write(usage);
+    else if (a.startsWith("-s") || a === "--stub") options.stubs.push(value());
+    else if (a.startsWith("-r") || a === "--require") options.requires.push(value());
+    else if (a.startsWith("-o") || a === "--output") options.output = value();
+    else if (a.startsWith("-I") || a === "--include") options.paths.push(value());
+    else if (a.startsWith("-g") || a === "--gem") process.stderr.write(`opal-build: gems are not available in Node.js; --gem ${value()} ignored\n`);
+    else libs.push(a);
+  }
+  if (libs.length === 0) return process.stdout.write(usage);
 
-require 'optparse'
-
-module Opal
-  class BuilderOptions < OptionParser
-    def initialize
-      @options = {}
-
-      super do |opts|
-        opts.banner = 'Usage: opal-build [options] -- [libname]'
-
-        opts.separator ''
-        opts.separator 'Options:'
-
-        opts.on("-h", "--help", "Show this message") do
-          puts opts
-          exit
-        end
-
-        opts.on('-g', '--gem GEM_NAME', String,
-                'Adds the specified GEM_NAME lib dir to Opal\'s load path.',
-                'E.g.: opal-build --gem erubis -- erubis`',
-                'Will build erubis.rb from the regular "erubis" gem') do |g|
-          options[:gems] ||= []
-          options[:gems] << g
-        end
-
-        opts.on('-s', '--stub STUB', String) do |stub|
-          options[:stubs] ||= []
-          options[:stubs] << stub
-        end
-
-        opts.on('-r', '--require LIBRARY', String,
-                'Require the library before executing your script',
-                'E.g.: opal-build --require opal-browser browser`',
-                'Will build browser.rb from the Opal gem opal-browser') do |library|
-          options[:requires] ||= []
-          options[:requires] << library
-        end
-
-        opts.on('-o', '--output FILE', String,
-                'Write the built lib to a file (defaults to STDOUT)') do |file|
-          options[:output] = file
-        end
-      end
-    end
-
-    attr_reader :options
-  end
-end
-
-option_parser = Opal::BuilderOptions.new
-option_parser.parse!
-
-if ARGV.empty?
-  puts option_parser
-else
-  require 'opal'
-  options = option_parser.options
-
-  if options[:gems]
-    require 'rubygems'
-    options[:gems].each { |gem_name| Opal.use_gem gem_name }
-  end
-
-  if options[:requires]
-    options[:requires].each { |required_lib| require required_lib }
-  end
-
-  lib_name = ARGV.first
-
-  output = options[:output] ? File.open(options[:output], 'w') : $stdout
-  output.puts Opal::Builder.build(lib_name.dup)
-end
-
-
+  const builder = new Builder({ stubs: options.stubs });
+  builder.appendPaths(...options.paths);
+  for (const r of options.requires) builder.build(r);
+  builder.build(libs[0]);
+  let code = builder.toString();
+  if (!code.endsWith("\n")) code += "\n";
+  if (options.output) require("node:fs").writeFileSync(options.output, code);
+  else process.stdout.write(code);
+});

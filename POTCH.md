@@ -407,6 +407,15 @@ a `.potch.js` fixture):
      resolution, `Opalfile`/`Project`, the cache, the DCE post-processor and
      the ESM/CJS output modes.
    * `Opalfile` loses `add_gem_dependency` (no gems).
+   * Decided: the builder is single-threaded (with a file cache) for now.
+   * **TODO:** a forking builder, the counterpart of the Ruby builder's
+     prefork scheduler: compile files in parallel with `worker_threads` (or
+     child processes), keeping the output order deterministic as the
+     scheduler's OrderCorrector does.
+   * **TODO:** the `.rb.erb` and `.js.erb` processors are dropped: they run
+     arbitrary Ruby through Ruby's ERB at build time, which a Node-only
+     toolchain can't do. Revisit later, e.g. by evaluating the templates
+     through Opal in Node. `.opalerb` is unaffected.
 2. Port to `lib/opal/compiler/cli/`:
    * the CLI and its options
    * runners: Node first; then the browser runners (Chrome/Firefox/Safari/
@@ -428,6 +437,56 @@ a `.potch.js` fixture):
   `minitest_nodejs` green.
 * The browser runners pass the same suites as today.
 * `opal-parser` `eval` works in Node and Chrome.
+
+#### Phase 3 progress
+
+Done:
+* **Builder** (`lib/opal/compiler/builder/`): path reader and file finder,
+  processors (`.rb`, `.opal`, `.js`, `.mjs`, `.opalerb`), `require`/
+  `require_tree`/`autoload` resolution, projects and the Opalfile, a file
+  cache (`~/.cache/opal-js`, `OPAL_CACHE_DIR`), DCE and the directory output
+  mode. Its output, source maps and DCE results included, is byte-identical
+  to the Ruby builder's.
+* **ESM linker** (`builder/esm_linker.mjs`): `.mjs` files with import/export
+  statements are linked with their imports into one script whose exports go
+  to `Opal.esm[name]`. It needs an import graph without cycles (the
+  compiler had one, now removed).
+* **CLI** (`lib/opal/compiler/cli/`): all options, the runners (nodejs,
+  compiler with `--watch`, server, deno, bun, quickjs, gjs, chrome, firefox,
+  safari, applescript), `--compile-to-exe`, `--sexp` (prints the Prism
+  tree), `--debug-source-map` and the REPL. `exe/opal`, `exe/opal-repl`,
+  `exe/opal-build` and `bin/opal` are Node scripts; the Ruby CLI remains as
+  `bin/opal-rb` until phase 5.
+* **opal-parser** keeps its Ruby API (`Opal::Compiler`, `Kernel#eval`,
+  `Opal.compile`, `Opal.eval`, `require_remote`, `text/ruby` scripts,
+  `Opal::ERB`) on top of the linked JS compiler; **opal-builder** wraps the
+  JS builder (Node.js only).
+* `bin/rake dist` (`tasks/dist.mjs`) builds corelib and stdlib with the JS
+  builder.
+* The test tasks run `exe/opal` with no Ruby compiler involved:
+  mspec_opal_nodejs 684 examples, mspec_ruby_nodejs 14,612, minitest_cruby_
+  nodejs 208 runs (29 skips), minitest_node_nodejs 80 runs, all with 0
+  failures. Seven ruby/spec examples that expect pre-3.4 parser behaviour
+  (circular argument references, parse.y messages) are filtered in
+  `spec/filters/unsupported/ruby40.rb`.
+
+CLI changes:
+* `-q` is now `--plugin MODULE`: a JS module imported before compiling,
+  whose default export gets the CLI (the test tasks use
+  `tasks/testing/mspec_special_calls.mjs` to set the rubyspec filters).
+  Ruby-context requires (`--rbrequire`) don't exist anymore.
+* `--gem` is ignored with a warning (no gems in Node.js); the Opalfile's
+  `add_gem_dependency` likewise.
+* The miniracer runner (a Ruby gem) is gone.
+* opalopal (the Ruby CLI compiled with Opal) and its test tasks are removed;
+  the self-hosted JS compiler replaces it. `stdlib/nodejs/opal-paths.rb.erb`
+  (its gem paths) is gone.
+
+Remaining:
+* The browser runners are ported but untested here (no browser installed).
+* Port the builder/CLI RSpec specs to `spec/lib/compiler/**/*.test.mjs`.
+* opal-builder bundles the compiler twice (once for opal-parser, once in the
+  builder's module graph).
 
 ### Phase 4: Self-bootstrap
 

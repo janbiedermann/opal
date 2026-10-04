@@ -298,23 +298,18 @@ Use PATTERN environment variable to manually set the glob for specs:
   bundle exec rake mspec_nodejs PATTERN=spec/ruby/core/numeric/**_spec.rb
 DESC
 runners = Opal::CliRunners.to_h.keys.map(&:to_s).reject { |r| r == 'compiler' }
-platforms = (%w[opalopal_nodejs] + runners).sort
-node_platforms = %w[nodejs opalopal_nodejs]
+platforms = runners.sort
+node_platforms = %w[nodejs]
 mspec_suites = %w[ruby opal]
 minitest_suites = %w[cruby]
 
 require 'opal/paths'
-opalopal_cmdline = "-sreadline -rnodejs -rcorelib/string/unpack -popal/cli_runners/nodejs exe/opal -- #{Opal.paths.map{|i| "-I#{i}"}.join(" ")} --no-source-map "
 
 platforms.each do |platform|
   mspec_suites.each do |suite|
     desc "Run the MSpec test suite on Opal::Builder/#{platform}" + pattern_usage
     task :"mspec_#{suite}_#{platform}" do
       filename = "tmp/mspec_#{platform}.rb"
-      if platform.start_with? "opalopal_"
-        platform = platform.split('_').last
-        cmdline = opalopal_cmdline
-      end
       mkdir_p File.dirname(filename)
       bm_filepath = Testing::MSpec.bm_filepath if ENV['BM']
       specs_env = {
@@ -326,8 +321,8 @@ platforms.each do |platform|
 
       stubs = Testing::MSpec.stubs.map{|s| "-s#{s}"}.join(' ')
 
-      sh "ruby -w -rbundler/setup -r#{__dir__}/testing/mspec_special_calls "\
-         "exe/opal #{cmdline} -Ispec/mspec/lib -Ispec -Ilib #{stubs} -R#{platform} -Dwarning -A --enable-source-location #{filename}"
+      sh "exe/opal -q #{__dir__}/testing/mspec_special_calls.mjs "\
+         "-Ispec/mspec/lib -Ispec -Ilib #{stubs} -R#{platform} -Dwarning -A --enable-source-location #{filename}"
 
       if bm_filepath
         puts "Benchmark results have been written to #{bm_filepath}"
@@ -364,18 +359,13 @@ platforms.each do |platform|
       end
       Testing::HTTPServer.new.with_server do |session|
         filename = "tmp/minitest_#{suite}_#{platform}.rb"
-        if platform.start_with? "opalopal_"
-          platform = platform.split('_').last
-          cmdline = opalopal_cmdline
-        end
         files.push('nodejs') if platform == 'nodejs'
         Testing::Minitest.write_file(filename, files, ENV)
 
         stubs = "-soptparse -sio/console -stimeout -smutex_m -srubygems -stempfile -smonitor"
         includes = "-Itest -Ilib -Ivendored-minitest #{includes}"
 
-        sh "ruby -rbundler/setup "\
-         "exe/opal #{cmdline} #{includes} #{stubs} -R#{platform} -Dwarning -A --enable-source-location #{filename}"
+        sh "exe/opal #{includes} #{stubs} -R#{platform} -Dwarning -A --enable-source-location #{filename}"
       end
     end
   end
@@ -385,10 +375,6 @@ node_platforms.each do |platform|
   # The name ends with the platform, which is of course mandated in this case
   desc "Run the Node.js Minitest suite on #{platform}"
   task :"minitest_node_#{platform}" do
-    if platform.start_with? "opalopal_"
-      platform = platform.split('_').last
-      cmdline = opalopal_cmdline
-    end
     files = %w[
       nodejs
       opal-parser
@@ -412,8 +398,7 @@ node_platforms.each do |platform|
     includes = "-Itest -Ilib -Ivendored-minitest"
 
     use_strict_opt = ENV['USE_STRICT'] ? ' --use-strict' : ''
-    sh "ruby -rbundler/setup "\
-      "exe/opal #{cmdline} #{includes} #{stubs} -R#{platform} -Dwarning -A --enable-source-location#{use_strict_opt} #{filename}"
+    sh "exe/opal #{includes} #{stubs} -R#{platform} -Dwarning -A --enable-source-location#{use_strict_opt} #{filename}"
   end
 end
 

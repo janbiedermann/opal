@@ -60,6 +60,21 @@ export default [
       "no-control-regex": "off",
     },
   },
+  // Builds that embed the JS compiler (opal-parser, opal-builder) contain
+  // its ES2022 code; everything else Opal generates stays ES2021. The
+  // compiler and potch sources are linted with their own rules (lint:potch,
+  // lint:compiler), so the rules they don't use are off here.
+  {
+    files: ["**/opal-parser.js", "**/opal-builder.js"],
+    languageOptions: { ecmaVersion: 2022 },
+    linterOptions: { reportUnusedDisableDirectives: "off" },
+    rules: {
+      "no-fallthrough": "off",
+      "no-case-declarations": "off",
+      "no-dupe-else-if": "off",
+      "no-loss-of-precision": "off",
+    },
+  },
   {
     files: potchFiles,
     languageOptions: {

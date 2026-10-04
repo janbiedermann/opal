@@ -1,12 +1,147 @@
 # helpers: call, raise
 # backtick_javascript: true
 
-# parser uses String#unpack
-require 'corelib/string/unpack'
+# Opal's compiler at runtime: Kernel#eval, Opal.compile, Opal.eval,
+# require_remote and <script type="text/ruby"> tags. The compiler is the
+# JavaScript one (lib/opal/compiler), linked into the program by the
+# builder; Opal::Compiler wraps it with the Ruby compiler's API.
 
-require 'opal/compiler'
-require 'opal/erb'
+require 'opal/compiler/index.mjs'
 require 'opal/version'
+
+module Opal
+  class Error < ::StandardError; end
+  class CompilationError < Error; end
+
+  class SyntaxError < ::SyntaxError
+    attr_accessor :location
+  end
+
+  # Compiles Ruby source to JavaScript (the Ruby compiler's API).
+  #
+  #   compiler = Opal::Compiler.new("puts 1", file: 'x.rb', requirable: true)
+  #   compiler.compile  # => JavaScript source
+  #   compiler.requires # => ["..."]
+  class Compiler
+    # The JavaScript module (lib/opal/compiler/index.mjs).
+    JS = `Opal.esm["opal/compiler/index"]`
+
+    def self.module_name(path)
+      `#{JS}.Compiler.moduleName(#{path})`
+    end
+
+    # Ruby options hash -> JS options object
+    def self.js_options(options)
+      %x{
+        var js = {};
+        #{options}.forEach(function(value, key) {
+          if (value === nil || value == null) return;
+          if (value.$$is_hash) value = #{js_options(`value`)};
+          else if (value.$$is_string) value = value.valueOf();
+          js[key] = value;
+        });
+        return js;
+      }
+    end
+
+    def initialize(source, options = {})
+      source = `#{::Opal.coerce_to!(source, ::String, :to_str)}.valueOf()`
+      @source = source
+      @options = options
+      js_compiler, js_options = `#{JS}.Compiler`, Compiler.js_options(options)
+      # compile-time warnings go to Kernel#warn, as with the Ruby compiler
+      `js_options.warning = function(text) { #{::Kernel.warn(`text`)} }`
+      @js = `new js_compiler(source, js_options)`
+    end
+
+    attr_reader :source, :options
+
+    # rubocop:disable Naming/MemoizedInstanceVariableName
+    def compile
+      @result ||= begin
+        js = @js
+        %x{
+          try {
+            return #{js}.compile();
+          } catch (e) {
+            if (e.name === "OpalSyntaxError") {
+              var error = #{::Opal::SyntaxError.new(`e.message`)};
+              error.$location = e.location;
+              throw error;
+            }
+            throw e;
+          }
+        }
+      end
+    end
+    # rubocop:enable Naming/MemoizedInstanceVariableName
+
+    alias result compile
+
+    def requires
+      `#{@js}.requires`
+    end
+
+    def required_trees
+      `#{@js}.requiredTrees`
+    end
+
+    def autoloads
+      `#{@js}.autoloads`
+    end
+
+    def source_map
+      compile
+      SourceMap.new(`#{@js}.sourceMap`)
+    end
+
+    # The source map of a compiled file.
+    class SourceMap
+      def initialize(js)
+        @js = js
+      end
+
+      def to_h
+        `Opal.hash(#{@js}.map())`
+      end
+
+      def to_json(*)
+        `JSON.stringify(#{@js}.map())`
+      end
+
+      def to_data_uri_comment
+        `#{@js}.toDataUriComment()`
+      end
+    end
+  end
+
+  def self.compile(source, options = {})
+    Compiler.new(source, options).compile
+  end
+
+  singleton_class.alias_method :opal_compile, :compile
+
+  # Templates (.opalerb) at runtime
+  module ERB
+    def self.compile(source, file_name = '(erb)')
+      Compiler.new(source, file_name).compile
+    end
+
+    class Compiler
+      def initialize(source, file_name = '(erb)')
+        @source, @file_name = source, file_name
+      end
+
+      def prepared_source
+        @prepared_source ||= `Opal.esm["opal/compiler/index"].prepareErb(#{@source}, #{@file_name})`
+      end
+
+      def compile
+        ::Opal.compile prepared_source
+      end
+    end
+  end
+end
 
 module Kernel
   def eval(str, binding = nil, file = nil, line = nil)
@@ -38,8 +173,6 @@ module Kernel
 end
 
 %x{
-  var $has_own = Object.hasOwn || $call.bind(Object.prototype.hasOwnProperty);
-
   Opal.compile = function(str, options) {
     try {
       str = #{::Opal.coerce_to!(`str`, String, :to_str)}

@@ -51,6 +51,9 @@ codebase healthy.
 - The Node.js stdlib needs `NODE_PATH=stdlib/nodejs/node_modules` (for
   `picomatch`) when running Opal-built JS with plain `node` instead of
   `exe/opal -Rnodejs`.
+- `exe/opal` (and `bin/opal`) is the Node.js CLI on the JS compiler
+  (`lib/opal/compiler/cli`); the Ruby CLI is `bin/opal-rb` until the Ruby
+  compiler is removed (POTCH.md). The test tasks use `exe/opal`.
 - `node --test` on Node 22 does not accept a directory; pass the files
   (`node --test spec/lib/potch/*.test.mjs`).
 - If an agent discovers information that required significant setup time, condense

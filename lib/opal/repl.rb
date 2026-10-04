@@ -47,7 +47,7 @@ module Opal
       runner = @argv.reject { |i| i == '--repl' }
       runner += ['-R', @runner_type.to_s, '--await']
       runner += ['-e', 'require "opal/repl_js"']
-      runner = [RbConfig.ruby, "#{__dir__}/../../exe/opal"] + runner
+      runner = [RbConfig.ruby, "#{__dir__}/../../bin/opal-rb"] + runner
 
       # What I try to achieve here: let the runner ignore
       # interrupts. Those should be handled by a supervisor.
