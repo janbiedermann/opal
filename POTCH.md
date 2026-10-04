@@ -6,9 +6,11 @@ compiler built on **potch**, a pure-JS port of Prism 1.9.0. The result is an
 Opal that parses and compiles in Node.js or the browser only, builds itself,
 and accepts Ruby 4.0 syntax.
 
-Status: **phase 1 done** (potch copied in, specs and lint wired up); phase 2
-next. The performance baseline has been collected
-in [`BASELINE.md`](BASELINE.md); section 8 summarises it.
+Status: **phase 1 done**; **phase 2 in progress**: the JS compiler covers
+everything the Ruby compiler does and passes Opal's test suites through
+the temporary bridge (see "Phase 2 progress" below). The performance
+baseline has been collected in [`BASELINE.md`](BASELINE.md); section 8
+summarises it.
 
 ---
 
@@ -321,6 +323,74 @@ other syntax change gets a spec.
   Prism semantics.
 * The compiler specs and the Ruby 4.0 specs pass.
 * Compiler throughput meets the targets in section 8.
+
+#### Phase 2 progress
+
+**How it was built.** The code generators are ports of `lib/opal/nodes/*`
+working on Prism nodes. Where the Ruby compiler depends on the parser gem's
+tree shape, small passes over the Prism tree (`lib/opal/compiler/
+transforms/`) reproduce it: `normalize` (if/unless, begin/rescue/ensure,
+`__FILE__`/`__LINE__`/`__ENCODING__`), the engine check, `for` loops,
+targeted patches, the `.JS` syntax, pattern matching, operator
+assignment, returnable logic (`case`/`&&`/`||` into if-chains), the
+thrower finder and the rubyspec filters. The argument rewriters are a
+planning step (`nodes/args.mjs`). String literals are re-read from the raw
+source where potch's value isn't enough (`string_literal.mjs`): bytes
+that aren't valid UTF-8, binary sources, and the per-line split of
+multi-line literals.
+
+**Checks.**
+* `tasks/compiler/compare.mjs` compiles files with both compilers and
+  compares the output; `spec/lib/fixtures/compiler` (59 fixtures) keeps
+  the Ruby compiler's output as expected results for `bin/rake compiler`.
+* Output comparison over 12,752 files (`lib`, `spec/opal`, `test/opal`,
+  `spec/ruby`, `test/cruby`, `benchmark`, `examples`): 97.5 % identical
+  before the last round of fixes; opal/ and stdlib/ (201 files) are 100 %
+  identical.
+* The temporary bridge (`OPAL_JS_COMPILER=1`, `lib/opal/js_compiler_bridge.rb`
+  + `tasks/compiler/bridge_server.mjs`) lets the Ruby builder compile with
+  the JS compiler. All Node.js suites pass with the same results as with
+  the Ruby compiler: `mspec_opal_nodejs` 684 examples, 0 failures;
+  `mspec_ruby_nodejs` 14,619 examples, 0 failures; `minitest_cruby_nodejs`
+  208 runs, 717 assertions, 0 failures, 29 skips; `minitest_node_nodejs`
+  80 runs, 0 failures.
+* Performance (`BASELINE.md`, "The JS compiler"): 6–10× faster than the Ruby
+  compiler on CRuby for the real files; every corpus file compiles;
+  scaling is linear (s6 1.1× s5 per kB). The synthetic many-strings and
+  many-methods files are at 3.0× and 2.9× s5 per kB (target ≤ 3×), mostly
+  from the transform passes, which each walk the whole tree; merging or
+  speeding up those walks is the next optimization. Parse share on s5:
+  20 %. Chains of up to about 1,500 method calls compile (the JS stack is
+  the limit).
+
+**Intended differences from the Ruby compiler**
+* `it` (Ruby 3.4) is the implicit block parameter; the Ruby compiler made
+  it a method call.
+* `_1` outside a block is a method call (NameError at runtime), not a
+  bare JS variable.
+* Code the parser gem accepted but Ruby rejects (e.g. a variable capture
+  in an alternative pattern) is a syntax error; some constructs the Ruby
+  compiler crashed on (e.g. `/#@x/`) compile.
+* Source maps: positions of compiler-generated nodes point at the
+  construct they come from, generated columns are UTF-16 code units.
+* Temp counters (`$logical_op_recvr_tmp_N`, `$for_tmpN`, ...) restart for
+  every file (the Ruby compiler kept them per process).
+* potch works on JS strings: raw bytes in a source that aren't valid
+  UTF-8 become U+FFFD; sources in other encodings must be converted to
+  UTF-8 before compiling (the bridge does this; the phase 3 builder will
+  use TextDecoder).
+
+**Ruby compiler bugs kept for parity, to fix after phase 2** (each fix gets
+a `.potch.js` fixture):
+* `/a b/x` on a single line is not trimmed (only multi-part regexps are).
+* `break a, b` keeps only `a`.
+* `value => pattern` evaluates `value` twice.
+* `eval` with an assignment to an outer local shadows it instead of
+  assigning it.
+* A top-level `return`, `BEGIN { }` and `END { }` are not supported.
+
+**Also fixed in potch:** escaped non-ASCII bytes in `/.../n` regexps
+(`/\xff/n`) were reported as an encoding mismatch.
 
 ### Phase 3: JS builder, CLI and the in-browser compiler
 

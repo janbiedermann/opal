@@ -700,3 +700,10 @@ module Opal
     end
   end
 end
+
+# Temporary: compile with the JS compiler (POTCH.md, phase 2). The engine
+# check keeps the require out of Opal-compiled builds of this file, so it
+# must stay a condition of its own.
+if RUBY_ENGINE != 'opal'
+  require 'opal/js_compiler_bridge' if ENV['OPAL_JS_COMPILER'] # rubocop:disable Style/SoleNestedConditional
+end

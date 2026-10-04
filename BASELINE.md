@@ -92,6 +92,38 @@ size, not because the output differs.
 * potch parses the 2.5 MB file in 187 ms. For every file, potch's parse is
   faster than CRuby's rewrite step alone.
 
+## The JS compiler (POTCH.md phase 2)
+
+The same corpus and run counts with the JS compiler in `lib/opal/compiler`
+on Node.js (`node benchmark/potch/bench_compiler.mjs tmp/bench_corpus`),
+measured on 2026-10-04. `parse_ms` is potch; `transform_ms` is the AST
+passes, measured on a separate parse; `codegen_ms` is the rest of the
+total, so it can come out negative when the run-to-run variance is larger
+than the code generation time.
+
+| file | bytes | parse_ms | transform_ms | codegen_ms | total_ms | out_bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| s0_201b.rb | 201 | 0.07 | 0.09 | 0.04 | 0.19 | 262 |
+| synth_deep_nest.rb | 206 | 0.23 | 0.53 | -0.02 | 0.74 | 113 |
+| s1_324b.rb | 324 | 0.25 | 0.27 | 0.06 | 0.58 | 896 |
+| synth_method_chain.rb | 4006 | 0.72 | 1.35 | 0.16 | 2.22 | 7165 |
+| synth_binop_chain.rb | 5892 | 2.41 | 2.90 | -1.30 | 4.01 | 15038 |
+| s2_pack.rb | 6019 | 0.93 | 1.27 | 0.26 | 2.45 | 8009 |
+| s3_34kb.rb | 34065 | 4.36 | 7.32 | 3.03 | 14.71 | 44874 |
+| s4_114kb.rb | 114391 | 10.43 | 19.32 | 16.51 | 46.25 | 271218 |
+| synth_big_array.rb | 338895 | 45.34 | 52.60 | -32.26 | 65.68 | 289028 |
+| synth_many_locals.rb | 317790 | 66.53 | 114.38 | -29.85 | 151.06 | 646862 |
+| synth_many_methods.rb | 408902 | 106.24 | 270.32 | 64.19 | 440.75 | 1138055 |
+| s5_639kb.rb | 638935 | 47.86 | 100.03 | 85.74 | 233.63 | 863002 |
+| synth_many_strings.rb | 648890 | 154.50 | 434.80 | 112.95 | 702.25 | 1309070 |
+| s6_mega_2.5mb.rb | 2555740 | 191.11 | 523.57 | 178.19 | 892.87 | 3433887 |
+
+Compared with the Ruby compiler on CRuby (the "CRuby total" column above),
+the JS compiler is 6–10× faster on the real files: s3 14.7 vs 95.0 ms,
+s4 46.3 vs 411.6 ms, s5 233.6 vs 1,868.3 ms, s6 892.9 vs 8,428.1 ms. It
+compiles every corpus file, including s3, which fails with today's
+Node-hosted compiler.
+
 ## How to reproduce
 
 The scripts live in `benchmark/potch/`:
