@@ -10,6 +10,9 @@ codebase healthy.
 
 ## Directory overview
 - `lib/` holds the compiler and CLI implementations.
+  - `lib/opal/potch/` is potch, Opal's built-in Ruby parser: a JS port of
+    Prism 1.9 written as ES modules (`.mjs`). See `docs/potch.md` and
+    `POTCH.md`.
 - `opal/` provides the runtime and Ruby core library. Its layout is:
   - `corelib/` contains Ruby's built-ins implemented in Ruby.
   - `runtime/` holds JS helpers required at execution time.
@@ -31,13 +34,25 @@ codebase healthy.
   - `bin/rake minitest_cruby_nodejs` runs the vendored CRuby tests and Opal's stdlib additions from `test/opal` (set `FILES=<glob>` to limit).
   - `bin/rake minitest_node_nodejs` runs integration tests in `test/nodejs`.
   - `bin/rake minitest_nodejs` runs both Minitest suites on Node.js.
+  - `bin/rake potch` runs the potch parser specs (`spec/lib/potch/*.test.mjs`,
+    about 8,500 cases in a few seconds, Node.js only).
 
 ## Linting
 - Run `bin/rake lint` to check code style. This builds the corelib and stdlib then executes RuboCop and ESLint.
+- `bin/rake lint:potch` lints only the potch ES modules and checks that
+  `lib/opal/potch/potch.mjs` matches its parts. After editing
+  `lib/opal/potch/parts/*.mjs`, regenerate it with `bin/rake potch:assemble`.
 
 ## Notes
 - The list of MSpec files is in `spec/ruby_specs` and filters live in `spec/filters`.
 - Tests depend on initialized submodules (`spec/mspec`, `spec/ruby`, `test/cruby`).
+- Use `bundle install`, not `bin/setup`, to install the gems without
+  rewriting `Gemfile.lock` (`bin/setup` runs `bundle update`).
+- The Node.js stdlib needs `NODE_PATH=stdlib/nodejs/node_modules` (for
+  `picomatch`) when running Opal-built JS with plain `node` instead of
+  `exe/opal -Rnodejs`.
+- `node --test` on Node 22 does not accept a directory; pass the files
+  (`node --test spec/lib/potch/*.test.mjs`).
 - If an agent discovers information that required significant setup time, condense
   the result into a short bullet in this file so later agents can skip the same
   work.
