@@ -114,7 +114,7 @@ above does).
 | `lib/opal/potch/cli.mjs` | The command-line tool, run as `exe/potch` |
 | `spec/lib/potch/*.test.mjs` | Specs (`node --test`) |
 | `spec/lib/fixtures/potch/`, `spec/lib/fixtures/potch_errors/` | Parse and error fixtures used by the specs |
-| `tasks/potch/` | `assemble.mjs` and `gen_field_order.mjs` |
+| `tasks/potch/` | `assemble.mjs`, `gen_field_order.mjs` and `gen_convert.mjs` |
 | `benchmark/potch/` | Benchmarks and their corpus |
 
 Offsets are UTF-16 code-unit indices into whatever JS string you pass as
@@ -203,9 +203,14 @@ node tasks/potch/assemble.mjs           # (re)writes lib/opal/potch/potch.mjs
 node tasks/potch/assemble.mjs --check   # verifies it's up to date without writing (part of tasks/lint.mjs)
 ```
 
-`lib/opal/potch/field_order.mjs` is generated from Prism's `config.yml` by
-`tasks/potch/gen_field_order.mjs --config=<path>`. It only needs
-regenerating when potch moves to a new Prism version.
+`lib/opal/potch/field_order.mjs` and `lib/opal/potch/convert.mjs` are
+generated from Prism's `config.yml` by `tasks/potch/gen_field_order.mjs
+--config=<path>` and `tasks/potch/gen_convert.mjs --config=<path>` (Prism
+1.9's `config.yml` comes with its gem). `convert.mjs` holds one function
+per node type that turns the parser's node into the plain AST object; the
+generic conversion in `index.mjs` (from the field order) remains for
+reference and for node types without one. They only need regenerating when
+potch moves to a new Prism version.
 
 ## Benchmarking
 

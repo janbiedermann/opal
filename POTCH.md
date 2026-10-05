@@ -103,7 +103,7 @@ lib/opal/potch/              # the parser (copied from potch/src, renamed to .mj
   index.mjs                  #   public API: parse, parseWithMetadata, lexWithMetadata, ...
   potch.mjs                  #   generated from parts/ (committed; checked by lint)
   parts/potch_part*.mjs      #   the parser sources that potch.mjs is generated from
-  ast.mjs  diagnostic.mjs  encoding.mjs  field_order.mjs  node.mjs
+  ast.mjs  convert.mjs  diagnostic.mjs  encoding.mjs  field_order.mjs  node.mjs
   options.mjs  regexp.mjs  static_literals.mjs  token_type.mjs
   util/*.mjs
 lib/opal/compiler/           # the new JS compiler
@@ -125,7 +125,7 @@ spec/lib/fixtures/potch_errors/ # potch error fixtures (from potch/test/errors)
 spec/lib/compiler/*.test.mjs # JS compiler specs (ported from spec/lib/*_spec.rb)
 benchmark/potch/             # potch benchmarks + the compiler benchmark from section 8
 tasks/potch.rake             # rake tasks while rake still exists
-tasks/potch/*.mjs            # assemble.mjs, gen_field_order.mjs, compiler bench
+tasks/potch/*.mjs            # assemble.mjs, gen_field_order.mjs, gen_convert.mjs
 docs/potch.md                # from potch README
 docs/potch_performance.md    # from potch PERFORMANCE.md
 ```

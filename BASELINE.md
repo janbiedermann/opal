@@ -205,7 +205,46 @@ setting `fragments` in the constructor, a larger young generation
 generating code into one buffer with source-map positions instead of
 fragment trees, and, on the parse side, potch building the plain AST
 directly (its conversion step, `convertNode`, is the largest single
-allocator, about 60 MB per compile of s5 and s6).
+allocator, about 60 MB per compile of s5 and s6; done, see the next
+section).
+
+### Faster AST conversion in potch (2026-10-05)
+
+potch's parser builds its own nodes (numeric types, constant pool ids, flag
+bits), which `parseWithMetadata` converts into the plain AST objects; the
+conversion took 40–55 % of potch's time. It now uses one generated function
+per node type (`lib/opal/potch/convert.mjs`, from Prism's `config.yml` by
+`tasks/potch/gen_convert.mjs`) instead of a generic walk with a per-field
+plan, and the AST's locations are the parser's own `{ start, end }` objects
+instead of copies. The AST is unchanged (JSON-identical, key order
+included, on 16,343 files), and so is the compiler's output, code and
+source maps (13,071 files).
+
+The conversion alone (`parseWithMetadata` minus `pm_parse`): s5 20.4 →
+6.4 ms, s6 82.8 → 39.6 ms, synth_many_methods 62.1 → 17.9 ms,
+synth_many_strings 82.6 → 28.3 ms. The whole compile, best of two medians
+each (`parse_ms` is potch plus the transforms; less allocation also leaves
+less GC work for the code generation):
+
+| file | bytes | parse_ms before | parse_ms after | total_ms before | total_ms after |
+|---|---:|---:|---:|---:|---:|
+| s0_201b.rb | 201 | 0.09 | 0.08 | 0.22 | 0.21 |
+| synth_deep_nest.rb | 206 | 0.38 | 0.29 | 0.83 | 0.68 |
+| s1_324b.rb | 324 | 0.28 | 0.27 | 0.70 | 0.70 |
+| synth_method_chain.rb | 4006 | 1.07 | 0.64 | 2.60 | 1.82 |
+| synth_binop_chain.rb | 5892 | 1.86 | 1.31 | 4.51 | 3.38 |
+| s2_pack.rb | 6019 | 1.14 | 1.10 | 3.24 | 3.14 |
+| s3_34kb.rb | 34065 | 6.14 | 4.95 | 18.65 | 16.08 |
+| s4_114kb.rb | 114391 | 16.65 | 14.26 | 50.22 | 45.61 |
+| synth_big_array.rb | 338895 | 48.45 | 43.58 | 96.49 | 87.27 |
+| synth_many_locals.rb | 317790 | 76.99 | 61.99 | 185.42 | 159.21 |
+| synth_many_methods.rb | 408902 | 165.32 | 125.65 | 462.84 | 388.57 |
+| s5_639kb.rb | 638935 | 70.73 | 56.15 | 219.68 | 185.65 |
+| synth_many_strings.rb | 648890 | 227.82 | 175.13 | 644.89 | 525.36 |
+| s6_mega_2.5mb.rb | 2555740 | 307.24 | 248.55 | 929.96 | 772.97 |
+
+The whole compile is 9–19 % faster on the files above 30 KB (s6 17 %).
+`convert.mjs` adds 84 KB (5 KB gzipped) to potch.
 
 ## How to reproduce
 
