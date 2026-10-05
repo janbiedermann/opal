@@ -1,6 +1,5 @@
 // Runs the Minitest suites (vendored CRuby tests and test/opal, and the
-// Node.js integration tests in test/nodejs) with exe/opal. Port of
-// Testing::Minitest and the minitest tasks in tasks/testing.rake.
+// Node.js integration tests in test/nodejs) with exe/opal.
 //
 // Environment: FILES (a glob of test files, cruby suite), RANDOM_SEED,
 // USE_STRICT (node suite).

@@ -358,3 +358,29 @@ describe("[regressions]", () => {
     compiled("for foo in bar\n  #\nend");
   });
 });
+
+// spec/lib/dependency_resolver_spec.rb
+describe("require resolution", () => {
+  const compile = (source, options = {}) => {
+    const warnings = [];
+    const compiler = new Compiler(source, { warning: (w) => warnings.push(w), ...options });
+    compiler.compile();
+    return { requires: compiler.requires, warnings };
+  };
+
+  test("resolves strings and require_relative", () => {
+    assert.deepEqual(compile('require "foo"; require_relative "bar"', { file: "x/y.rb" }).requires, ["foo", "x/bar"]);
+  });
+
+  test("raises for a dynamic require with severity error", () => {
+    assert.throws(() => compile("require self", { dynamic_require_severity: "error" }), /Cannot handle dynamic require/);
+  });
+
+  test("warns for a dynamic require with severity warning", () => {
+    assert.deepEqual(compile("require self", { dynamic_require_severity: "warning" }).warnings, ["warning: Cannot handle dynamic require -- (file):1"]);
+  });
+
+  test("ignores a dynamic require with severity ignore (the default)", () => {
+    assert.deepEqual(compile("require self"), { requires: [], warnings: [] });
+  });
+});

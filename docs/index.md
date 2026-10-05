@@ -46,7 +46,7 @@ How to work with template libraries in Opal, be it to share the templates with t
 
 #### [Rails](rails.html)
 
-How to use `opal-rails` to use Opal as the JavaScript compiler.
+How to use `opal-rails` to use Opal as the JavaScript compiler. (Opal 1.x: needs the Ruby gems)
 
 #### [Static Applications](static_applications.html)
 
@@ -54,11 +54,11 @@ The most basic setup for a static Opal powered website that can be hosted anywhe
 
 #### [Sinatra](sinatra.html)
 
-Serve Opal applications through Sinatra and `opal-sprockets`.
+Serve Opal applications through Sinatra and `opal-sprockets`. (Opal 1.x: needs the Ruby gems)
 
 #### [Roda + Sprockets](roda-sprockets.html)
 
-Setup Roda + Sprockets to start serving Opal applications from Roda.
+Setup Roda + Sprockets to start serving Opal applications from Roda. (Opal 1.x: needs the Ruby gems)
 
 ---
 
@@ -66,15 +66,15 @@ Setup Roda + Sprockets to start serving Opal applications from Roda.
 
 #### [jQuery](jquery.html)
 
-This guide covers the `opal-jquery` wrapper around the popular library.
+This guide covers the `opal-jquery` wrapper around the popular library. (Opal 1.x: needs the Ruby gems)
 
 #### [RSpec](rspec.html)
 
-Write specs for your Opal code RSpec and run them on Node.js or in a browser.
+Write specs for your Opal code RSpec and run them on Node.js or in a browser. (Opal 1.x: needs the Ruby gems)
 
 #### [Using Sprockets](using_sprockets.html)
 
-Configure the long-lasting asset handler to work with Opal.
+Configure the long-lasting asset handler to work with Opal. (Opal 1.x: needs the Ruby gems)
 
 ---
 
@@ -82,11 +82,11 @@ Configure the long-lasting asset handler to work with Opal.
 
 #### [Adjusting Load Paths with Opalfile](opalfile.html)
 
-How to define where Opal should look for Ruby files at build time and how to setup gems for use inside Opal programs.
+How to define where Opal should look for Ruby files at build time.
 
 #### [Configuring Gems](configuring_gems.html)
 
-How to make your gem work in Opal and differentiate code for the JavaScript environment.
+How to make your gem work in Opal and differentiate code for the JavaScript environment. (Opal 1.x: needs the Ruby gems)
 
 #### [Compiler](compiler.html)
 

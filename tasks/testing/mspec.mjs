@@ -1,5 +1,4 @@
-// Runs MSpec suites (ruby/spec, spec/opal) with exe/opal. Port of
-// Testing::MSpec in tasks/testing.rake.
+// Runs MSpec suites (ruby/spec, spec/opal) with exe/opal.
 //
 // Environment: SUITE (ruby/opal), PATTERN (a glob of spec files), RUBYSPECS
 // (with PATTERN: only files listed in spec/ruby_specs), RANDOM_SEED,

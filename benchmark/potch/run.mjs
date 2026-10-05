@@ -25,7 +25,7 @@
 //            it finishes tiering it up to optimized code, so fewer than
 //            that still measures JIT warmup cost, not steady-state cost.
 //
-// Usage: bin/rake potch:bench (or: node benchmark/potch/run.mjs) [--runs=N] [--warmup-runs=N]
+// Usage: node benchmark/potch/run.mjs [--runs=N] [--warmup-runs=N]
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";

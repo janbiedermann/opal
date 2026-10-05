@@ -1,5 +1,10 @@
 # Configuring Gems For Opal
 
+> **Note:** this guide describes an integration through Ruby gems
+> (opal-sprockets, opal-rails, opal-rspec, ...) and the `opal` gem. Opal 2
+> runs on Node.js and isn't a Ruby gem anymore, so the guide applies to
+> Opal 1.x until these integrations move to the Node.js toolchain.
+
 **Note: While everything described in this document works, it is recommended to use Opalfile for that purpose. See: [Adjusting Load Paths with Opalfile](opalfile.html)**
 
 To configure a gem to run in Opal the gem will need a couple of things:

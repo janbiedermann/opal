@@ -1,5 +1,10 @@
 # Opal & Sprockets
 
+> **Note:** this guide describes an integration through Ruby gems
+> (opal-sprockets, opal-rails, opal-rspec, ...) and the `opal` gem. Opal 2
+> runs on Node.js and isn't a Ruby gem anymore, so the guide applies to
+> Opal 1.x until these integrations move to the Node.js toolchain.
+
 The `opal-sprockets` gem adds sprockets support to Opal, providing a simple
 `Opal::Sprockets::server` class to make it easy to get a rack server up and 
 running for trying out opal. This server will automatically recompile ruby 

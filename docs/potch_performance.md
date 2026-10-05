@@ -1,6 +1,6 @@
 # potch performance vs. the real C WASM parser
 
-Numbers below come from `benchmark/potch/run.mjs` (`bin/rake potch:bench`), comparing
+Numbers below come from `benchmark/potch/run.mjs`, comparing
 `potch` against the real C WASM parser via the published `@ruby/prism` npm
 package ("ref" - the actual Prism WASM build: same parser, same WASM
 binary, used here instead of a Ruby install because it needs no native
@@ -10,11 +10,10 @@ project - no other native-parser backends, no Ruby.
 ## How to reproduce
 
 ```
-bin/rake potch:bench
+node benchmark/potch/run.mjs [--runs=N] [--warmup-runs=N]
 ```
 
-Equivalently: `node benchmark/potch/run.mjs [--runs=N] [--warmup-runs=N]` (defaults:
-3 and 20). Takes a few seconds; prints the two Markdown tables below
+(defaults: 3 runs, 20 warmup runs). Takes a few seconds; prints the two Markdown tables below
 directly.
 
 ### Methodology
@@ -58,7 +57,7 @@ directly.
   warmup runs mostly measures JIT compilation cost, not the steady-state
   cost this is trying to isolate.
 
-Measured on whatever machine ran `bin/rake potch:bench` last (this is a
+Measured on whatever machine ran `node benchmark/potch/run.mjs` last (this is a
 single-machine comparison, not a controlled benchmark environment - expect
 some run-to-run noise, especially on the smallest files where fixed
 per-process overhead dominates).

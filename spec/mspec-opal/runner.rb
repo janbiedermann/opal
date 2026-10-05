@@ -123,7 +123,9 @@ class OpalBM
     MSpec.repeat = repeat
     MSpec.register :before, self
     MSpec.register :after,  self
-    MSpec.register :finish, self
+    # (not a :finish action: the formatter's #finish exits before the next
+    # action would run)
+    at_exit { finish }
   end
 
   def before(state = nil)

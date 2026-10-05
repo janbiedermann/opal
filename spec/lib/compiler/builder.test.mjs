@@ -271,12 +271,12 @@ describe("PathReader", () => {
 
   test("works with absolute and relative paths", () => {
     const r = reader();
-    assert.notEqual(r.read(join(SPEC_LIB, "spec_helper.rb")), null);
+    assert.notEqual(r.read(join(OPAL_ROOT, "spec", "spec_helper.rb")), null);
     const cwd = process.cwd();
     try {
       process.chdir(OPAL_ROOT);
-      assert.notEqual(r.read("./spec/lib/spec_helper.rb"), null);
-      assert.notEqual(r.read(`../${OPAL_ROOT.split("/").pop()}/spec/lib/spec_helper.rb`), null);
+      assert.notEqual(r.read("./spec/spec_helper.rb"), null);
+      assert.notEqual(r.read(`../${OPAL_ROOT.split("/").pop()}/spec/spec_helper.rb`), null);
     } finally {
       process.chdir(cwd);
     }

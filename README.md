@@ -21,7 +21,6 @@
 
   <br>
   <strong>Code:</strong><br>
-  <a href="https://badge.fury.io/rb/opal"><img src="https://img.shields.io/gem/v/opal.svg?style=flat" alt="Gem Version" title="" /></a>
   <a href="https://github.com/opal/opal/actions?query=workflow%3Abuild"><img src="https://github.com/opal/opal/workflows/build/badge.svg" alt="Build Status" /></a>
   <a href="https://codeclimate.com/github/opal/opal"><img src="https://img.shields.io/codeclimate/maintainability-percentage/opal/opal.svg" alt="Code Climate" title="" /></a>
   <a href="https://coveralls.io/github/opal/opal?branch=master"><img src="https://coveralls.io/repos/opal/opal/badge.svg?branch=master&amp;service=github" alt="Coverage Status" title="" /></a>
@@ -75,33 +74,34 @@ Be sure to set the page encoding to `UTF-8` inside your `<head>` tag as follows:
 Just open this page in a browser and check the JavaScript console.
 
 
-### Compiling Ruby code from Ruby
+### Compiling Ruby code from JavaScript
 
-`Opal.compile` is a simple interface to just compile a string of Ruby into a
-string of JavaScript code.
+The compiler is a set of ES modules that run in Node.js (and in the
+browser, see `opal-parser` below). `compile` turns a string of Ruby into
+a string of JavaScript code:
 
-```ruby
-Opal.compile("puts 'wow'")  # => "(function() { ... self.$puts("wow"); ... })()"
+```js
+import { compile } from "./lib/opal/compiler/index.mjs";
+
+compile("puts 'wow'", { file: "wow.rb" }); // => "Opal.queue(function(Opal) { ... self.$puts(\"wow\"); ... })"
 ```
 
 Running this by itself is not enough; you need the opal runtime/corelib.
 
-#### Using Opal::Builder
+#### Using the Builder
 
-`Opal::Builder` can be used to build the runtime/corelib into a string.
+The builder (Node.js) builds the runtime/corelib into a string, or an
+entire app including dependencies declared with `require`:
 
-```ruby
-Opal::Builder.build('opal') #=> "(function() { ... })()"
+```js
+import { Builder } from "./lib/opal/compiler/builder/builder.mjs";
+import { writeFileSync } from "node:fs";
+
+const builder = new Builder();
+builder.build("opal");
+builder.buildStr('puts "wow"', "(inline)");
+writeFileSync("app.js", builder.toString());
 ```
-
-or to build an entire app including dependencies declared with `require`:
-
-```ruby
-builder = Opal::Builder.new
-builder.build_str('require "opal"; puts "wow"', '(inline)')
-File.binwrite 'app.js', builder.to_s # must use binary mode for writing
-```
-
 
 ### Compiling Ruby code from HTML (or using it as you would with inline JavaScript)
 
@@ -137,52 +137,35 @@ on opal.
 
 ## Running tests
 
-Setup the project:
+Opal needs Node.js (22 or later), git and yarn. Setup the project:
 
     $ bin/setup
 
-The test suite can be run using:
+The test suite (the parser and compiler specs, [MSpec][] with ruby/spec
+and Opal's own specs, and the Minitest suites) can be run using:
 
-    $ bundle exec rake
+    $ node tasks/test.mjs
 
-This command will run all RSpec and MSpec examples in sequence.
-
-
-### MSpec
-
-[MSpec][] tests can be run with:
-
-    $ rake mspec
-
-Alternatively, you can just load up a rack instance using `rackup`, and
-visit `http://localhost:9292/` in any web browser.
-
-
-### RSpec
-
-[RSpec][] tests can be run with:
-
-    $ rake rspec
-
-
-### Automated runs
-
-A `Guardfile` with decent mappings between specs and lib/corelib/stdlib files is in place.
-Run `bundle exec guard -i` to start `guard`.
+`node tasks/test.mjs mspec_ruby` runs a single suite,
+`node tasks/test.mjs spec/ruby/core/string` the given specs, and
+`node tasks/test.mjs -R chrome mspec` the specs in a browser. See
+[HACKING.md](HACKING.md) for more.
 
 ## Code Overview
 
 What code is supposed to run where?
 
-* `lib/` code runs inside your Ruby env. It compiles Ruby to JavaScript.
+* `lib/` is the toolchain, in JavaScript: the parser and compiler, the builder and the CLI. It runs in Node.js (the compiler also in browsers).
 * `opal/` is the runtime+corelib for our implementation (runs in browser).
 * `stdlib/` is our implementation of Ruby's stdlib. It is optional (runs in browser).
 
 ### lib/
 
-The `lib` directory holds the **Opal parser/compiler** used to compile Ruby
-into JavaScript. It is also built ready for the browser into `opal-parser.js`
-to allow compilation in any JavaScript environment.
+The `lib/opal` directory holds **potch**, Opal's Ruby parser (a JavaScript
+port of [Prism](https://github.com/ruby/prism)), and the **compiler**, which
+compiles Ruby into JavaScript, with the **builder** and the `opal` **CLI**
+(`exe/opal`). The compiler is also built ready for the browser into
+`opal-parser.js` to allow compilation in any JavaScript environment.
 
 ### opal/
 
@@ -278,4 +261,3 @@ THE SOFTWARE.
 
 
 [MSpec]: https://github.com/ruby/mspec#readme
-[RSpec]: https://github.com/rspec/rspec#readme

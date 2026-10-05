@@ -1,5 +1,10 @@
 # RSpec
 
+> **Note:** this guide describes an integration through Ruby gems
+> (opal-sprockets, opal-rails, opal-rspec, ...) and the `opal` gem. Opal 2
+> runs on Node.js and isn't a Ruby gem anymore, so the guide applies to
+> Opal 1.x until these integrations move to the Node.js toolchain.
+
 `opal-rspec` allows opal to use rspec for running specs in javascript
 environments. It comes with built-in support for running rspec with
 standard web browser formatters. Also, async spec examples

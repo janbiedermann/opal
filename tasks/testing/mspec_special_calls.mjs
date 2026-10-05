@@ -1,7 +1,6 @@
-// opal --plugin for running ruby/spec (the JS counterpart of
-// mspec_special_calls.rb): enables the compile-time handling of mspec's
-// guards (not_supported_on, platform_is, ...) and leaves out the specs
-// listed in spec/filters/{bugs,unsupported}.
+// opal --plugin for running ruby/spec: enables the compile-time handling
+// of mspec's guards (not_supported_on, platform_is, ...) and leaves out the
+// specs listed in spec/filters/{bugs,unsupported}.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseWithMetadata } from "../../lib/opal/potch/index.mjs";

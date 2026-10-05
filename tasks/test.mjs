@@ -9,7 +9,7 @@
 // Suites: potch, compiler, mspec_opal, mspec_ruby, minitest_cruby,
 // minitest_node; "mspec" and "minitest" name both of theirs. Files and
 // directories run their specs/tests (like bin/test). The suites read the
-// environment variables of the rake tasks (PATTERN, FILES, RANDOM_SEED, ...).
+// environment variables PATTERN, FILES, RANDOM_SEED, ... (see AGENTS.md).
 import { relative, resolve } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import { glob } from "./testing/glob.mjs";

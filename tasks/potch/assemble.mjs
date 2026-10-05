@@ -8,8 +8,8 @@
 // emits the matching import header.
 //
 // Usage:
-//   bin/rake potch:assemble          # write lib/opal/potch/potch.mjs
-//   bin/rake potch:assemble_check    # verify lib/opal/potch/potch.mjs is up to date
+//   node tasks/potch/assemble.mjs           # write lib/opal/potch/potch.mjs
+//   node tasks/potch/assemble.mjs --check   # verify lib/opal/potch/potch.mjs is up to date
 //
 // (or directly: node tasks/potch/assemble.mjs [--check])
 
@@ -253,7 +253,7 @@ if (process.argv.includes("--check")) {
   if (current === generated) {
     console.log("lib/opal/potch/potch.mjs is up to date");
   } else {
-    console.error("lib/opal/potch/potch.mjs is OUT OF DATE — run: bin/rake potch:assemble");
+    console.error("lib/opal/potch/potch.mjs is OUT OF DATE — run: node tasks/potch/assemble.mjs");
     process.exit(1);
   }
 } else {

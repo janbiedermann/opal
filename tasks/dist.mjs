@@ -1,6 +1,10 @@
-// Builds corelib and stdlib (`bin/rake dist`); port of the Ruby dist task.
+// Builds corelib and stdlib to build/ (or DIR).
 //
-//   node tasks/dist.mjs   (env: DIR, FILES, FORMATS; see tasks/building.rake)
+//   node tasks/dist.mjs
+//   DIR=/tmp/foo FILES=opal.rb,base64.rb FORMATS=js,min,gz,map node tasks/dist.mjs
+//
+// FILES restricts the libraries (comma separated), FORMATS selects the
+// outputs: js, min (terser), gz (gzipped min), map (embedded source map).
 import { readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, basename, join } from "node:path";
 import { spawnSync } from "node:child_process";

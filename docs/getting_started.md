@@ -1,45 +1,62 @@
 # Getting Started
 
-Opal is a Ruby to JavaScript compiler, an implementation of the Ruby corelib and stdlib, and associated gems for building fast client-side web applications in Ruby.
+Opal is a Ruby to JavaScript compiler and an implementation of the Ruby corelib and stdlib, for building fast client-side web applications in Ruby.
 
 ## Installation
 
-Opal is available as a gem and can be installed via:
+Opal runs on Node.js (22 or later); it needs no Ruby. Get it from git and install
+its development dependencies:
 
 ```
-$ gem install opal
+$ git clone https://github.com/opal/opal.git
+$ cd opal
+$ bin/setup
 ```
 
-Or added to your Gemfile as:
+`exe/opal` is the command line interface (add `exe/` to your `PATH` to call it
+as `opal`):
 
-```ruby
-gem 'opal'
+```
+$ exe/opal -e "[1, 2, 3].each { |a| puts a }"
+1
+2
+3
+$ exe/opal --compile app.rb > app.js
 ```
 
 ## Getting Started with Opal
 
 At its core, Opal provides a simple method of compiling a string of Ruby into JavaScript that can run on top of the Opal runtime:
 
-```ruby
-Opal.compile("[1, 2, 3].each { |a| puts a }")
-# => "(function() { ... })()"
+```js
+import { compile } from "./lib/opal/compiler/index.mjs";
+
+compile("[1, 2, 3].each { |a| puts a }");
+// => "Opal.queue(function(Opal) { ... })"
 ```
 
-Opal allows for Ruby (and ERB) assets to be compiled and treated as first-class JavaScript citizens. Ruby sources can require JavaScript and other Ruby files, working similar to CoffeeScript.
+Opal allows for Ruby (and ERB) assets to be compiled and treated as first-class JavaScript citizens. Ruby sources can require JavaScript and other Ruby files.
 
-This relies on the Opal load path. Any gem containing Opal code registers that directory to the Opal load path. Opal will then use all Opal load paths when running instances.
+This relies on the Opal load path: `opal/`, `stdlib/` and `lib/` of Opal itself, plus the directories you add.
 
 ### Adding Lookup Paths
 
-Opal uses a load path to create a set of locations from which Opal can require files. If you want to add a directory to this load path, you can add it to the global environment.
+Opal uses a load path to create a set of locations from which Opal can require files. To add a directory to it, pass it to the CLI:
 
-In the `Opal` module, a property `paths` is used to hold the load paths which `Opal` uses to require files from. You can add a directory to this:
-
-```ruby
-Opal.append_path '../my_lib'
+```
+$ exe/opal -I ../my_lib app.rb
 ```
 
-Now, any Ruby files in this directory can be discovered.
+or to the builder:
+
+```js
+import { Builder } from "./lib/opal/compiler/builder/builder.mjs";
+
+const builder = new Builder();
+builder.appendPaths("../my_lib");
+```
+
+or list it in an [Opalfile](opalfile.md). Now, any Ruby files in this directory can be discovered.
 
 ## FAQ
 
@@ -53,7 +70,7 @@ Opal is tested against the [Ruby spec](https://github.com/ruby/spec) as our prim
 
 ### What Version of Ruby Does Opal Target?
 
-Opal's tests are run under Ruby 3.2.0 conditions, but it remains mostly compatible with 2.6 level features.
+The compiler implements Ruby 4.0 syntax (its parser is a port of Prism). The corelib is tested against ruby/spec.
 
 ### Why Doesn't Opal Support Mutable Strings?
 

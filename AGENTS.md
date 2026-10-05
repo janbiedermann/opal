@@ -4,64 +4,77 @@ This file explains how automation and human contributors should work in this
 repository. Follow the steps below to set up the project, run tests and keep the
 codebase healthy.
 
+Opal needs only Node.js (22 or later), git and yarn; no Ruby.
+
 
 ## Setup
-- Run `bin/setup` once after cloning to install gems, yarn packages and git submodules.
+- Run `bin/setup` once after cloning to install the git submodules and the
+  yarn packages.
 
 ## Directory overview
-- `lib/` holds the compiler and CLI implementations.
+- `lib/opal/` holds the toolchain, written in JavaScript (`.mjs`):
   - `lib/opal/potch/` is potch, Opal's built-in Ruby parser: a JS port of
-    Prism 1.9 written as ES modules (`.mjs`). See `docs/potch.md` and
-    `POTCH.md`.
+    Prism 1.9. See `docs/potch.md` and `POTCH.md`.
+  - `lib/opal/compiler/` is the compiler (`index.mjs`, `nodes/`,
+    `transforms/`), the builder (`builder/`) and the CLI with its runners
+    (`cli/`). `exe/opal` runs the CLI.
+  - `lib/opal/cli_runners/` holds the JS support files of the runners.
 - `opal/` provides the runtime and Ruby core library. Its layout is:
   - `corelib/` contains Ruby's built-ins implemented in Ruby.
   - `runtime/` holds JS helpers required at execution time.
   - `opal/` offers entry points like `base.rb`, `mini.rb` and `full.rb` for
     loading subsets of the runtime.
 - `stdlib/` contains Opal's standard library implementation.
-- `spec/` and `test/` host RSpec and Minitest suites.
+- `spec/` and `test/` host the test suites: `spec/lib/{potch,compiler}`
+  (`node --test`), `spec/opal` and `spec/ruby` (MSpec), `test/` (Minitest).
 - `examples/` shows sample applications.
 - `docs/` provides documentation for contributors and users.
-- `tasks/` defines Rake tasks used by `bin/rake`.
+- `tasks/` holds the development scripts (`tasks/*.mjs`, run with `node`).
 
 ## Running tests
-- `node tasks/test.mjs` runs every Node.js suite (potch, compiler,
-  mspec_opal, mspec_ruby, minitest_cruby, minitest_node) with no Ruby
-  needed, in about 40 seconds; ensure it passes before committing. Name
-  suites to run only those (`node tasks/test.mjs mspec_ruby`), pass spec or
-  test files/directories to run just them (`bin/test` does the same), or
-  `-R chrome` for a browser runner. The environment variables below
-  (`PATTERN`, `FILES`, `RANDOM_SEED`, ...) apply.
-- Running `bin/rake` executes every suite on both Chrome and Node.js but is slow and requires a browser.
-- The rake tasks call `tasks/test.mjs` (the RSpec suite still needs Ruby):
-  - `bin/rake rspec` runs the RSpec suite covering Opal compiler and runtime internals.
-  - `bin/rake mspec_ruby_nodejs` runs the ruby/spec compatibility suite (use `PATTERN=<glob>` to limit the run).
-  - `bin/rake mspec_opal_nodejs` executes the Opal-specific specs under `spec/opal`.
-  - `bin/rake mspec_nodejs` runs both of the above suites in sequence.
-  - `bin/rake minitest_cruby_nodejs` runs the vendored CRuby tests and Opal's stdlib additions from `test/opal` (set `FILES=<glob>` to limit).
-  - `bin/rake minitest_node_nodejs` runs integration tests in `test/nodejs`.
-  - `bin/rake minitest_nodejs` runs both Minitest suites on Node.js.
-  - `bin/rake potch` runs the potch parser specs (`spec/lib/potch/*.test.mjs`,
-    about 8,500 cases in a few seconds, Node.js only).
+- `node tasks/test.mjs` (or `yarn test`) runs every Node.js suite in about
+  40 seconds; ensure it passes before committing:
+  - `potch`: the parser specs (`spec/lib/potch/*.test.mjs`, about 8,500 cases)
+  - `compiler`: the compiler, builder and CLI specs (`spec/lib/compiler`)
+  - `mspec_opal`: the Opal-specific specs under `spec/opal`
+  - `mspec_ruby`: the ruby/spec compatibility suite (`PATTERN=<glob>` limits
+    the run, `RUBYSPECS=true` with it only takes files of `spec/ruby_specs`)
+  - `minitest_cruby`: the vendored CRuby tests and Opal's stdlib additions
+    from `test/opal` (`FILES=<glob>` runs other test files instead)
+  - `minitest_node`: integration tests in `test/nodejs`
+- Name suites to run only those (`node tasks/test.mjs mspec_ruby`; `mspec` and
+  `minitest` name both of theirs), or pass spec/test files or directories to run
+  just them (`bin/test` does the same). `-R chrome` (firefox, bun, deno,
+  safari, ...) runs the Opal suites on another runner. `RANDOM_SEED` repeats a
+  randomized order.
 
 ## Linting
-- Run `bin/rake lint` to check code style. This builds the corelib and stdlib then executes RuboCop and ESLint.
-- `node tasks/lint.mjs` runs the ESLint part with Node.js only.
-- `bin/rake lint:potch` lints only the potch ES modules and checks that
-  `lib/opal/potch/potch.mjs` matches its parts. After editing
-  `lib/opal/potch/parts/*.mjs`, regenerate it with `bin/rake potch:assemble`.
+- Run `node tasks/lint.mjs` (or `yarn lint`) to check the JavaScript style. It
+  checks that `lib/opal/potch/potch.mjs` matches its parts, runs ESLint on
+  potch, the compiler and the tasks, then builds the corelib and stdlib and
+  lints the result.
+- After editing `lib/opal/potch/parts/*.mjs`, regenerate `potch.mjs` with
+  `node tasks/potch/assemble.mjs`.
+- The Ruby code style is described by `.rubocop.yml`; checking it needs a Ruby
+  with `rubocop` and `rubocop-performance` (optional).
 
 ## Notes
-- The list of MSpec files is in `spec/ruby_specs` and filters live in `spec/filters`.
-- Tests depend on initialized submodules (`spec/mspec`, `spec/ruby`, `test/cruby`).
-- Use `bundle install`, not `bin/setup`, to install the gems without
-  rewriting `Gemfile.lock` (`bin/setup` runs `bundle update`).
+- The list of MSpec files is in `spec/ruby_specs` and filters live in
+  `spec/filters` (`bin/format-filters` sorts them, `bin/remove-filters`
+  removes the ones given on stdin).
+- Tests depend on initialized submodules (`spec/mspec`, `spec/ruby`,
+  `test/cruby`); `node bin/git-submodule-fast-install` fetches them as
+  archives.
+- The compiler fixtures (`spec/lib/fixtures/compiler/**/*.rb` and their
+  expected `.js`) are regenerated with `node tasks/compiler/update_fixtures.mjs`;
+  review the diff.
+- Other tasks: `node tasks/dist.mjs` (build corelib/stdlib),
+  `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
+  (performance comparison with master), `node tasks/release.mjs` (changelog,
+  release preparation).
 - The Node.js stdlib needs `NODE_PATH=stdlib/nodejs/node_modules` (for
   `picomatch`) when running Opal-built JS with plain `node` instead of
   `exe/opal -Rnodejs`.
-- `exe/opal` (and `bin/opal`) is the Node.js CLI on the JS compiler
-  (`lib/opal/compiler/cli`); the Ruby CLI is `bin/opal-rb` until the Ruby
-  compiler is removed (POTCH.md). The test tasks use `exe/opal`.
 - Browser runners without a system browser: download one with
   `npx @puppeteer/browsers install chrome-headless-shell@stable` (or
   `firefox@esr_128.14.0esr`) and point `GOOGLE_CHROME_BINARY` /
@@ -77,9 +90,10 @@ codebase healthy.
   work.
 - Write commit messages in the `subsystem: summary` form so changes are easy to
   track.
-- New features or bugfixes should come with tests. For compiler or builder
-  changes add RSpec specs; for runtime or stdlib consult the ruby/spec suite
-  first and add new specs under `spec/opal` if needed.
+- New features or bugfixes should come with tests. For parser, compiler,
+  builder or CLI changes add specs under `spec/lib/{potch,compiler}`; for
+  runtime or stdlib consult the ruby/spec suite first and add new specs under
+  `spec/opal` if needed.
 - See `HACKING.md` and `CONTRIBUTING.md` for more detailed guides on
   collaborating on Opal.
 - Do not commit changes to external submodules such as `spec/ruby` or

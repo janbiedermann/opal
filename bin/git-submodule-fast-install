@@ -1,49 +1,45 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env node
+// Installs the git submodules from GitHub zip archives of their commits
+// (faster than cloning, e.g. on CI), then runs `git submodule init`.
+const { execSync, execFileSync } = require("node:child_process");
+const { existsSync, mkdirSync, rmSync, readdirSync, renameSync } = require("node:fs");
+const { dirname, join } = require("node:path");
 
-def system(*args)
-  puts "== command: #{args.inspect}"
-  super
-end
+const run = (cmd, args) => {
+  console.log(`== command: ${[cmd, ...args].join(" ")}`);
+  execFileSync(cmd, args, { stdio: "inherit" });
+};
 
-def system!(*args)
-  system(*args) or raise "== command failed: #{args.inspect}"
-end
+process.chdir(join(__dirname, ".."));
+mkdirSync("tmp", { recursive: true });
+try {
+  execSync("git submodule --quiet deinit --all -f", { stdio: "ignore" });
+} catch {
+  // nothing to deinit
+}
 
+const modules = {};
+for (const line of execSync("git config -f .gitmodules --list", { encoding: "utf8" }).split("\n").filter(Boolean)) {
+  const [fullkey, value] = [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)];
+  const [, name, key] = fullkey.match(/^submodule\.(.+)\.([^.]+)$/);
+  (modules[name] ||= {})[key] = value.trim();
+}
+for (const line of execSync("git submodule", { encoding: "utf8" }).split("\n").filter(Boolean)) {
+  const [, sha1, name] = line.slice(1).match(/^(\w+) (\S+)/);
+  modules[name].sha1 = sha1;
+}
 
-Dir.chdir "#{__dir__}/.."
-Dir.mkdir 'tmp' unless File.directory? 'tmp'
+for (const [name, { url, sha1, path }] of Object.entries(modules)) {
+  console.log(`== installing ${name}...`);
+  const dir = dirname(path);
+  const zip = `tmp/${sha1}.zip`;
+  run("curl", ["-L", `${url.replace(/\.git$/, "")}/archive/${sha1}.zip`, "-o", zip]);
+  run("unzip", ["-q", zip, "-d", dir]);
+  rmSync(zip);
+  if (existsSync(path)) rmSync(path, { recursive: true, force: true });
+  const extracted = readdirSync(dir).find((e) => e.endsWith(`-${sha1}`));
+  renameSync(join(dir, extracted), path);
+  console.log(`== completed installing ${name}.`);
+}
 
-system 'git submodule --quiet deinit --all -f 2> /dev/null'
-
-modules = {}
-`git config -f #{__dir__}/../.gitmodules --list`.lines.each do |line|
-  fullkey, value = line.split('=', 2)
-  _, name, key = fullkey.split('.', 3)
-  modules[name] ||= {}
-  modules[name][key.to_sym] = value.strip
-end
-
-`git submodule`.lines.each do |line|
-  sha1, name = line[1..-1].scan(/^(?<sha1>\w+) (?<name>\S+)/).first
-  modules[name][:sha1] = sha1
-end
-
-modules.map do |name, config|
-  puts "== installing #{name}..."
-  url, sha1, path = config.values_at(:url, :sha1, :path)
-  dir = File.dirname(path)
-  url.sub!(/\.git$/, '')
-
-  Thread.new do
-    system! "curl -L #{url}/archive/#{sha1}.zip -o #{sha1}.zip"
-
-    system! "unzip -q #{sha1}.zip -d #{dir}"
-    system! "rm #{sha1}.zip"
-
-    system! "rm -rf #{path}" if File.directory? path
-    system! "mv #{dir}/*-#{sha1} #{path}"
-    print "== completed installing #{name}.\n"
-  end
-end.each(&:join)
-
-system! 'git submodule init'
+run("git", ["submodule", "init"]);

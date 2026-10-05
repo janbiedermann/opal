@@ -1,6 +1,15 @@
 {
   "name": "opal-dev",
   "private": true,
+  "scripts": {
+    "test": "node tasks/test.mjs",
+    "lint": "node tasks/lint.mjs",
+    "dist": "node tasks/dist.mjs",
+    "bench": "node tasks/bench.mjs",
+    "performance": "node tasks/performance.mjs",
+    "update-fixtures": "node tasks/compiler/update_fixtures.mjs",
+    "potch:assemble": "node tasks/potch/assemble.mjs"
+  },
   "dependencies": {
     "benchmark": "^2.1.4",
     "browserify": "^17.0.0",

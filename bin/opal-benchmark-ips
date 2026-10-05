@@ -1,8 +1,10 @@
-#!/usr/bin/env ruby
-
-file = ARGV.shift
-if ARGV.any?
-  warn "usage example:\n\n  #{$0} benchmark-ips/bm_case.rb\n"
+#!/bin/sh
+# Runs a benchmark-ips benchmark (needs BENCHMARK_IPS_LIB, see tasks/bench.mjs):
+#   bin/opal-benchmark-ips benchmark-ips/bm_case.rb
+if [ $# -ne 1 ]; then
+  echo "usage example:" >&2
+  echo "" >&2
+  echo "  $0 benchmark-ips/bm_case.rb" >&2
   exit 1
-end
-exec 'bundle', 'exec', 'rake', 'bench:ips', "FILE=#{file}"
+fi
+exec node "$(dirname "$0")/../tasks/bench.mjs" ips "$1"

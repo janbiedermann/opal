@@ -1,5 +1,4 @@
-// The HTTP server the open-uri tests talk to (port 4567). Port of
-// test/opal/http_server.rb (Sinatra).
+// The HTTP server the open-uri tests talk to (port 4567).
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

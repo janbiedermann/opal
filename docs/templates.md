@@ -44,7 +44,7 @@ Template['login']
 
 ## ERB Templates
 
-Support for `erb` templates is built in directly to the opal gem and stdlib.
+Support for `erb` templates is built in directly to Opal (`.opalerb` files) and its stdlib.
 There is one caveat though when working with sprockets - it must have the
 `.opalerb` file extension, instead of `.erb`. This is because sprockets has a
 built in handler for `.erb` files.
@@ -82,7 +82,8 @@ puts template.render(user)
 ## Haml templates
 
 `opal-haml` allows `.haml` templates to be compiled, just like opal compiles
-ruby code, ready to run on the client.
+ruby code, ready to run on the client. (It is a Ruby gem working with the
+Sprockets pipeline, for Opal 1.x.)
 
 To get started, add to your Gemfile:
 

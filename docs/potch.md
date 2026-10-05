@@ -165,7 +165,7 @@ directly (see above).
 ## Running the tests
 
 ```
-bin/rake potch
+node tasks/test.mjs potch
 ```
 
 Runs the full suite (`node --test spec/lib/potch/*.test.mjs`) - currently 8000+
@@ -187,7 +187,7 @@ one, in a fixture with many heredocs in one file) is still open and not
 yet root-caused.
 
 ```
-bin/rake lint:potch    # eslint over the potch modules, specs, tasks and benchmarks,
+node tasks/lint.mjs    # eslint (potch, the compiler, the tasks and the built corelib),
                        # plus the potch.mjs assemble check
 ```
 
@@ -199,8 +199,8 @@ header) that `index.mjs` imports from. Regenerate it after editing anything
 under `parts/`:
 
 ```
-bin/rake potch:assemble          # (re)writes lib/opal/potch/potch.mjs
-bin/rake potch:assemble_check    # verifies it's up to date without writing (part of bin/rake lint)
+node tasks/potch/assemble.mjs           # (re)writes lib/opal/potch/potch.mjs
+node tasks/potch/assemble.mjs --check   # verifies it's up to date without writing (part of tasks/lint.mjs)
 ```
 
 `lib/opal/potch/field_order.mjs` is generated from Prism's `config.yml` by
@@ -210,7 +210,7 @@ regenerating when potch moves to a new Prism version.
 ## Benchmarking
 
 ```
-bin/rake potch:bench    # RUNS=n WARMUP_RUNS=n
+node benchmark/potch/run.mjs    # [--runs=N] [--warmup-runs=N]
 ```
 
 See [`potch_performance.md`](./potch_performance.md) for the current numbers and what

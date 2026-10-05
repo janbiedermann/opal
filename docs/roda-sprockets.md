@@ -1,5 +1,10 @@
 # Using Opal with Roda and Sprockets
 
+> **Note:** this guide describes an integration through Ruby gems
+> (opal-sprockets, opal-rails, opal-rspec, ...) and the `opal` gem. Opal 2
+> runs on Node.js and isn't a Ruby gem anymore, so the guide applies to
+> Opal 1.x until these integrations move to the Node.js toolchain.
+
 Add Opal-Sprockets and Roda-Sprockets to your Gemfile (or install using `gem`):
 
 ```ruby

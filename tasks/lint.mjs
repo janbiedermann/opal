@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Lints Opal's JavaScript with ESLint, with Node.js only (the JS part of
-// `bin/rake lint`; RuboCop still needs Ruby):
+// Lints Opal's JavaScript with ESLint (Ruby code style: see HACKING.md):
 //   * potch (and that lib/opal/potch/potch.mjs matches its parts)
 //   * the JS compiler, builder, CLI and the Node.js tasks
 //   * corelib and stdlib as built by tasks/dist.mjs (in tmp/lint); errors
@@ -18,7 +17,7 @@ async function main() {
   const steps = [
     ["potch:assemble --check", () => run(process.execPath, ["tasks/potch/assemble.mjs", "--check"])],
     ["potch", () => eslint("lib/opal/potch", "spec/lib/potch", "tasks/potch", "benchmark/potch", "exe/potch")],
-    ["compiler", () => eslint("lib/opal/compiler", "spec/lib/compiler", "tasks/compiler", "tasks/dist.mjs", "tasks/test.mjs", "tasks/lint.mjs", "tasks/testing")],
+    ["compiler", () => eslint("lib/opal/compiler", "spec/lib/compiler", "tasks/compiler", ...glob("tasks/*.mjs"), "tasks/testing")],
     ["corelib and stdlib", async () => {
       rmSync("tmp/lint", { recursive: true, force: true });
       const built = await run(process.execPath, ["tasks/dist.mjs"], { env: { ...process.env, DIR: "tmp/lint", FORMATS: "js,map" } });

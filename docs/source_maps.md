@@ -2,47 +2,44 @@
 
 Source maps are available on most environments we support.
 
-#### Processor `source_map_enabled` flag
-To enable sourcemaps in the Sprockets processor you need to turn on the relative flag:
+## The `opal` CLI
 
-```ruby
-Opal::Config.source_map_enabled = true # default
+`opal` appends the source map to the compiled code as a data URI by
+default:
+
+```
+$ opal --compile app.rb > app.js           # with an embedded source map
+$ opal --compile --no-source-map app.rb    # without
+$ opal --compile -P app.js.map app.rb      # also writes the map to a file
 ```
 
+When running code (`opal app.rb`, the default nodejs runner, or `-R chrome`
+etc.), the source maps are used for the backtraces.
 
-#### Sprockets debug mode
+`opal --debug-source-map -e 'puts 123'` prints a link to a source map
+visualization of the compiled code.
 
-The source maps only work with Sprockets in debug mode - this is a limitation of Sprockets.
+## The builder
 
-## Enable source maps
+The builder (`lib/opal/compiler/builder/builder.mjs`) gives the code with
+the embedded source map, or the map as an object:
 
-### Rails
-
-Rails has debug mode already enabled in development environment with the following line from `config/environments/development.rb`:
-
-```ruby
-# Debug mode disables concatenation and preprocessing of assets.
-# This option may cause significant delays in view rendering with a large
-# number of complex assets.
-config.assets.debug = true
+```js
+const builder = new Builder();
+builder.build("application");
+builder.compiledSource();                        // code + embedded source map
+builder.compiledSource({ withSourceMap: false }); // just the code
+builder.sourceMap.map();                         // the (index) source map
 ```
 
-`opal-rails` also enables sourcemaps in development so with the standard setup you ready to go.
+In [directory mode](directory_mode.md) each file gets its own `.map` file.
 
+## The server runner
 
-### Sinatra
+`opal -R server app.rb` serves the program with its source map embedded.
 
-You can add `Opal::Server` as in the official example: [sinatra/config.ru](https://github.com/opal/opal/blob/master/examples/sinatra/config.ru).
+## The compiler
 
-### Opal::Server
-
-`Opal::Server` (which is based on Sprockets) implements sourcemaps and can be used alone or with `Rack::Cascade` in conjunction with other apps.
-
-### Opal::SimpleServer
-
-Like `Opal::Server`, `Opal::SimpleServer` (which isn't based on Sprockets) implements sourcemaps properly.
-
-### Opal::Builder
-
-`Opal::Builder` is a bit lower level and doesn't support source maps by itself. It requires you to call in a specific method to generate them yourself.
-
+`new Compiler(source, { file }).sourceMap` is the source map of a single
+compiled file (`map()` gives the JSON object, `toDataUriComment()` the
+comment to append).

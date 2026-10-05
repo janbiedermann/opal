@@ -1,54 +1,48 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env node
+// Sorts and deduplicates the `fails` lines of every filter group in
+// spec/filters/**/*.rb.
+import("node:fs").then(async (fs) => {
+  const { glob } = await import("../tasks/testing/glob.mjs");
+  process.chdir(new URL("..", import.meta.url).pathname);
 
-sort_lines = -> lines {
-  lines.sort.uniq { |l| l.split('" # ', 2).first }
-}
+  // like Ruby's Array#sort (byte order) then #uniq by the spec name
+  const byteCompare = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+  const sortLines = (lines) => {
+    const seen = new Set();
+    return [...lines].sort(byteCompare).filter((l) => {
+      const key = l.split('" # ')[0];
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
 
-write_group = ->(title:, lines:, type:) {
-  %{#{type} "#{title}" do\n}+
-  sort_lines[lines].join+
-  %{end\n}
-}
-
-write_groups = -> groups {
-  %{# NOTE: run bin/format-filters after changing this file\n}+
-  groups.map.with_index do |group, index|
-    puts "- #{group[:type]} #{group[:title].inspect}..."
-    ("\n" if index > 0).to_s + write_group.call(**group)
-  end.join
-}
-
-group_lines = -> lines {
-  groups = []
-  group = nil
-  lines.each do |line|
-    case line
-    when /^(opal_(?:unsupported_)?filter) *"([^"]+)" *do *\n/
-      raise "bad group for #{line.inspect}!" if group
-
-      group = {
-        type: $1,
-        title: $2,
-        lines: []
+  const groupLines = (lines) => {
+    const groups = [];
+    let group = null;
+    for (const line of lines) {
+      const m = /^(opal_(?:unsupported_)?filter) *"([^"]+)" *do *\n/.exec(line);
+      if (m) {
+        if (group) throw new Error(`bad group for ${JSON.stringify(line)}!`);
+        group = { type: m[1], title: m[2], lines: [] };
+      } else if (/^ {2}fails/.test(line)) {
+        group.lines.push(line);
+      } else if (/^end/.test(line)) {
+        groups.push(group);
+        group = null;
       }
+    }
+    return groups;
+  };
 
-    when /^  fails/
-      group[:lines] << line
+  const writeGroups = (groups) => "# NOTE: run bin/format-filters after changing this file\n" + groups.map((group, index) => {
+    console.log(`- ${group.type} ${JSON.stringify(group.title)}...`);
+    return (index > 0 ? "\n" : "") + `${group.type} "${group.title}" do\n` + sortLines(group.lines).join("") + "end\n";
+  }).join("");
 
-    when /^end/
-      groups << group
-      group = nil
-    end
-  end
-  groups
-}
-
-format_filter = -> path {
-  File.write path, write_groups[group_lines[File.read(path).lines]]
-}
-
-Dir['spec/filters/**/*.rb'].each do |path|
-  puts
-  puts "Formatting #{path} ..."
-  format_filter[path]
-end
+  for (const path of glob("spec/filters/**/*.rb")) {
+    console.log(`\nFormatting ${path} ...`);
+    const lines = fs.readFileSync(path, "utf8").split(/(?<=\n)/);
+    fs.writeFileSync(path, writeGroups(groupLines(lines)));
+  }
+});

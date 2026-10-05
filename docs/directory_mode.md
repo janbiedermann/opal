@@ -1,6 +1,6 @@
 # Directory Mode
 
-By default, `Opal::Builder` and `opal` CLI tool build all the dependencies, then concatenate all the resulting JavaScript into a single file, possibly with a concatenated source map. This used to be a robust idea, before introduction of protocols like HTTP/2, HTTP/3 and before Rails 7. This also kind of duplicates the work of JavaScript bundlers and makes their work a little bit more difficult.
+By default, the builder and the `opal` CLI tool build all the dependencies, then concatenate all the resulting JavaScript into a single file, possibly with a concatenated source map. This used to be a robust idea, before introduction of protocols like HTTP/2, HTTP/3 and before Rails 7. This also kind of duplicates the work of JavaScript bundlers and makes their work a little bit more difficult.
 
 Since Opal 2.0, we have introduced a directory mode, which builds the resulting JavaScript into a directory instead of building a single file. It also duplicates the source files into this resulting directory and we debundle the source maps. **It is now, along with the ESM mode, the recommended way to build your Opal project and we will explore the ways to make it the default in some future major release.**
 
@@ -48,37 +48,26 @@ This command should simply output the following:
 "Hello world!"
 ```
 
-## `Opal::Builder`
+## The builder
 
-If you build your program with `Opal::Builder` class, for instance in your Rake task, its semantics in the directory mode also change slightly. For instance, you may have a code like this:
+If you build your program with the builder (`lib/opal/compiler/builder/builder.mjs`), for instance in a build script, its semantics in the directory mode also change slightly. For instance, you may have a code like this:
 
-```ruby
-builder = Opal::Builder.new
-builder.append_paths __dir__
-builder.build_require "opal", load: true
-builder.build "my_program.rb"
-File.binwrite("my_program.js", builder.to_s)
+```js
+const builder = new Builder();
+builder.appendPaths(import.meta.dirname);
+builder.buildRequire("opal", { load: true });
+builder.build("my_program.rb");
+writeFileSync("my_program.js", builder.toString());
 ```
 
 To use the directory mode and ESM, build your program like follows:
 
-```ruby
-builder = Opal::Builder.new(compiler_options: {esm: true, directory: true})
-builder.append_paths __dir__
-builder.build_require "opal", load: true
-builder.build "my_program.rb"
-builder.compile_to_directory "my_program"
+```js
+const builder = new Builder({ compilerOptions: { esm: true, directory: true } });
+builder.appendPaths(import.meta.dirname);
+builder.buildRequire("opal", { load: true });
+builder.build("my_program.rb");
+builder.compileToDirectory("my_program");
 ```
 
-To set compiler options, you can also use global variables:
-
-```ruby
-Opal::Config.esm = true
-Opal::Config.directory = true
-```
-
-Note two differences: you can't use `#to_s` anymore and you need to define the correct compiler options.
-
-## Sprockets
-
-Unfortunately, the Sprockets pipeline is not supported with directory mode. While we intend to support the Sprockets pipeline for the foreseeable future, it's mostly in a maintenance stage and new features like directory mode won't be supported. We recommend you to migrate to any pipeline that uses `Opal::Builder` under the hood.
+Note two differences: you can't use `toString()` anymore and you need to define the correct compiler options.
