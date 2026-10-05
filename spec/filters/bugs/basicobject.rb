@@ -12,7 +12,6 @@ opal_filter "BasicObject" do
   fails "BasicObject#instance_eval converts lineno argument with #to_int method" # Expected "corelib/kernel.rb>" == "15" to be truthy but was false
   fails "BasicObject#instance_eval evaluates string with given filename and linenumber" # Expected ["<internal", "corelib/kernel.rb>"] == ["a_file", "10"] to be truthy but was false
   fails "BasicObject#instance_eval evaluates string with given filename and negative linenumber" # Expected ["<internal", "corelib/kernel.rb>"] == ["b_file", "-98"] to be truthy but was false
-  fails "BasicObject#instance_eval has access to the caller's local variables" # Expected nil == "value" to be truthy but was false
   fails "BasicObject#instance_eval raises ArgumentError if returned value is not Integer" # Expected TypeError (/can't convert Object to Integer/) but got: RuntimeError ()
   fails "BasicObject#instance_eval raises ArgumentError if returned value is not String" # Expected TypeError (/can't convert Object to String/) but got: NoMethodError (undefined method `encoding' for #<Object:0x72a4a>)
   fails "BasicObject#instance_eval raises TypeError for frozen objects when tries to set receiver's instance variables" # Expected FrozenError (can't modify frozen NilClass: nil) but no exception was raised (42 was returned)
