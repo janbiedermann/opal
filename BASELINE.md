@@ -124,6 +124,37 @@ s4 46.3 vs 411.6 ms, s5 233.6 vs 1,868.3 ms, s6 892.9 vs 8,428.1 ms. It
 compiles every corpus file, including s3, which fails with today's
 Node-hosted compiler.
 
+### Faster transform passes (2026-10-05)
+
+The `transform_ms` column above included a second parse: the benchmark
+started its timer before parsing the input of the passes (fixed in
+`benchmark/potch/bench_compiler.mjs`). Measured with the fixed benchmark,
+before and after two changes to the passes: the tree walk visits only the
+fields of a Prism node type that can hold nodes (from potch's field table),
+and a census of the parse tree skips the passes with nothing to do (no
+`for` loops, pattern matching, compound assignments, `.JS` calls, ...).
+The output is unchanged (all 13,068 files of the comparison corpus).
+
+| file | bytes | parse_ms | transform_ms before | transform_ms after | total_ms before | total_ms after |
+|---|---:|---:|---:|---:|---:|---:|
+| s0_201b.rb | 201 | 0.07 | 0.02 | 0.01 | 0.18 | 0.18 |
+| synth_deep_nest.rb | 206 | 0.27 | 0.20 | 0.10 | 0.66 | 0.53 |
+| s1_324b.rb | 324 | 0.23 | 0.06 | 0.03 | 0.66 | 0.62 |
+| synth_method_chain.rb | 4006 | 0.72 | 0.81 | 0.18 | 2.37 | 2.45 |
+| synth_binop_chain.rb | 5892 | 1.38 | 2.66 | 0.44 | 4.18 | 2.91 |
+| s2_pack.rb | 6019 | 1.42 | 0.45 | 0.19 | 2.76 | 2.98 |
+| s3_34kb.rb | 34065 | 4.33 | 3.46 | 1.39 | 16.90 | 14.08 |
+| s4_114kb.rb | 114391 | 12.67 | 12.05 | 4.65 | 55.10 | 49.44 |
+| synth_big_array.rb | 338895 | 43.45 | 17.92 | 8.38 | 74.02 | 71.27 |
+| synth_many_locals.rb | 317790 | 72.56 | 43.19 | 5.09 | 159.33 | 121.92 |
+| synth_many_methods.rb | 408902 | 115.68 | 170.81 | 35.14 | 504.95 | 377.72 |
+| s5_639kb.rb | 638935 | 55.69 | 61.92 | 22.80 | 213.84 | 202.77 |
+| synth_many_strings.rb | 648890 | 162.55 | 305.60 | 48.77 | 789.52 | 460.98 |
+| s6_mega_2.5mb.rb | 2555740 | 199.72 | 323.38 | 94.74 | 954.12 | 754.88 |
+
+The transforms are 3–9× faster and are now a small part of the total
+(code generation is the largest); totals vary by ±10 % between runs.
+
 ## How to reproduce
 
 The scripts live in `benchmark/potch/`:

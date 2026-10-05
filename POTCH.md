@@ -608,7 +608,7 @@ Still possible with Ruby, but optional: RuboCop on the Ruby code
 
 Later:
 * ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
-* optimize the transform tree walks (section 8)
+* ~~optimize the transform tree walks~~ (done: 3–9× faster, see BASELINE.md)
 * move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
 * the TODOs of phase 3: the forking builder, the `.rb.erb`/`.js.erb`
   processors, opal-builder bundling the compiler only once

@@ -26,13 +26,13 @@ for (const f of readdirSync(dir).filter((f) => f.endsWith(".rb")).sort()) {
       const pm = performance.now() - s;
 
       // the passes, on a fresh parse (they change the tree)
+      // (parsed before the timer starts)
       const c = new Compiler(src, { file: name, warning() {} });
       c.parse();
-      const program = c.envelope.ast;
+      const top = { type: "OpalTop", location: null, body: parseWithMetadata(src, null).ast.statements, kind: "main" };
       s = performance.now();
-      transform(c, { type: "OpalTop", location: null, body: parseWithMetadata(src, null).ast.statements, kind: "main" });
+      transform(c, top);
       const tm = performance.now() - s;
-      void program;
 
       s = performance.now();
       out = new Compiler(src, { file: name, warning() {} }).compile();
