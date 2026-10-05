@@ -203,6 +203,30 @@ describe("processors", () => {
   });
 });
 
+describe("ES modules in a build", () => {
+  test("a module imported by several .mjs files is included once and shared", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-esm-shared-"));
+    try {
+      writeFileSync(join(dir, "shared.mjs"), "export const box = { count: 0 };\nexport function bump() { return ++box.count; }\n");
+      writeFileSync(join(dir, "a.mjs"), 'import { bump } from "./shared.mjs";\nexport const a = bump();\n');
+      writeFileSync(join(dir, "b.mjs"), 'import { bump, box } from "./shared.mjs";\nexport const b = bump();\nexport { box };\n');
+      writeFileSync(join(dir, "main.rb"), 'require "a.mjs"\nrequire "b.mjs"\n');
+      const builder = newBuilder();
+      builder.appendPaths(dir);
+      builder.build("main.rb");
+      const a = builder.processed.find((p) => p.filename.endsWith("a.mjs")).source;
+      const b = builder.processed.find((p) => p.filename.endsWith("b.mjs")).source;
+      assert.equal(a.split("shared.mjs\"] = function").length - 1, 1);
+      assert.equal(b.split("shared.mjs\"] = function").length - 1, 0);
+      const Opal = { loaded() {} };
+      new Function("Opal", a + b)(Opal);
+      assert.deepEqual([Opal.esm.a.a, Opal.esm.b.b, Opal.esm.b.box.count], [1, 2, 2]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("ESM linker", () => {
   test("links the compiler into a working script", () => {
     const ns = (0, eval)(link(join(OPAL_ROOT, "lib", "opal", "compiler", "index.mjs")));

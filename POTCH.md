@@ -509,8 +509,9 @@ Remaining:
 * The Firefox runner talks CDP, which Firefox removed in version 129 (only
   WebDriver BiDi remains); it works with Firefox ESR 128. Moving it to
   BiDi is a separate task (the Ruby runner had the same limitation).
-* opal-builder bundles the compiler twice (once for opal-parser, once in the
-  builder's module graph).
+* ~~opal-builder bundles the compiler twice~~ (done: linked modules live in
+  `Opal.$$esm_registry` and each is linked once per build; opal-builder went
+  from 3,276 to 1,680 kB).
 
 ### Phase 4: Self-bootstrap
 
@@ -612,8 +613,8 @@ Later:
 * ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
 * ~~optimize the transform tree walks~~ (done: 3–9× faster, see BASELINE.md)
 * move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
-* the TODOs of phase 3: the forking builder and opal-builder bundling the
-  compiler only once (the `.rb.erb`/`.js.erb` processors are done)
+* the TODO of phase 3: the forking builder (the `.rb.erb`/`.js.erb`
+  processors and bundling the compiler once in opal-builder are done)
 
 ---
 
