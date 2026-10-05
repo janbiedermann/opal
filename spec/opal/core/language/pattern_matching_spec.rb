@@ -121,4 +121,16 @@ describe "pattern matching" do
     4 in String => a
     a.should == nil
   end
+
+  it "evaluates the value of `=>` once" do
+    calls = 0
+    value = -> { calls += 1; {a: 1, b: [2, 3]} }
+    value.call => {a:}
+    value.call => {b: [_, c]}
+    calls.should == 2
+    a.should == 1
+    c.should == 3
+    -> { value.call => {a: 2} }.should raise_error(NoMatchingPatternError)
+    calls.should == 3
+  end
 end
