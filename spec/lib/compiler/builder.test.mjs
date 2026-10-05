@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, statSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { Builder, MissingRequire } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { NullCache } from "../../../lib/opal/compiler/builder/cache.mjs";
 import { JsProcessor, RubyProcessor } from "../../../lib/opal/compiler/builder/processors.mjs";
@@ -289,6 +290,28 @@ describe("PathReader", () => {
       assert.notEqual(r.read(`../${OPAL_ROOT.split("/").pop()}/spec/spec_helper.rb`), null);
     } finally {
       process.chdir(cwd);
+    }
+  });
+});
+
+describe("source encodings", () => {
+  test("an ISO-8859-1 source is decoded one byte per character", async () => {
+    const { decodeSource } = await import("../../../lib/opal/compiler/builder/path_reader.mjs");
+    const bytes = Buffer.from([...Buffer.from("# encoding: iso-8859-1\n"), 0x80, 0x9f, 0xe9]);
+    const text = decodeSource(bytes);
+    assert.deepEqual([...text.slice(-3)].map((c) => c.charCodeAt(0)), [0x80, 0x9f, 0xe9]);
+    assert.equal(decodeSource(Buffer.from("caf\u00e9")), "caf\u00e9");
+  });
+
+  test("the CLI decodes its main file by the magic comment", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-latin1-"));
+    try {
+      const file = join(dir, "main.rb");
+      writeFileSync(file, Buffer.from([...Buffer.from('# encoding: iso-8859-1\np "caf'), 0xe9, ...Buffer.from('".bytes\n')]));
+      const result = spawnSync(process.execPath, [join(OPAL_ROOT, "exe", "opal"), "--no-source-map", file], { encoding: "utf8", env: { ...process.env, OPAL_CACHE_DISABLE: "1" } });
+      assert.equal(result.stdout, "[99, 97, 102, 233]\n");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

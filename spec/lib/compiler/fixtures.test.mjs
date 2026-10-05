@@ -9,6 +9,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Compiler } from "../../../lib/opal/compiler/index.mjs";
+import { decodeSource } from "../../../lib/opal/compiler/builder/path_reader.mjs";
 
 const FIXTURES = join(fileURLToPath(new URL(".", import.meta.url)), "..", "fixtures", "compiler");
 
@@ -31,7 +32,7 @@ for (const file of walk(FIXTURES)) {
   const expectedPath = file.replace(/\.rb$/, ".js");
 
   test(name, () => {
-    const source = readFileSync(file, "utf8");
+    const source = decodeSource(readFileSync(file)); // honours encoding magic comments
     const expected = readFileSync(expectedPath, "utf8");
     const options = { file: name, warning: () => {}, ...fixtureOptions(source) };
 

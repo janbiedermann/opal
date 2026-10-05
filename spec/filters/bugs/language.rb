@@ -92,12 +92,6 @@ opal_filter "language" do
   fails "Hash literal expands a BasicObject using ** into the containing Hash literal initialization" # NoMethodError: undefined method `respond_to?' for #<BasicObject:0xab798>
   fails "Hash literal raises an EncodingError at parse time when Symbol key with invalid bytes and 'key: value' syntax used" # Expected EncodingError (invalid symbol in encoding UTF-8 :"\xC3") but no exception was raised ({"Ã"=>1} was returned)
   fails "Hash literal raises an EncodingError at parse time when Symbol key with invalid bytes" # Expected EncodingError (invalid symbol in encoding UTF-8 :"\xC3") but no exception was raised ({"Ã"=>1} was returned)
-  fails "Heredoc string allow HEREDOC with <<\"identifier\", interpolated" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "Heredoc string allows HEREDOC with <<'identifier', no interpolation" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "Heredoc string allows HEREDOC with <<-'identifier', allowing to indent identifier, no interpolation" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "Heredoc string allows HEREDOC with <<-\"identifier\", allowing to indent identifier, interpolated" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "Heredoc string allows HEREDOC with <<-identifier, allowing to indent identifier, interpolated" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "Heredoc string allows HEREDOC with <<identifier, interpolated" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
   fails "Inside 'endless' method definitions allows method calls without parenthesis" # NoMethodError: undefined method `concat' for "Hi, "
   fails "Instance variables global variable when global variable is uninitialized warns about accessing uninitialized global variable in verbose mode" # Expected warning to match: /warning: global variable `\$specs_uninitialized_global_variable' not initialized/ but got: ""
   fails "Instantiating a singleton class raises a TypeError when allocate is called" # Expected TypeError but no exception was raised (#<Object:0x90a56> was returned)
@@ -227,10 +221,8 @@ opal_filter "language" do
   fails "Predefined global $\\ does not call #to_str to convert the object to a String" # Expected TypeError but no exception was raised (#<MockObject:0xa7c78 @name="$\\ value", @null=nil> was returned)
   fails "Predefined global $\\ raises a TypeError if assigned not String" # Expected TypeError but no exception was raised (1 was returned)
   fails "Predefined global $_ is Thread-local" # NotImplementedError: Thread creation not available
-  fails "Predefined global $_ is set at the method-scoped level rather than block-scoped" # Expected  "bar " ==  "baz " to be truthy but was false
   fails "Predefined global $stdout raises TypeError error if assigned to nil" # Expected TypeError but no exception was raised (nil was returned)
   fails "Predefined global $stdout raises TypeError error if assigned to object that doesn't respond to #write" # Expected TypeError but no exception was raised (#<MockObject:0xa7634 @name="object", @null=nil> was returned)
-  fails "Predefined global $~ is set at the method-scoped level rather than block-scoped" # Expected nil == nil to be falsy but was true
   fails "Predefined global $~ raises an error if assigned an object not nil or instanceof MatchData" # Expected TypeError but no exception was raised (#<Object:0xa73aa> was returned)
   fails "Ruby String interpolation returns a string with the source encoding by default" # Expected #<Encoding:UTF-8> == #<Encoding:ASCII-8BIT> to be truthy but was false
   fails "Ruby String interpolation returns a string with the source encoding, even if the components have another encoding" # ArgumentError: unknown encoding name - euc-jp
@@ -248,9 +240,6 @@ opal_filter "language" do
   fails "The END keyword runs in reverse order of registration" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x5bfd0 @method="END" @object=nil>
   fails "The END keyword runs only once for multiple calls" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x193ae>
   fails "The END keyword warns when END is used in a method" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x5bfd0 @method="END" @object=nil>
-  fails "The __ENCODING__ pseudo-variable is US-ASCII by default" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "The __ENCODING__ pseudo-variable is the encoding specified by a magic comment in the file" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "The __ENCODING__ pseudo-variable is the encoding specified by a magic comment inside an eval" # Expected #<Encoding:UTF-8> == #<Encoding:ASCII-8BIT> to be truthy but was false
   fails "The __ENCODING__ pseudo-variable is the evaluated strings's one inside an eval" # Expected #<Encoding:UTF-8> == #<Encoding:US-ASCII> to be truthy but was false
   fails "The __FILE__ pseudo-variable with load equals the absolute path of a file loaded by a relative path" # LoadError: cannot load such file -- ruby/fixtures/code/file_fixture
   fails "The __FILE__ pseudo-variable with load equals the absolute path of a file loaded by an absolute path" # LoadError: cannot load such file -- ruby/fixtures/code/file_fixture

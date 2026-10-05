@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "
 import { join, relative, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Compiler } from "../../lib/opal/compiler/index.mjs";
+import { decodeSource } from "../../lib/opal/compiler/builder/path_reader.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURES = join(ROOT, "spec", "lib", "fixtures", "compiler");
@@ -33,7 +34,7 @@ const args = process.argv.slice(2);
 const files = (args.length ? args : [FIXTURES]).flatMap((p) => walk(resolve(p)));
 let written = 0;
 for (const file of files) {
-  const source = readFileSync(file, "utf8");
+  const source = decodeSource(readFileSync(file)); // honours encoding magic comments
   const options = { file: relative(FIXTURES, file), warning: () => {}, ...fixtureOptions(source) };
   let content;
   try {

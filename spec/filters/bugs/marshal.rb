@@ -82,7 +82,6 @@ opal_filter "Marshal" do
   fails "Marshal.load loads an array containing objects having _dump method, and with proc" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)
   fails "Marshal.load loads an array containing objects having marshal_dump method, and with proc" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)
   fails "Marshal.load when a class does not exist in the namespace raises an ArgumentError" # Expected ArgumentError (undefined class/module NamespaceTest::SameName) but no exception was raised (#<SameName:0x89b06> was returned)
-  fails "Marshal.load when called on objects with custom _dump methods loads the String in non US-ASCII and non UTF-8 encoding" # ArgumentError: unknown encoding name - windows-1251
   fails "Marshal.load when called with a proc call the proc with extended objects" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)
   fails "Marshal.load when called with a proc call the proc with fully initialized strings" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)
   fails "Marshal.load when called with a proc calls the proc for recursively visited data" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)

@@ -383,9 +383,10 @@ multi-line literals.
 * Temp counters (`$logical_op_recvr_tmp_N`, `$for_tmpN`, ...) restart for
   every file (the Ruby compiler kept them per process).
 * potch works on JS strings: raw bytes in a source that aren't valid
-  UTF-8 become U+FFFD; sources in other encodings must be converted to
-  UTF-8 before compiling (the bridge does this; the phase 3 builder will
-  use TextDecoder).
+  UTF-8 become U+FFFD; sources in other encodings are decoded by the
+  builder (magic comment). Since then, string literals in ISO-8859-1 and
+  US-ASCII sources get their source encoding and bytes, and `__ENCODING__`
+  the source encoding, as in CRuby (see docs/encoding.md).
 
 **Ruby compiler bugs kept for parity, fixed after phase 5** (each with a
 fixture and specs):
