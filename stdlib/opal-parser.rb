@@ -148,6 +148,8 @@ module Kernel
     str = ::Opal.coerce_to!(str, String, :to_str)
     default_eval_options = { file: file || '(eval)', eval: true }
     compiling_options = __OPAL_COMPILER_CONFIG__.merge(default_eval_options)
+    # the code can use and assign the binding's local variables
+    compiling_options[:scope_variables] = binding.local_variables.map(&:to_s) if binding
     compiler = Opal::Compiler.new(str, compiling_options)
     code = compiler.compile
     code += compiler.source_map.to_data_uri_comment unless compiling_options[:no_source_map]

@@ -10,7 +10,6 @@ opal_filter "BasicObject" do
   fails "BasicObject#instance_eval constants lookup when a String given looks in the receiver singleton class first" # Expected "Receiver" == "singleton_class" to be truthy but was false
   fails "BasicObject#instance_eval converts filename argument with #to_str method" # Expected "<internal" == "file.rb" to be truthy but was false
   fails "BasicObject#instance_eval converts lineno argument with #to_int method" # Expected "corelib/kernel.rb>" == "15" to be truthy but was false
-  fails "BasicObject#instance_eval converts string argument with #to_str method" # NoMethodError: undefined method `encoding' for #<Object:0x72810>
   fails "BasicObject#instance_eval evaluates string with given filename and linenumber" # Expected ["<internal", "corelib/kernel.rb>"] == ["a_file", "10"] to be truthy but was false
   fails "BasicObject#instance_eval evaluates string with given filename and negative linenumber" # Expected ["<internal", "corelib/kernel.rb>"] == ["b_file", "-98"] to be truthy but was false
   fails "BasicObject#instance_eval has access to the caller's local variables" # Expected nil == "value" to be truthy but was false

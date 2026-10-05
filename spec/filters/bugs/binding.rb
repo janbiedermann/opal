@@ -1,10 +1,5 @@
 # NOTE: run bin/format-filters after changing this file
 opal_filter "Binding" do
-  fails "Binding#clone is a shallow copy of the Binding object" # NoMethodError: undefined method `a' for #<BindingSpecs::Demo:0x3aa86 @secret=99>
-  fails "Binding#clone returns a copy of the Binding object" # NoMethodError: undefined method `a' for #<BindingSpecs::Demo:0x3ac2e @secret=99>
-  fails "Binding#dup is a shallow copy of the Binding object" # NoMethodError: undefined method `a' for #<BindingSpecs::Demo:0x336ac @secret=99>
-  fails "Binding#dup returns a copy of the Binding object" # NoMethodError: undefined method `a' for #<BindingSpecs::Demo:0x33854 @secret=99>
-  fails "Binding#eval behaves like Kernel.eval(..., self)" # NoMethodError: undefined method `a' for #<BindingSpecs::Demo:0x4e62 @secret=10>
   fails "Binding#eval does not leak variables to cloned bindings" # Expected [] == ["x"] to be truthy but was false
   fails "Binding#eval reflects refinements activated in the binding scope" # NoMethodError: undefined method `foo' for "bar"
   fails "Binding#eval starts with a __LINE__ from the third argument if passed" # Expected 1 == 88 to be truthy but was false

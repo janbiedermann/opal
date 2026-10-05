@@ -49,10 +49,7 @@ opal_filter "Kernel" do
   fails "Kernel#eval raises a LocalJumpError if there is no lambda-style closure in the chain" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x4be5a>
   fails "Kernel#eval returns from the method calling #eval when evaluating 'return' in BEGIN" # SyntaxError: Unsupported sexp: preexe
   fails "Kernel#eval unwinds through a Proc-style closure and returns from a lambda-style closure in the closure chain" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x4be5a>
-  fails "Kernel#eval updates a local in a scope above a surrounding block scope" # Expected 1 == 2 to be truthy but was false
   fails "Kernel#eval updates a local in a scope above when modified in a nested block scope" # NoMethodError: undefined method `es' for #<MSpecEnv:0x4be5a>
-  fails "Kernel#eval updates a local in a surrounding block scope" # Expected 1 == 2 to be truthy but was false
-  fails "Kernel#eval updates a local in an enclosing scope" # Expected 1 == 2 to be truthy but was false
   fails "Kernel#eval uses the same scope for local variables when given the same binding" # NoMethodError: undefined method `a' for #<MSpecEnv:0x4be5a>
   fails "Kernel#eval with a magic encoding comment allows a magic encoding comment and a frozen_string_literal magic comment on the same line in emacs style" # Expected ["A", "CoercedObject"] to include "Vπsame_line"
   fails "Kernel#eval with a magic encoding comment allows a magic encoding comment and a subsequent frozen_string_literal magic comment" # Expected ["A", "CoercedObject"] to include "Vπstring"
@@ -77,7 +74,6 @@ opal_filter "Kernel" do
   fails "Kernel#instance_variables immediate values returns the correct array if an instance variable is added" # Expected RuntimeError but got: Exception (Cannot create property 'test' on number '0')
   fails "Kernel#is_a? does not take into account `class` method overriding" # TypeError: can't define singleton
   fails "Kernel#kind_of? does not take into account `class` method overriding" # TypeError: can't define singleton
-  fails "Kernel#local_variables is accessible from bindings" # Expected [] to include "a"
   fails "Kernel#method converts the given name to a String using #to_str calls #to_str to convert the given name to a String" # Mock 'method-name' expected to receive to_str("any_args") exactly 1 times but received it 0 times
   fails "Kernel#method converts the given name to a String using #to_str raises a NoMethodError if the given argument raises a NoMethodError during type coercion to a String" # Expected NoMethodError but got: NameError (undefined method `#<MockObject:0x9e5a6>' for class `Class')
   fails "Kernel#method converts the given name to a String using #to_str raises a TypeError if the given name can't be converted to a String" # Expected TypeError but got: NameError (undefined method `' for class `Class')
