@@ -121,10 +121,27 @@ module Opal
 
   singleton_class.alias_method :opal_compile, :compile
 
-  # Templates (.opalerb) at runtime
+  # Templates at runtime: .opalerb (compile) and Ruby ERB (render)
   module ERB
     def self.compile(source, file_name = '(erb)')
       Compiler.new(source, file_name).compile
+    end
+
+    # Renders a Ruby ERB template (<%= %>, <% %>, <%# %>) in this runtime;
+    # the template's code sees no local variables of the caller.
+    #
+    #   Opal::ERB.render("1 + 1 = <%= 1 + 1 %>") # => "1 + 1 = 2"
+    def self.render(source, file_name = '(erb)')
+      source = ::Opal.coerce_to!(source, ::String, :to_str)
+      %x{
+        var js = Opal.esm["opal/compiler/index"];
+        try {
+          return js.renderErb(source.valueOf(), { file: file_name, run: js.opalErbRunner(Opal) });
+        } catch (e) {
+          if (e.name === "OpalSyntaxError") #{::Kernel.raise ::SyntaxError, `e.message`};
+          throw e;
+        }
+      }
     end
 
     class Compiler

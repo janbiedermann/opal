@@ -4,7 +4,7 @@
 // builder/post_processor/dce_spec.rb.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, statSync, readFileSync, cpSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, statSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { Builder, MissingRequire } from "../../../lib/opal/compiler/builder/builder.mjs";
@@ -101,23 +101,9 @@ describe("Builder", () => {
   });
 
   test("preserves the output order", () => {
-    // spec/lib/fixtures/build_order, with file5 as a plain .rb file
-    // (the .rb.erb processor isn't part of the JS builder)
-    const dir = mkdtempSync(join(tmpdir(), "opal-build-order-"));
-    try {
-      cpSync(join(FIXTURES, "build_order.rb"), join(dir, "fixtures", "build_order.rb"));
-      cpSync(join(FIXTURES, "build_order"), join(dir, "fixtures", "build_order"), { recursive: true });
-      const erb = join(dir, "fixtures", "build_order", "file5.rb.erb");
-      const source = readFileSync(erb, "utf8").replace('<%= __dir__.inspect[1..-2] %>', join(dir, "fixtures", "build_order"));
-      writeFileSync(join(dir, "fixtures", "build_order", "file5.rb"), source);
-      rmSync(erb);
-      const builder = newBuilder();
-      builder.appendPaths(dir);
-      const order = [...builder.build("fixtures/build_order").toString().matchAll(/(FILE_[0-9]+)/g)].map((m) => m[1]);
-      assert.deepEqual([...new Set(order)], ["FILE_1", "FILE_2", "FILE_3", "FILE_4", "FILE_51", "FILE_5", "FILE_61", "FILE_62", "FILE_63", "FILE_64", "FILE_6", "FILE_7"]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    // (file5 is a .rb.erb template)
+    const order = [...builderWithPaths().build("fixtures/build_order").toString().matchAll(/(FILE_[0-9]+)/g)].map((m) => m[1]);
+    assert.deepEqual([...new Set(order)], ["FILE_1", "FILE_2", "FILE_3", "FILE_4", "FILE_51", "FILE_5", "FILE_61", "FILE_62", "FILE_63", "FILE_64", "FILE_6", "FILE_7"]);
   });
 
   for (const esm of [true, false]) {

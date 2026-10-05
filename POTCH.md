@@ -422,10 +422,12 @@ passed since the switch to potch and the JS compiler).
      prefork scheduler: compile files in parallel with `worker_threads` (or
      child processes), keeping the output order deterministic as the
      scheduler's OrderCorrector does.
-   * **TODO:** the `.rb.erb` and `.js.erb` processors are dropped: they run
-     arbitrary Ruby through Ruby's ERB at build time, which a Node-only
-     toolchain can't do. Revisit later, e.g. by evaluating the templates
-     through Opal in Node. `.opalerb` is unaffected.
+   * ~~**TODO:** the `.rb.erb` and `.js.erb` processors~~ (done): templates
+     are translated to Ruby (`erbToRuby` in `lib/opal/compiler/erb.mjs`) and
+     run in Opal: in a worker thread with the nodejs stdlib during a Node.js
+     build (`builder/erb_runner.mjs`), in the running Opal otherwise
+     (`opalErbRunner`, also `Opal::ERB.render` in opal-parser, browsers
+     included). The output matches Ruby's ERB.
 2. Port to `lib/opal/compiler/cli/`:
    * the CLI and its options
    * runners: Node first; then the browser runners (Chrome/Firefox/Safari/
@@ -610,8 +612,8 @@ Later:
 * ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
 * ~~optimize the transform tree walks~~ (done: 3–9× faster, see BASELINE.md)
 * move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
-* the TODOs of phase 3: the forking builder, the `.rb.erb`/`.js.erb`
-  processors, opal-builder bundling the compiler only once
+* the TODOs of phase 3: the forking builder and opal-builder bundling the
+  compiler only once (the `.rb.erb`/`.js.erb` processors are done)
 
 ---
 

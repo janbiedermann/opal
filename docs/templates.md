@@ -79,6 +79,34 @@ puts template.render(user)
 # => "<div class="row">...</div>"
 ```
 
+## Ruby ERB templates at build time (`.rb.erb`, `.js.erb`)
+
+The builder (and so `opal`) also renders Ruby ERB templates while building,
+like Ruby's `ERB.new(source).result` (`<%= expr %>`, `<% code %>`,
+`<%# comment %>`, `<%%` for a literal `<%`):
+
+* `name.rb.erb` is rendered, then compiled as Ruby (`require "name"`)
+* `name.js.erb` (any `.erb`) is rendered into JavaScript, loaded as the
+  module `name`
+
+```erb
+# app/config.rb.erb
+BUILT_AT = <%= Time.now.to_i %>
+VERSION = <%= File.read(File.join(__dir__, "VERSION")).strip.inspect %>
+```
+
+The template's code runs in Opal (with the Node.js stdlib: `File`, `Dir`,
+`ENV`, `__dir__`, ...), in a worker thread of the build. It can't `require`
+other files of your program.
+
+At runtime, with `opal-parser` (also in the browser), `Opal::ERB.render`
+renders a template in the running program:
+
+```ruby
+require "opal-parser"
+Opal::ERB.render("1 + 1 = <%= 1 + 1 %>") # => "1 + 1 = 2"
+```
+
 ## Haml templates
 
 `opal-haml` allows `.haml` templates to be compiled, just like opal compiles
