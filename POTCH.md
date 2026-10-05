@@ -419,10 +419,40 @@ passed since the switch to potch and the JS compiler).
      the ESM/CJS output modes.
    * `Opalfile` loses `add_gem_dependency` (no gems).
    * Decided: the builder is single-threaded (with a file cache) for now.
-   * **TODO:** a forking builder, the counterpart of the Ruby builder's
-     prefork scheduler: compile files in parallel with `worker_threads` (or
-     child processes), keeping the output order deterministic as the
-     scheduler's OrderCorrector does.
+   * **TODO (undecided):** a forking builder, the counterpart of the Ruby
+     builder's prefork scheduler: compile files in parallel with
+     `worker_threads` (or child processes), keeping the output order
+     deterministic as the scheduler's OrderCorrector does. Investigated on
+     2026-10-05 with a prototype worker pool (8-core Ryzen 7 5700G with
+     SMT, Node.js 22; cold builds without the file cache, compile plus
+     source map):
+
+     | build | files | sequential | 2 workers | 4 workers | 8 workers |
+     |---|---:|---:|---:|---:|---:|
+     | minimal app (corelib) | 75 | 526 ms | 417 | 334 | 349 |
+     | stdlib-heavy app | 110 | 788 ms | 598 | 470 | 494 |
+     | ruby/spec bundle | 2,579 | 4,536 ms | 3,374 | 2,405 | 2,088 |
+
+     * IPC is cheap: a round trip with the source and a result of code and
+       map (as a JSON string) takes ~30 µs for 0.2–10 KB files (1.4 ms at
+       300 KB), 2–6 % of their compile time.
+     * The costs are elsewhere: worker startup (70–100 ms until the pool is
+       ready), the JIT warm-up of each worker (two thirds of a small cold
+       build: the corelib compiles in 485 ms cold, 172 ms hot), and CPU
+       contention (with 4 workers each is 1.3–1.5× slower than alone, with
+       8 1.9–2.6×; 8 workers spend ~15 s of CPU on the 4.5 s ruby/spec
+       build). Small builds are fastest with 4 workers.
+     * Dependency discovery is no limit (knowing all files up front gives
+       the same times).
+     * With a warm file cache only changed files compile (the minimal app
+       builds in 256 ms through the CLI, against 740 ms without cache), so
+       a pool would only add its startup.
+     * Conclusion so far: the use case is a resident compiler (server
+       runner, watch-style rebuilds, test tasks) whose workers stay warm;
+       a single project build is better off sequential. If built: start
+       the pool only after many cache misses, at most 4 workers for typical
+       builds, results as strings, `--plugin` modules loaded in the workers
+       too, and an async build API (CLI runners, opal-builder).
    * ~~**TODO:** the `.rb.erb` and `.js.erb` processors~~ (done): templates
      are translated to Ruby (`erbToRuby` in `lib/opal/compiler/erb.mjs`) and
      run in Opal: in a worker thread with the nodejs stdlib during a Node.js
@@ -614,7 +644,8 @@ Later:
 * ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
 * ~~optimize the transform tree walks~~ (done: 3–9× faster, see BASELINE.md)
 * move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
-* the TODO of phase 3: the forking builder (the `.rb.erb`/`.js.erb`
+* the TODO of phase 3: the forking builder, undecided (investigated: worth
+  it for a resident compiler, not for single builds; the `.rb.erb`/`.js.erb`
   processors and bundling the compiler once in opal-builder are done)
 
 ---
