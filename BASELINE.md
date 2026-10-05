@@ -246,6 +246,53 @@ less GC work for the code generation):
 The whole compile is 9–19 % faster on the files above 30 KB (s6 17 %).
 `convert.mjs` adds 84 KB (5 KB gzipped) to potch.
 
+### Faster source maps (2026-10-05)
+
+The builder makes a source map of every file it compiles
+(`compiler.sourceMap.map()`), which took another 50–65 % of the compile
+time: the map split the code of each fragment into lines and built arrays
+of absolute and then relative segments before encoding them. It now makes
+the VLQ mappings in one pass over the fragments (newlines found with
+`indexOf`, segments relative to the previous one as they are made, the
+position and name of a fragment's node computed once for a run of fragments
+of the same node). The compiler no longer flattens the fragment tree for
+`compile` and `sourceMap`, which walk it (the flat `fragments` list, which
+DCE uses, is made on demand). Code and source maps are unchanged on all
+13,071 files of the comparison corpus.
+
+`compile()` plus `sourceMap.map()` as the builder calls them, best of two
+medians each:
+
+| file | bytes | map_ms before | map_ms after | compile+map before | compile+map after |
+|---|---:|---:|---:|---:|---:|
+| s0_201b.rb | 201 | 0.07 | 0.03 | 0.22 | 0.17 |
+| synth_deep_nest.rb | 206 | 0.03 | 0.02 | 0.50 | 0.49 |
+| s1_324b.rb | 324 | 0.13 | 0.05 | 0.61 | 0.54 |
+| synth_method_chain.rb | 4006 | 0.70 | 0.26 | 2.47 | 1.70 |
+| synth_binop_chain.rb | 5892 | 1.02 | 0.56 | 4.19 | 3.11 |
+| s2_pack.rb | 6019 | 0.33 | 0.18 | 3.00 | 2.76 |
+| s3_34kb.rb | 34065 | 2.35 | 1.63 | 16.21 | 15.72 |
+| s4_114kb.rb | 114391 | 19.46 | 10.70 | 52.68 | 42.74 |
+| synth_big_array.rb | 338895 | 0.59 | 0.57 | 41.05 | 40.64 |
+| synth_many_locals.rb | 317790 | 72.40 | 29.41 | 171.98 | 121.57 |
+| synth_many_methods.rb | 408902 | 196.24 | 97.01 | 494.75 | 351.23 |
+| s5_639kb.rb | 638935 | 83.78 | 45.49 | 217.75 | 179.12 |
+| synth_many_strings.rb | 648890 | 202.93 | 106.25 | 559.15 | 439.72 |
+| s6_mega_2.5mb.rb | 2555740 | 370.92 | 168.49 | 938.68 | 691.68 |
+
+Source maps are 1.5–2.6× faster; compile plus map is 19–29 % faster on the
+larger real files (s4 19 %, s5 18 %, s6 26 %) and up to 31 % on the
+synthetic ones.
+
+Tried without a gain, and left out: keeping a node's code strings as plain
+strings in its fragment array (the array recording its node and scope),
+so that only the flat list needs Fragment objects. Two thirds of the
+fragments became plain strings, but the named properties on the arrays
+cost V8 a property store per array, about as much memory as the Fragment
+objects saved. Generating code into one buffer instead of fragment trees
+would need every node class to generate its code in order; they compute
+the code of their children first and then wrap it.
+
 ## How to reproduce
 
 The scripts live in `benchmark/potch/`:
