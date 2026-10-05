@@ -47,7 +47,6 @@ opal_filter "Kernel" do
   fails "Kernel#eval evaluates string with given filename and negative linenumber" # Expected "unexpected token $end" =~ /speccing.rb:-100:.+/ to be truthy but was nil
   fails "Kernel#eval includes file and line information in syntax error" # Expected "unexpected token $end" =~ /speccing.rb:1:.+/ to be truthy but was nil
   fails "Kernel#eval raises a LocalJumpError if there is no lambda-style closure in the chain" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x4be5a>
-  fails "Kernel#eval returns from the method calling #eval when evaluating 'return' in BEGIN" # SyntaxError: Unsupported sexp: preexe
   fails "Kernel#eval unwinds through a Proc-style closure and returns from a lambda-style closure in the closure chain" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x4be5a>
   fails "Kernel#eval updates a local in a scope above when modified in a nested block scope" # NoMethodError: undefined method `es' for #<MSpecEnv:0x4be5a>
   fails "Kernel#eval uses the same scope for local variables when given the same binding" # NoMethodError: undefined method `a' for #<MSpecEnv:0x4be5a>

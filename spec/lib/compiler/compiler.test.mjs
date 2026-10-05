@@ -329,13 +329,13 @@ describe("a compilation error", () => {
   test("at compile time carries the file, line and source line", () => {
     let error = null;
     try {
-      compiled("BEGIN {}", { file: "compiler_spec.rb/foobar.js.rb" });
+      compiled("require self", { file: "compiler_spec.rb/foobar.js.rb", dynamic_require_severity: "error" });
     } catch (e) {
       error = e;
     }
     assert.ok(error instanceof OpalSyntaxError);
     assert.equal(error.file, "compiler_spec.rb/foobar.js.rb");
-    assert.equal(error.location, "compiler_spec.rb/foobar.js.rb:1:in `BEGIN {}'");
+    assert.equal(error.location, "compiler_spec.rb/foobar.js.rb:1:in `require self'");
   });
 
   test("at parse time carries the file, line and source line", () => {

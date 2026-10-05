@@ -237,11 +237,6 @@ opal_filter "language" do
   fails "Ruby String interpolation returns a string with the source encoding by default" # Expected #<Encoding:UTF-8> == #<Encoding:ASCII-8BIT> to be truthy but was false
   fails "Ruby String interpolation returns a string with the source encoding, even if the components have another encoding" # ArgumentError: unknown encoding name - euc-jp
   fails "Source files encoded in UTF-16 LE without a BOM are parsed as empty because they contain a NUL byte before the encoding comment" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x9a8a0>
-  fails "The BEGIN keyword accesses variables outside the eval scope" # SyntaxError: Unsupported sexp: preexe
-  fails "The BEGIN keyword runs first in a given code unit" # SyntaxError: Unsupported sexp: preexe
-  fails "The BEGIN keyword runs in a shared scope" # SyntaxError: Unsupported sexp: preexe
-  fails "The BEGIN keyword runs multiple begins in FIFO order" # SyntaxError: Unsupported sexp: preexe
-  fails "The BEGIN keyword uses top-level for self" # SyntaxError: Unsupported sexp: preexe
   fails "The END keyword END blocks and at_exit callbacks are mixed runs them all in reverse order of registration" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x5bfd0 @method="END" @object=nil>
   fails "The END keyword allows calling exit inside a handler" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x5bfd0 @method="END" @object=nil>
   fails "The END keyword both exceptions in a handler and in the main script are printed" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x5bfd0 @method="END" @object=nil>
