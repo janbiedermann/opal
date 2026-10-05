@@ -46,7 +46,6 @@ opal_filter "language" do
   fails "A nested method definition creates a method in the surrounding context when evaluated in a def expr.method" # Expected DefSpecNested to have instance method 'inherited_method' but it does not
   fails "A nested method definition creates an instance method inside Class.new" # NoMethodError: undefined method `new_def' for #<#<Class:0x10642>:0x10640>
   fails "A nested method definition creates an instance method when evaluated in an instance method" # NoMethodError: undefined method `an_instance_method' for #<DefSpecNested:0x1064c>
-  fails "A number literal can be a decimal literal with trailing 'r' to represent a Rational" # Expected (5404319552844595/18014398509481984) == (3/10) to be truthy but was false
   fails "A number literal can be a float literal with trailing 'r' to represent a Rational" # Expected (5030569068109113/288230376151711740) == (136353847812057/7812500000000000) to be truthy but was false
   fails "A singleton class raises a TypeError for symbols" # Expected TypeError but no exception was raised (#<Class:#<String:0x9093e>> was returned)
   fails "A singleton method definition can be declared for a global variable" # TypeError: can't define singleton
@@ -55,7 +54,6 @@ opal_filter "language" do
   fails "Accessing a class variable raises a RuntimeError when accessed from the toplevel scope (not in some module or class)" # Expected RuntimeError (class variable access from toplevel) but got: NameError (uninitialized class variable @@cvar_toplevel1 in MSpecEnv)
   fails "Allowed characters allows non-ASCII lowercased characters at the beginning" # Expected nil == 1 to be truthy but was false
   fails "Allowed characters allows not ASCII upcased characters at the beginning" # NameError: wrong constant name ἍBB
-  fails "Allowed characters parses a non-ASCII upcased character as a constant identifier" # Expected SyntaxError (/dynamic constant assignment/) but no exception was raised ("test" was returned)
   fails "An Exception reaching the top level kills all threads and fibers, ensure clauses are only run for threads current fibers, not for suspended fibers with ensure on non-root fiber" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x29a62>
   fails "An Exception reaching the top level kills all threads and fibers, ensure clauses are only run for threads current fibers, not for suspended fibers with ensure on the root fiber" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x29a62>
   fails "An ensure block inside 'do end' block is executed even when a symbol is thrown in it's corresponding begin block" # Expected ["begin", "rescue", "ensure"] == ["begin", "ensure"] to be truthy but was false
@@ -91,8 +89,6 @@ opal_filter "language" do
   fails "Global variable $VERBOSE converts truthy values to true" # Expected 1 to be true
   fails "Global variable $\" is an alias for $LOADED_FEATURES" # Expected [] to be identical to ["corelib/runtime",  "opal",  "opal/base",  "corelib/helpers",  "corelib/module",  ...]
   fails "Global variable $\" is read-only" # Expected NameError but no exception was raised ([] was returned)
-  fails "Hash literal checks duplicated float keys on initialization" # Expected warning to match: /key 1.0 is duplicated|duplicated key/ but got: ""
-  fails "Hash literal checks duplicated keys on initialization" # Expected warning to match: /key 1000 is duplicated|duplicated key/ but got: ""
   fails "Hash literal expands a BasicObject using ** into the containing Hash literal initialization" # NoMethodError: undefined method `respond_to?' for #<BasicObject:0xab798>
   fails "Hash literal raises an EncodingError at parse time when Symbol key with invalid bytes and 'key: value' syntax used" # Expected EncodingError (invalid symbol in encoding UTF-8 :"\xC3") but no exception was raised ({"Ã"=>1} was returned)
   fails "Hash literal raises an EncodingError at parse time when Symbol key with invalid bytes" # Expected EncodingError (invalid symbol in encoding UTF-8 :"\xC3") but no exception was raised ({"Ã"=>1} was returned)
@@ -126,7 +122,6 @@ opal_filter "language" do
   fails "Keyword arguments raises ArgumentError exception when required keyword argument is not passed" # Expected ArgumentError (/missing keyword: :c/) but got: ArgumentError (missing keyword: c)
   fails "Keyword arguments raises ArgumentError for missing keyword arguments even if there are extra ones" # Expected ArgumentError (/missing keyword: :a/) but got: ArgumentError (missing keyword: a)
   fails "Literal (A::X) constant resolution uses the module or class #inspect to craft the error message if they are anonymous" # Expected NameError (/uninitialized constant <unusable info>::DOES_NOT_EXIST/) but got: NameError (uninitialized constant #<Module:0x913b2>::DOES_NOT_EXIST)
-  fails "Literal (A::X) constant resolution uses the module or class #name to craft the error message" # Expected NameError (/uninitialized constant ModuleName::DOES_NOT_EXIST/) but got: NameError (uninitialized constant #<Module:0x913aa>::DOES_NOT_EXIST)
   fails "Literal Ranges creates a simple range as an object literal" # Expected 1..3.equal? 1..3 to be truthy but was false
   fails "Literal Regexps caches the Regexp object" # Expected /foo/ to be identical to /foo/
   fails "Literal Regexps supports (?# )" # Exception: Invalid regular expression: /foo(?#comment)bar/: Invalid group
@@ -136,7 +131,6 @@ opal_filter "language" do
   fails "Literal Regexps supports conditional regular expressions with named capture groups" # Exception: Invalid regular expression: /^(?<word>foo)?(?(<word>)(T)|(F))$/: Invalid group
   fails "Literal Regexps supports conditional regular expressions with positional capture groups" # Exception: Invalid regular expression: /^(foo)?(?(1)(T)|(F))$/: Invalid group
   fails "Literal Regexps supports possessive quantifiers" # Exception: Invalid regular expression: /fooA++bar/: Nothing to repeat
-  fails "Literal Regexps throws SyntaxError for malformed literals" # Expected SyntaxError but got: Exception (Invalid regular expression: /(/: Unterminated group)
   fails "Local variable shadowing does not warn in verbose mode" # Expected nil == [3, 3, 3] to be truthy but was false
   fails "Magic comments in a loaded file are case-insensitive" # LoadError: cannot load such file -- ruby/language/fixtures/case_magic_comment
   fails "Magic comments in a loaded file are optional" # LoadError: cannot load such file -- ruby/language/fixtures/no_magic_comment
@@ -206,7 +200,6 @@ opal_filter "language" do
   fails "Pattern matching Array pattern raises TypeError if #deconstruct method does not return array" # Expected TypeError (/deconstruct must return Array/) but no exception was raised (nil was returned)
   fails "Pattern matching Hash pattern does not match object if #deconstruct_keys method does not return Hash" # Expected TypeError (/deconstruct_keys must return Hash/) but got: NoMethodError (undefined method `key?' for "")
   fails "Pattern matching Hash pattern does not match object if #deconstruct_keys method returns Hash with non-symbol keys" # Expected true == false to be truthy but was false
-  fails "Pattern matching Hash pattern raise SyntaxError when keys duplicate in pattern" # Expected SyntaxError (/duplicated key name/) but got: SyntaxError (duplicate hash pattern key a)
   fails "Pattern matching alternative pattern does not support variable binding" # Expected SyntaxError (/illegal variable in alternative pattern/) but no exception was raised (nil was returned)
   fails "Pattern matching can be standalone assoc operator that deconstructs value and properly scopes variables" # Expected [nil, nil] == [0, nil] to be truthy but was false
   fails "Pattern matching cannot mix in and when operators" # Expected SyntaxError (/syntax error, unexpected `in'/) but got: SyntaxError (unexpected token kIN)
@@ -215,8 +208,6 @@ opal_filter "language" do
   fails "Pattern matching refinements are used for #deconstruct" # NoMatchingPatternError: []
   fails "Pattern matching refinements are used for #deconstruct_keys" # NoMatchingPatternError: {}
   fails "Pattern matching variable pattern allows applying ^ operator to bound variables" # NoMatchingPatternError: [1, 1]
-  fails "Pattern matching variable pattern does not support using variable name (except _) several times" # Expected SyntaxError (/duplicated variable name/) but got: SyntaxError (duplicate variable name a)
-  fails "Pattern matching variable pattern requires bound variable to be specified in a pattern before ^ operator when it relies on a bound variable" # Expected SyntaxError (/n: no such local variable/) but got: SyntaxError (no such local variable: `n')
   fails "Pattern matching variable pattern supports existing variables in a pattern specified with ^ operator" # SyntaxError: no such local variable: `a'
   fails "Pattern matching warning when regular form does not warn about pattern matching is experimental feature" # NameError: uninitialized constant Warning
   fails "Predefined global $+ captures the last non nil capture" # Expected nil == "a" to be truthy but was false
@@ -307,10 +298,8 @@ opal_filter "language" do
   fails "The defined? keyword when called with a method name in a void context does not execute the receiver" # Expected "defined_specs_side_effects" == "not_executed" to be truthy but was false
   fails "The defined? keyword when called with a method name in a void context warns about the void context when parsing it" # Expected warning to match: /warning: possibly useless use of defined\? in void context/ but got: ""
   fails "The defined? keyword when called with a method name without a receiver returns 'method' if the method is defined" # Expected false == true to be truthy but was false
-  fails "The if expression when a branch syntactically does not return a value raises SyntaxError if both do not return a value" # Expected SyntaxError (/void value expression/) but no exception was raised ("m" was returned)
   fails "The if expression with a boolean range ('flip-flop' operator) evaluates the first conditions lazily with exclusive-end range" # NoMethodError: undefined method `collector' for #<MSpecEnv:0x7bd18>
   fails "The if expression with a boolean range ('flip-flop' operator) evaluates the first conditions lazily with inclusive-end range" # NoMethodError: undefined method `collector' for #<MSpecEnv:0x7bd18>
-  fails "The redo statement in a method is invalid and raises a SyntaxError" # Expected SyntaxError but no exception was raised ("m" was returned)
   fails "The redo statement triggers ensure block when re-executing a block" # TypeError: NilClass can't be coerced into Numeric
   fails "The rescue keyword allows rescue in 'do end' block" # NoMethodError: undefined method `call' for nil
   fails "The rescue keyword inline form can be inlined" # Expected Infinity == 1 to be truthy but was false
@@ -327,8 +316,6 @@ opal_filter "language" do
   fails "The unpacking splat operator (*) when applied to a BasicObject coerces it to Array if it respond_to?(:to_a)" # NoMethodError: undefined method `respond_to?' for #<BasicObject:0x4128>
   fails "The yield call taking a single argument yielding to a lambda should not destructure an Array into multiple arguments" # Expected ArgumentError but no exception was raised ([1, 2] was returned)
   fails "The yield call taking no arguments ignores assignment to the explicit block argument and calls the passed block" # Expected #<Proc:0x2b4c> == 42 to be truthy but was false
-  fails "Using yield in a singleton class literal raises a SyntaxError" # Expected SyntaxError (/Invalid yield/) but got: SyntaxError (undefined method `uses_block!' for nil)
-  fails "Using yield in non-lambda block raises a SyntaxError" # Expected SyntaxError (/Invalid yield/) but got: SyntaxError (undefined method `uses_block!' for nil)
   fails "a method definition that sets more than one default parameter all to the same value only allows overriding the default value of the first such parameter in each set" # Expected ArgumentError (wrong number of arguments (given 2, expected 0..1)) but got: ArgumentError ([MSpecEnv#foo] wrong number of arguments (given 2, expected -1))
   fails "a method definition that sets more than one default parameter all to the same value treats the argument after the multi-parameter normally" # Expected ArgumentError (wrong number of arguments (given 3, expected 0..2)) but got: ArgumentError ([MSpecEnv#bar] wrong number of arguments (given 3, expected -1))
   fails "self in a metaclass body (class << obj) raises a TypeError for symbols" # Expected TypeError but got: Exception (Cannot create property '$$meta' on string 'symbol')

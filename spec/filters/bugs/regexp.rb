@@ -58,7 +58,6 @@ opal_filter "regular_expressions" do
   fails "Regexp#to_s shows non-included options after a - sign" # Expected "abc" == "(?i-mx:abc)" to be truthy but was false
   fails "Regexp#to_s shows the pattern after the options" # Expected "xyz" == "(?-mix:xyz)" to be truthy but was false
   fails "Regexp.compile given a Regexp does not honour options given as additional arguments" # Expected warning to match: /flags ignored/ but got: ""
-  fails "Regexp.compile given a String accepts an Integer of two or more options ORed together as the second argument" # Expected 0 == 0 to be falsy but was true
   fails "Regexp.compile given a String raises a RegexpError when passed an incorrect regexp" # Expected RegexpError but got: Exception (Invalid regular expression: /^[$/: Unterminated character class)
   fails "Regexp.compile given a String with escaped characters accepts a backspace followed by a character" # Exception: Invalid regular expression: /\N/u: Invalid escape
   fails "Regexp.compile given a String with escaped characters accepts multiple consecutive '\\' characters" # Exception: Invalid regular expression: /\\\N/u: Invalid escape
@@ -79,7 +78,6 @@ opal_filter "regular_expressions" do
   fails "Regexp.linear_time? return false if matching can't be done in linear time" # NoMethodError: undefined method `linear_time?' for Regexp
   fails "Regexp.linear_time? returns true if matching can be done in linear time" # NoMethodError: undefined method `linear_time?' for Regexp
   fails "Regexp.linear_time? warns about flags being ignored for regexp arguments" # NoMethodError: undefined method `linear_time?' for Regexp
-  fails "Regexp.new given a String accepts an Integer of two or more options ORed together as the second argument" # Expected 0 == 0 to be falsy but was true
   fails "Regexp.new given a String raises a RegexpError when passed an incorrect regexp" # Expected RegexpError but got: Exception (Invalid regular expression: /^[$/: Unterminated character class)
   fails "Regexp.new given a String with escaped characters accepts a backspace followed by a character" # Exception: Invalid regular expression: /\N/u: Invalid escape
   fails "Regexp.new given a String with escaped characters accepts multiple consecutive '\\' characters" # Exception: Invalid regular expression: /\\\N/u: Invalid escape

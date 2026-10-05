@@ -108,6 +108,7 @@ class ::Regexp < `RegExp`
           var temp = 'u';
           if (#{IGNORECASE} & options) { temp += 'i'; }
           if (#{MULTILINE}  & options) { temp += 'm'; }
+          if (#{EXTENDED}   & options) { temp += 'x'; }
           options = temp;
         }
         else if (!options.$$is_string) {

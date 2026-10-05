@@ -12,6 +12,12 @@ module Opal
     def transform_regexp(original_regexp, flags)
       flags ||= ''
 
+      # JS has no extended mode
+      if include?(flags, 'x')
+        original_regexp = strip_extended(original_regexp)
+        flags = remove_flag(flags, 'x')
+      end
+
       if include?(flags, 'm')
         ruby_multiline = true
         flags = remove_flag(flags, 'm')
@@ -147,6 +153,51 @@ module Opal
       end
 
       [new_regexp, flags]
+    end
+
+    # Removes the whitespace and comments of an extended (x) regexp, except in
+    # character classes and escapes (keep in sync with stripExtended in
+    # lib/opal/compiler/regexp_transpiler.mjs).
+    def strip_extended(regexp)
+      %x{
+      var out = "", i = 0, length = regexp.length, depth = 0, c;
+      while (i < length) {
+        c = regexp[i];
+        if (c === "\\") {
+          out += regexp.slice(i, i + 2);
+          i += 2;
+          continue;
+        }
+        if (depth > 0) {
+          if (c === "[") depth++;
+          else if (c === "]") depth--;
+          out += c;
+          i++;
+          continue;
+        }
+        if (c === "[") {
+          depth = 1;
+          out += c;
+          i++;
+          // a "]" right after "[" or "[^" is a literal
+          if (regexp[i] === "^") out += regexp[i++];
+          if (regexp[i] === "]") out += regexp[i++];
+          continue;
+        }
+        if (c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f" || c === "\v") {
+          i++;
+          continue;
+        }
+        if (c === "#") {
+          // a comment, to the end of the line
+          while (i < length && regexp[i] !== "\n") i++;
+          continue;
+        }
+        out += c;
+        i++;
+      }
+      return out;
+      }
     end
 
     if RUBY_ENGINE == 'opal'
