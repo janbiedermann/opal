@@ -387,14 +387,24 @@ multi-line literals.
   UTF-8 before compiling (the bridge does this; the phase 3 builder will
   use TextDecoder).
 
-**Ruby compiler bugs kept for parity, to fix after phase 2** (each fix gets
-a `.potch.js` fixture):
-* `/a b/x` on a single line is not trimmed (only multi-part regexps are).
-* `break a, b` keeps only `a`.
-* `value => pattern` evaluates `value` twice.
-* `eval` with an assignment to an outer local shadows it instead of
-  assigning it.
-* A top-level `return`, `BEGIN { }` and `END { }` are not supported.
+**Ruby compiler bugs kept for parity, fixed after phase 5** (each with a
+fixture and specs):
+* `/a b/x` on a single line was not trimmed (only multi-part regexps were,
+  removing whitespace in character classes and escapes too). Extended
+  regexps are handled by the regexp transpiler now, at compile time and at
+  runtime (`Regexp.new(src, Regexp::EXTENDED)` works too).
+* `break a, b` kept only `a`; it returns `[a, b]` (a single splat returns
+  an array, also for next and return).
+* `value => pattern` evaluated `value` twice; once now.
+* `eval` with an assignment to an outer local shadowed it instead of
+  assigning it; Kernel#eval with a binding (Binding#eval) now uses the
+  binding's locals too.
+* A top-level `return`, `BEGIN { }` and `END { }` were not supported; they
+  are now.
+* (`redo` in a loop, broken JS in the Ruby compiler, was already right.)
+
+These fixes also let 34 filtered ruby/spec examples run (14 of them had
+passed since the switch to potch and the JS compiler).
 
 **Also fixed in potch:** escaped non-ASCII bytes in `/.../n` regexps
 (`/\xff/n`) were reported as an encoding mismatch.
@@ -597,7 +607,7 @@ Still possible with Ruby, but optional: RuboCop on the Ruby code
 (`.rubocop.yml`), `node tasks/bench.mjs run --ruby`.
 
 Later:
-* fix the Ruby compiler bugs kept for parity (see "Phase 2 results")
+* ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
 * optimize the transform tree walks (section 8)
 * move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
 * the TODOs of phase 3: the forking builder, the `.rb.erb`/`.js.erb`
