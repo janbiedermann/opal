@@ -175,8 +175,6 @@ opal_filter "Module" do
   fails "Module#ruby2_keywords prints warning when a method accepts keyword splat" # Expected warning to match: /Skipping set of ruby2_keywords flag for/ but got: ""
   fails "Module#ruby2_keywords prints warning when a method accepts keywords" # Expected warning to match: /Skipping set of ruby2_keywords flag for/ but got: ""
   fails "Module#ruby2_keywords prints warning when a method does not accept argument splat" # Expected warning to match: /Skipping set of ruby2_keywords flag for/ but got: ""
-  fails "Module#ruby2_keywords raises NameError when passed not existing method name" # Expected NameError (/undefined method `not_existing'/) but no exception was raised (nil was returned)
-  fails "Module#ruby2_keywords raises TypeError when passed not Symbol or String" # Expected TypeError (/is not a symbol nor a string/) but no exception was raised (nil was returned)
   fails "Module#to_s always show the refinement name, even if the module is named" # Expected "ModuleSpecs::RefinementInspect::R" == "#<refinement:String@ModuleSpecs::RefinementInspect>" to be truthy but was false
   fails "Module#to_s does not call #inspect or #to_s for singleton classes" # Expected "#<Class:#<:0x599ac>>" =~ /\A#<Class:#<#<Class:0x599b0>:0x\h+>>\z/ to be truthy but was nil
   fails "Module#to_s for the singleton class of an object of an anonymous class" # Expected "#<Class:#<:0x59a16>>" == "#<Class:#<#<Class:0x59a1a>:0x59a16>>" to be truthy but was false

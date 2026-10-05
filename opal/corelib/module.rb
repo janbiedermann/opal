@@ -628,6 +628,17 @@ class ::Module
     }
   end
 
+  # Marks methods as passing keywords on through a final *args hash (Ruby
+  # 2.7 compatibility). Opal passes keyword arguments as a final hash
+  # anyway, so only the names are checked.
+  def ruby2_keywords(*names)
+    names.each do |name|
+      ::Kernel.raise ::TypeError, "#{name.inspect} is not a symbol nor a string" unless ::String === name
+      ::Kernel.raise ::NameError.new("undefined method `#{name}' for class `#{inspect}'", name) unless method_defined?(name)
+    end
+    nil
+  end
+
   def module_function(*methods)
     %x{
       $deny_frozen_access(self);

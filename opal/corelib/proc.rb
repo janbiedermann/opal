@@ -74,6 +74,12 @@ class ::Proc < `Function`
     self
   end
 
+  # Marks the proc as passing keywords on through a final *args hash (see
+  # Module#ruby2_keywords); returns the proc.
+  def ruby2_keywords
+    self
+  end
+
   def lambda?
     # This method should tell the user if the proc tricks are unavailable,
     # (see Proc#lambda? on ruby docs to find out more).

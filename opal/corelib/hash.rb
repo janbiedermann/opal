@@ -75,6 +75,18 @@ class ::Hash < `Map`
     }
   end
 
+  # Opal has no hashes flagged as keywords (see Module#ruby2_keywords).
+  def self.ruby2_keywords_hash?(hash)
+    ::Kernel.raise ::TypeError, "wrong argument type #{hash.nil? ? 'nil' : hash.class} (expected Hash)" unless ::Hash === hash
+    false
+  end
+
+  # A copy of the hash (as a hash flagged as keywords).
+  def self.ruby2_keywords_hash(hash)
+    ::Kernel.raise ::TypeError, "wrong argument type #{hash.nil? ? 'nil' : hash.class} (expected Hash)" unless ::Hash === hash
+    hash.dup
+  end
+
   def self.try_convert(obj)
     ::Opal.coerce_to?(obj, ::Hash, :to_hash)
   end

@@ -9,6 +9,10 @@ class << self
     ::Object.include mod
   end
 
+  def ruby2_keywords(*names)
+    ::Object.ruby2_keywords(*names)
+  end
+
   def autoload(*args)
     `Opal.Object.$autoload.apply(Opal.Object, args)`
   end
