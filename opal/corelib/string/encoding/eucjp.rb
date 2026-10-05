@@ -102,27 +102,27 @@ require 'corelib/string/encoding/tables/jis_ext_inverted'
         // HALFWIDTH_KATAKANA
         else if( 0xFF61 <= unicode && unicode <= 0xFF9F ) {
           #{yield `0x8E`};
-          #{yield `unicode - 0xFFC0`};
+          #{yield `unicode - 0xFEC0`};
         }
         else {
           // KANJI
           var jis = JISInverted[ unicode ];
           if( jis ) {
-            #{yield `( jis >> 8 ) - 0x80`};
-            #{yield `( jis & 0xFF ) - 0x80`};
+            #{yield `( jis >> 8 ) + 0x80`};
+            #{yield `( jis & 0xFF ) + 0x80`};
           }
           else {
             // EXTENSION
             var ext = JISEXTInverted[ unicode ];
             if( ext ) {
               #{yield `0x8F`};
-              #{yield `( ext >> 8 ) - 0x80`};
-              #{yield `( ext & 0xFF ) - 0x80`};
+              #{yield `( ext >> 8 ) + 0x80`};
+              #{yield `( ext & 0xFF ) + 0x80`};
             }
             // UNKNOWN
             else {
-              #{yield `( unknownJis >> 8 ) - 0x80`};
-              #{yield `( unknownJis & 0xFF ) - 0x80`};
+              #{yield `( unknownJis >> 8 ) + 0x80`};
+              #{yield `( unknownJis & 0xFF ) + 0x80`};
             }
           }
         }
