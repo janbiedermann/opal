@@ -1,0 +1,6 @@
+# encoding: shift_jis
+"“ú–{"
+"\x93\xfa"
+"abc"
+"x1’l"
+__ENCODING__
