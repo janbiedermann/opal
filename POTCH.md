@@ -644,12 +644,16 @@ Later:
 * ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
 * ~~optimize the transform tree walks~~ (done: 3–9× faster, see BASELINE.md)
 * move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
-* review the 47 filtered ruby/spec examples that pass in the full inverted
-  run (`INVERT_RUNNING_MODE=true RUBYSPECS=true node tasks/test.mjs
-  mspec_ruby`, 2026-10-05) before removing their filters: some pass only
-  vacuously (e.g. the `String#byterindex` ones run no expectation), some
-  may pass only in the inverted run (shared state between specs); check
-  each in a normal run
+* ~~review the 47 filtered ruby/spec examples that pass in the full
+  inverted run~~ (done 2026-10-05): 41 filters removed (they pass in normal
+  runs with three random seeds, in isolation, and in other time zones).
+  Kept: the two `String#byteindex`/`byterindex` "raises a TypeError if
+  passed a Symbol" examples (no expectation runs), and four that pass only
+  in UTC (`Time#zone defaults to UTC when bad zones given`, `Time#strftime`
+  and `Date#strftime` seconds since the epoch, `DateTime.parse
+  YYYY-MM-DDTHH:MM:SS`): real bugs elsewhere, as the filters' messages
+  (recorded at UTC+1) show. Check inverted-run results in another time
+  zone too (`TZ=Europe/Berlin`).
 * the TODO of phase 3: the forking builder, undecided (investigated: worth
   it for a resident compiler, not for single builds; the `.rb.erb`/`.js.erb`
   processors and bundling the compiler once in opal-builder are done)

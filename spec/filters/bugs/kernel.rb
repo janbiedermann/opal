@@ -112,7 +112,6 @@ opal_filter "Kernel" do
   fails "Kernel#singleton_class for an IO object with a replaced singleton class looks up singleton methods from the fresh singleton class after an object instance got a new one" # NoMethodError: undefined method `reopen' for #<File:0x6c204 @fd="ruby/core/kernel/singleton_class_spec.rb" @flags="r" @eof=false @closed="write">
   fails "Kernel#singleton_class raises TypeError for Symbol" # Expected TypeError but no exception was raised (#<Class:#<String:0x53aaa>> was returned)
   fails "Kernel#singleton_class raises TypeError for a frozen deduplicated String" # Expected TypeError (can't define singleton) but no exception was raised (#<Class:#<String:0x6c200>> was returned)
-  fails "Kernel#singleton_class returns a frozen singleton class if object is frozen" # Expected false to be true
   fails "Kernel#singleton_method find a method defined on the singleton class" # NoMethodError: undefined method `singleton_method' for #<Object:0x4540a>
   fails "Kernel#singleton_method only looks at singleton methods and not at methods in the class" # Expected NoMethodError == NameError to be truthy but was false
   fails "Kernel#singleton_method raises a NameError if there is no such method" # Expected NoMethodError == NameError to be truthy but was false

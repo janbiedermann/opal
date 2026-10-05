@@ -52,7 +52,6 @@ opal_filter "language" do
   fails "A singleton method definition raises FrozenError with the correct class name" # Expected "can't modify frozen Class: #<Class:#<Object:0x10574>>".start_with? "can't modify frozen object" to be truthy but was false
   fails "Accessing a class variable raises a RuntimeError when a class variable is overtaken in an ancestor class" # Expected RuntimeError (/class variable @@cvar_overtaken of .+ is overtaken by .+/) but no exception was raised ("subclass" was returned)
   fails "Accessing a class variable raises a RuntimeError when accessed from the toplevel scope (not in some module or class)" # Expected RuntimeError (class variable access from toplevel) but got: NameError (uninitialized class variable @@cvar_toplevel1 in MSpecEnv)
-  fails "Allowed characters allows non-ASCII lowercased characters at the beginning" # Expected nil == 1 to be truthy but was false
   fails "Allowed characters allows not ASCII upcased characters at the beginning" # NameError: wrong constant name ἍBB
   fails "An Exception reaching the top level kills all threads and fibers, ensure clauses are only run for threads current fibers, not for suspended fibers with ensure on non-root fiber" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x29a62>
   fails "An Exception reaching the top level kills all threads and fibers, ensure clauses are only run for threads current fibers, not for suspended fibers with ensure on the root fiber" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x29a62>
@@ -125,7 +124,6 @@ opal_filter "language" do
   fails "Literal Regexps supports conditional regular expressions with named capture groups" # Exception: Invalid regular expression: /^(?<word>foo)?(?(<word>)(T)|(F))$/: Invalid group
   fails "Literal Regexps supports conditional regular expressions with positional capture groups" # Exception: Invalid regular expression: /^(foo)?(?(1)(T)|(F))$/: Invalid group
   fails "Literal Regexps supports possessive quantifiers" # Exception: Invalid regular expression: /fooA++bar/: Nothing to repeat
-  fails "Local variable shadowing does not warn in verbose mode" # Expected nil == [3, 3, 3] to be truthy but was false
   fails "Magic comments in a loaded file are case-insensitive" # LoadError: cannot load such file -- ruby/language/fixtures/case_magic_comment
   fails "Magic comments in a loaded file are optional" # LoadError: cannot load such file -- ruby/language/fixtures/no_magic_comment
   fails "Magic comments in a loaded file can be after the shebang" # LoadError: cannot load such file -- ruby/language/fixtures/shebang_magic_comment

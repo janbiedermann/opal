@@ -21,19 +21,12 @@ opal_filter "Array" do
   fails "Array#intersect? tries to convert the passed argument to an Array using #to_ary" # Expected false == true to be truthy but was false
   fails "Array#none? ignores the block if there is an argument" # Expected warning to match: /given block not used/ but got: ""
   fails "Array#one? ignores the block if there is an argument" # Expected warning to match: /given block not used/ but got: ""
-  fails "Array#pack with format 'A' ignores comments in the format string" # RuntimeError: Unsupported pack directive "m" (no chunk reader defined)
   fails "Array#pack with format 'A' warns that a directive is unknown" # Expected warning to match: /unknown pack directive 'R'/ but got: ""
-  fails "Array#pack with format 'C' ignores comments in the format string" # RuntimeError: Unsupported pack directive "m" (no chunk reader defined)
   fails "Array#pack with format 'C' warns that a directive is unknown" # Expected warning to match: /unknown pack directive 'R'/ but got: ""
-  fails "Array#pack with format 'L' ignores comments in the format string" # RuntimeError: Unsupported pack directive "m" (no chunk reader defined)
   fails "Array#pack with format 'L' warns that a directive is unknown" # Expected warning to match: /unknown pack directive 'R'/ but got: ""
-  fails "Array#pack with format 'U' ignores comments in the format string" # RuntimeError: Unsupported pack directive "m" (no chunk reader defined)
   fails "Array#pack with format 'U' warns that a directive is unknown" # Expected warning to match: /unknown pack directive 'R'/ but got: ""
-  fails "Array#pack with format 'a' ignores comments in the format string" # RuntimeError: Unsupported pack directive "m" (no chunk reader defined)
   fails "Array#pack with format 'a' warns that a directive is unknown" # Expected warning to match: /unknown pack directive 'R'/ but got: ""
-  fails "Array#pack with format 'c' ignores comments in the format string" # RuntimeError: Unsupported pack directive "m" (no chunk reader defined)
   fails "Array#pack with format 'c' warns that a directive is unknown" # Expected warning to match: /unknown pack directive 'R'/ but got: ""
-  fails "Array#pack with format 'l' ignores comments in the format string" # RuntimeError: Unsupported pack directive "m" (no chunk reader defined)
   fails "Array#pack with format 'l' warns that a directive is unknown" # Expected warning to match: /unknown pack directive 'R'/ but got: ""
   fails "Array#pack with format 'u' calls #to_str to convert an Object to a String" # Mock 'pack u string' expected to receive to_str("any_args") exactly 1 times but received it 0 times
   fails "Array#pack with format 'u' ignores comments in the format string" # RuntimeError: Unsupported pack directive "u" (no chunk reader defined)

@@ -91,7 +91,6 @@ opal_filter "Module" do
   fails "Module#define_method raises a TypeError when the given method is no Method/Proc" # Expected TypeError (wrong argument type Integer (expected Proc/Method/UnboundMethod)) but got: TypeError (wrong argument type Number (expected Proc/Method/UnboundMethod))
   fails "Module#deprecate_constant accepts multiple symbols and strings as constant names" # NoMethodError: undefined method `deprecate_constant' for #<Module:0x3bf08>
   fails "Module#deprecate_constant raises a NameError when given an undefined name" # NoMethodError: undefined method `deprecate_constant' for #<Module:0x3bf04>
-  fails "Module#deprecate_constant returns self" # NoMethodError: undefined method `deprecate_constant' for #<Module:0x3bf0c>
   fails "Module#deprecate_constant when accessing the deprecated module does not warn if Warning[:deprecated] is false" # NoMethodError: undefined method `deprecate_constant' for #<Module:0x3bf10>
   fails "Module#deprecate_constant when accessing the deprecated module passes the accessing" # NoMethodError: undefined method `deprecate_constant' for #<Module:0x3bf18>
   fails "Module#deprecate_constant when accessing the deprecated module warns with a message" # NoMethodError: undefined method `deprecate_constant' for #<Module:0x3bf14>
