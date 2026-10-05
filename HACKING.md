@@ -79,7 +79,7 @@ Core classes use each other and your changes may fix other bugs in `spec/filters
 $ env INVERT_RUNNING_MODE=true RUBYSPECS=true PATTERN="spec/ruby/core/string/*_spec.rb" node tasks/test.mjs mspec_ruby
 ```
 
-This command will execute tests marked as "bugs" from every file in the `spec/ruby/core/string` directory. After running it you will get a list of specs that in fact are passing. Feel free to remove them from `spec/filters/bugs` (`bin/remove-filters` removes the filters listed on its standard input).
+This command will execute tests marked as "bugs" from every file in the `spec/ruby/core/string` directory. With a `PATTERN`, you first get the usual report of the filtered specs that still fail (with their stack traces), then, after "Expected N examples to fail:", the list of the specs that in fact are passing (a run without `PATTERN` prints only the list). Feel free to remove them from `spec/filters/bugs`: `bin/remove-filters` removes the filters listed on its standard input, so you can pipe the output into it (it only takes the list after "Expected N examples to fail:").
 
 Note: Opal has some bugs that may cause a shared state between tests. Sometimes green specs are green only in the inverted test suite, so after removing them from `/bugs`, run a regular test suite one more time to verify that everything is fine.
 

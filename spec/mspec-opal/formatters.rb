@@ -192,6 +192,7 @@ module InvertedFormatter
   end
 
   def register
+    MSpec.register :start, self
     MSpec.register :before, self
     MSpec.register :exception, self
     MSpec.register :after, self
@@ -203,7 +204,21 @@ module InvertedFormatter
     super
   end
 
+  # With a PATTERN, the usual report (the filtered examples that still fail,
+  # with their stack traces) comes first, then the list of the passing ones
+  # (see #finish_with_code); for the whole suite only the list.
   def finish
+    return super if ENV['PATTERN']
+    print_expected_failures
+  end
+
+  def finish_with_code(code)
+    print_expected_failures
+    super
+  end
+
+  # The filtered examples that pass (for bin/remove-filters).
+  def print_expected_failures
     puts "\n\nExpected #{@actually_passing.size} examples to fail:\n"
     @actually_passing.each_with_index do |example, idx|
       puts "  #{idx + 1}) #{example.description.inspect}"

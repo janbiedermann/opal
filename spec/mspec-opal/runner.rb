@@ -99,7 +99,7 @@ class OSpecFormatter
       DottedFormatter
     end
 
-    if ENV['INVERT_RUNNING_MODE'] && !ENV['PATTERN']
+    if ENV['INVERT_RUNNING_MODE']
       formatter = Class.new(formatter)
       formatter.include InvertedFormatter
     end

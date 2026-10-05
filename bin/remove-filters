@@ -9,13 +9,19 @@
 // It expects an input of format:
 //  1) "Set#filter! returns an Enumerator when passed no block"
 //  2) "Set#filter! yields every element of self"
-// (or `fails "..."` lines).
+// (or `fails "..."` lines). In the output of an inverted run, only the
+// list after "Expected N examples to fail:" counts (with a PATTERN the
+// output also has the report of the examples that still fail, with their
+// `fails "..."` lines).
 import("node:fs").then(async (fs) => {
   const { glob } = await import("../tasks/testing/glob.mjs");
   process.chdir(new URL("..", import.meta.url).pathname);
 
-  const filters = fs.readFileSync(0, "utf8").split("\n")
-    .map((line) => /(?:\d+\)|fails) (".*")/.exec(line))
+  let lines = fs.readFileSync(0, "utf8").replace(/\x1b\[[0-9;]*m/g, "").split("\n");
+  const list = lines.findIndex((line) => /^Expected \d+ examples to fail/.test(line));
+  if (list !== -1) lines = lines.slice(list + 1);
+  const filters = lines
+    .map((line) => (list !== -1 ? /^\s*\d+\) (".*")/ : /(?:\d+\)|fails) (".*")/).exec(line))
     .filter(Boolean)
     .map((m) => m[1]);
   if (filters.length === 0) return;
