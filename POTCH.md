@@ -686,6 +686,27 @@ implementation.
   `bignum` stdlib) and never pass a BigInt where a Number is expected.
 * **Browser bundle size** of `opal-parser`. potch plus the compiler versus
   today's compiled parser gem is measured in phase 3. The goal is smaller.
+  Measured 2026-10-05 (master built with its Ruby toolchain; KB, gzip -9):
+
+  | `opal-parser` | development | minified (`-c`) | gzipped | minified, mangled | gzipped |
+  |---|---:|---:|---:|---:|---:|
+  | master (parser gem and Ruby compiler, compiled by Opal) | 1,958 | 1,400 | 205 | 1,166 | 193 |
+  | potch and the JS compiler (linked) | 1,714 | 960 | 172 | 577 | 136 |
+
+  The bundle is almost all the linked compiler; potch's parser
+  (`potch.mjs`) is 61 % of it (226 KB minified and mangled), then the
+  generated AST conversion (71 KB, 5 KB gzipped: property names), the
+  diagnostic messages (39 KB) and the constant tables. `tasks/dist.mjs`
+  now mangles (it compressed only), keeping the names of Opal's `$$`
+  functions for backtraces (`-c` alone dropped 796 of 1,146 of them in
+  `opal.js`): `opal.min.js` 485 → 355 KB (gzipped 109 → 101),
+  `opal-parser.min.js` 960 → 577 KB (174 → 136). Compiled code with a
+  direct `eval` keeps its names (terser leaves such scopes alone); a
+  ruby/spec subset (7,622 examples) and spec/opal pass mangled as they do
+  unmangled. Not done: leaving out exports that nothing imports in the
+  ESM linker would let terser drop ~870 unused functions (another 5 %,
+  577 → 546 KB, gzipped 136 → 128), but modules shared through the ESM
+  registry with later scripts would then lack exports those import.
 * **ESM linker in the builder** (phase 3). It must handle potch's
   import/export cycles. The fallback is a prebuilt single-file potch made
   by `potch:assemble`; that is still in-repo, not a dependency.
