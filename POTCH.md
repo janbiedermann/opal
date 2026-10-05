@@ -644,6 +644,12 @@ Later:
 * ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
 * ~~optimize the transform tree walks~~ (done: 3–9× faster, see BASELINE.md)
 * move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
+* review the 47 filtered ruby/spec examples that pass in the full inverted
+  run (`INVERT_RUNNING_MODE=true RUBYSPECS=true node tasks/test.mjs
+  mspec_ruby`, 2026-10-05) before removing their filters: some pass only
+  vacuously (e.g. the `String#byterindex` ones run no expectation), some
+  may pass only in the inverted run (shared state between specs); check
+  each in a normal run
 * the TODO of phase 3: the forking builder, undecided (investigated: worth
   it for a resident compiler, not for single builds; the `.rb.erb`/`.js.erb`
   processors and bundling the compiler once in opal-builder are done)
