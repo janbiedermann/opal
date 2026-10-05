@@ -201,9 +201,7 @@ opal_filter "language" do
   fails "Pattern matching Hash pattern does not match object if #deconstruct_keys method does not return Hash" # Expected TypeError (/deconstruct_keys must return Hash/) but got: NoMethodError (undefined method `key?' for "")
   fails "Pattern matching Hash pattern does not match object if #deconstruct_keys method returns Hash with non-symbol keys" # Expected true == false to be truthy but was false
   fails "Pattern matching alternative pattern does not support variable binding" # Expected SyntaxError (/illegal variable in alternative pattern/) but no exception was raised (nil was returned)
-  fails "Pattern matching can be standalone assoc operator that deconstructs value and properly scopes variables" # Expected [nil, nil] == [0, nil] to be truthy but was false
   fails "Pattern matching cannot mix in and when operators" # Expected SyntaxError (/syntax error, unexpected `in'/) but got: SyntaxError (unexpected token kIN)
-  fails "Pattern matching raises NoMatchingPatternError if no pattern matches and evaluates the expression only once" # Expected NoMatchingPatternError (/\[0, 1\]/) but got: NoMethodError (undefined method `+' for nil)
   fails "Pattern matching refinements are used for #=== in constant pattern" # NoMatchingPatternError: {}
   fails "Pattern matching refinements are used for #deconstruct" # NoMatchingPatternError: []
   fails "Pattern matching refinements are used for #deconstruct_keys" # NoMatchingPatternError: {}

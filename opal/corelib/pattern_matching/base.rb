@@ -33,3 +33,13 @@ class ::Struct
 end
 
 class ::NoMatchingPatternError < ::StandardError; end
+
+class ::NoMatchingPatternKeyError < ::NoMatchingPatternError
+  def initialize(message = nil, matchee: nil, key: nil)
+    @matchee = matchee
+    @key = key
+    super(message)
+  end
+
+  attr_reader :matchee, :key
+end

@@ -133,4 +133,42 @@ describe "pattern matching" do
     -> { value.call => {a: 2} }.should raise_error(NoMatchingPatternError)
     calls.should == 3
   end
+
+  describe "NoMatchingPatternError for a single pattern" do
+    def message_of
+      yield
+      nil
+    rescue NoMatchingPatternError => e
+      e.message
+    end
+
+    it "says which check failed" do
+      message_of { 1 => 2 }.should == "1: 2 === 1 does not return true"
+      message_of { case 1; in 2; end }.should == "1: 2 === 1 does not return true"
+      message_of { [1, 2] => [a] }.should == "[1, 2]: [1, 2] length mismatch (given 2, expected 1)"
+      message_of { [1] => [a, b, *] }.should == "[1]: [1] length mismatch (given 1, expected 2+)"
+      message_of { [1, [2]] => [_, [String]] }.should == "[1, [2]]: String === 2 does not return true"
+      message_of { nil => [*, 1, *] }.should == "nil: nil does not respond to #deconstruct"
+      message_of { 5 => {a:} }.should == "5: 5 does not respond to #deconstruct_keys"
+      message_of { case [1]; in [*, 2, *]; end }.should == "[1]: [1] does not match to find pattern"
+      message_of { case 1; in Integer if false; end }.should == "1: guard clause does not return true"
+      message_of { case 1; in 2 | 3; end }.should == "1: 3 === 1 does not return true"
+      message_of { {a: 1, b: 2} => {a: 1, **nil} }.should =~ /: rest of .* is not empty\z/
+    end
+
+    it "has just the value for case/in with several branches" do
+      message_of { case 1; in 2; in 3; end }.should == "1"
+    end
+
+    it "is a NoMatchingPatternKeyError for a missing key" do
+      begin
+        {a: 1} => {b:}
+      rescue NoMatchingPatternKeyError => e
+        e.message.should =~ /: key not found: /
+        e.key.should == :b
+        e.matchee.should == {a: 1}
+        e.should be_kind_of(NoMatchingPatternError)
+      end
+    end
+  end
 end
