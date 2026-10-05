@@ -25,8 +25,15 @@ codebase healthy.
 - `tasks/` defines Rake tasks used by `bin/rake`.
 
 ## Running tests
+- `node tasks/test.mjs` runs every Node.js suite (potch, compiler,
+  mspec_opal, mspec_ruby, minitest_cruby, minitest_node) with no Ruby
+  needed, in about 40 seconds; ensure it passes before committing. Name
+  suites to run only those (`node tasks/test.mjs mspec_ruby`), pass spec or
+  test files/directories to run just them (`bin/test` does the same), or
+  `-R chrome` for a browser runner. The environment variables below
+  (`PATTERN`, `FILES`, `RANDOM_SEED`, ...) apply.
 - Running `bin/rake` executes every suite on both Chrome and Node.js but is slow and requires a browser.
-- For day-to-day work rely on the Node.js tasks and ensure they pass before committing:
+- The rake tasks call `tasks/test.mjs` (the RSpec suite still needs Ruby):
   - `bin/rake rspec` runs the RSpec suite covering Opal compiler and runtime internals.
   - `bin/rake mspec_ruby_nodejs` runs the ruby/spec compatibility suite (use `PATTERN=<glob>` to limit the run).
   - `bin/rake mspec_opal_nodejs` executes the Opal-specific specs under `spec/opal`.
@@ -39,6 +46,7 @@ codebase healthy.
 
 ## Linting
 - Run `bin/rake lint` to check code style. This builds the corelib and stdlib then executes RuboCop and ESLint.
+- `node tasks/lint.mjs` runs the ESLint part with Node.js only.
 - `bin/rake lint:potch` lints only the potch ES modules and checks that
   `lib/opal/potch/potch.mjs` matches its parts. After editing
   `lib/opal/potch/parts/*.mjs`, regenerate it with `bin/rake potch:assemble`.

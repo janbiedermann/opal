@@ -19,6 +19,7 @@ const compilerFiles = [
   "tasks/compiler/**/*.mjs",
   "tasks/dist.mjs",
   "tasks/test.mjs",
+  "tasks/lint.mjs",
   "tasks/testing/**/*.mjs",
 ];
 

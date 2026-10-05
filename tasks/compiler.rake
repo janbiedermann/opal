@@ -26,6 +26,6 @@ end
 namespace :lint do
   desc 'Lint the JS compiler'
   task :compiler do
-    sh 'yarn', 'run', 'eslint', 'lib/opal/compiler', 'spec/lib/compiler', 'tasks/compiler', 'tasks/dist.mjs', 'tasks/test.mjs', 'tasks/testing'
+    sh 'yarn', 'run', 'eslint', 'lib/opal/compiler', 'spec/lib/compiler', 'tasks/compiler', 'tasks/dist.mjs', 'tasks/test.mjs', 'tasks/lint.mjs', 'tasks/testing'
   end
 end

@@ -6,10 +6,10 @@ compiler built on **potch**, a pure-JS port of Prism 1.9.0. The result is an
 Opal that parses and compiles in Node.js or the browser only, builds itself,
 and accepts Ruby 4.0 syntax.
 
-Status: **phases 1 and 2 done**: the JS compiler covers everything the
-Ruby compiler does, compiles 99.4 % of a 12,753-file corpus to identical
-output and passes all Node.js test suites through the temporary bridge
-(see "Phase 2 results" below). Phase 3 (JS builder and CLI) is next. The performance
+Status: **phases 1 to 4 done**: the JS compiler, builder and CLI replace
+the Ruby ones (output identical to theirs), and a checkout with only Node.js
+builds Opal and runs every Node.js suite (see the phase results below).
+Phase 5 (removing the Ruby compiler) is next. The performance
 baseline has been collected in [`BASELINE.md`](BASELINE.md); section 8
 summarises it.
 
@@ -511,6 +511,30 @@ Remaining:
 
 **Done when:** `node tasks/test.mjs` (or the equivalent) runs every Node
 suite with no `ruby` binary on `PATH`.
+
+#### Phase 4 results
+
+Done:
+* `node tasks/test.mjs` runs every Node.js suite (potch, compiler,
+  mspec_opal, mspec_ruby, minitest_cruby, minitest_node), selected suites,
+  given spec/test files (`bin/test` uses it) or a browser runner (`-R`).
+  `tasks/testing/{mspec,minitest}.mjs` port the Ruby drivers;
+  `tasks/testing/http_server.mjs` replaces the Sinatra server of the
+  open-uri tests. The rake test tasks call it.
+* `node tasks/lint.mjs` runs ESLint on potch, the JS compiler and the
+  built corelib/stdlib; `node tasks/dist.mjs` builds corelib and stdlib.
+* `bin/yarn` is a shell script; `bin/test` a Node script.
+* Bootstrap check: a fresh clone (submodules initialized) with no `ruby` on
+  `PATH` and an empty compile cache: `bin/yarn install`, then
+  `node tasks/test.mjs` passes every suite (potch 8,463, compiler 246,
+  mspec_opal 684, mspec_ruby 14,612, minitest_cruby 208 runs, minitest_node
+  80 runs, 0 failures) and `node tasks/dist.mjs` builds all of corelib and
+  stdlib.
+
+Still on Ruby until phase 5: RSpec (`spec/lib/**/*_spec.rb`, it tests the
+Ruby compiler), RuboCop, `bin/rake` itself, `bin/format-filters`,
+`bin/remove-filters`, `bin/git-submodule-fast-install`, the benchmark and
+performance tasks and the SauceLabs browser test.
 
 ### Phase 5: Remove the Ruby compiler
 
