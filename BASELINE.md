@@ -155,6 +155,58 @@ The output is unchanged (all 13,068 files of the comparison corpus).
 The transforms are 3–9× faster and are now a small part of the total
 (code generation is the largest); totals vary by ±10 % between runs.
 
+### Faster code generation (2026-10-05)
+
+Small changes in the code generators, found with CPU and allocation
+profiles; the output (code and source maps) is unchanged on all 13,071
+files of the comparison corpus:
+
+* `Compiler#compile` concatenates the fragment codes in a loop instead of
+  `map().join()`
+* symbol literals no longer create a `TextEncoder` each (their inspected
+  form is cached)
+* `uniqueTemp` skips its 17 replacements for plain names
+* `toVars` builds its fragment list without `flat(Infinity)`
+* `push`/`unshift`/`fragment` without per-call option objects, and
+  `unshift` with one array operation
+* methods and blocks without parameters share empty argument lists
+  instead of building them twice
+* the refinement check of every call no longer allocates
+
+`codegen_ms` here is the total minus parse and transforms (it also
+carries GC work left over by the parse); the best of two medians each:
+
+| file | bytes | codegen_ms before | codegen_ms after | total_ms before | total_ms after |
+|---|---:|---:|---:|---:|---:|
+| s0_201b.rb | 201 | 0.14 | 0.13 | 0.23 | 0.22 |
+| synth_deep_nest.rb | 206 | 0.48 | 0.47 | 0.84 | 0.85 |
+| s1_324b.rb | 324 | 0.46 | 0.46 | 0.76 | 0.74 |
+| synth_method_chain.rb | 4006 | 1.65 | 1.48 | 2.62 | 2.56 |
+| synth_binop_chain.rb | 5892 | 2.87 | 2.67 | 4.89 | 4.60 |
+| s2_pack.rb | 6019 | 2.27 | 2.13 | 3.51 | 3.34 |
+| s3_34kb.rb | 34065 | 13.02 | 12.01 | 18.99 | 17.36 |
+| s4_114kb.rb | 114391 | 41.05 | 34.10 | 55.88 | 50.49 |
+| synth_big_array.rb | 338895 | 66.03 | 50.30 | 124.17 | 98.47 |
+| synth_many_locals.rb | 317790 | 119.24 | 104.41 | 198.63 | 191.36 |
+| synth_many_methods.rb | 408902 | 325.84 | 304.48 | 477.87 | 458.37 |
+| s5_639kb.rb | 638935 | 170.64 | 148.02 | 236.94 | 223.23 |
+| synth_many_strings.rb | 648890 | 447.67 | 417.11 | 664.06 | 629.56 |
+| s6_mega_2.5mb.rb | 2555740 | 696.97 | 615.47 | 991.76 | 939.07 |
+
+Code generation is 7–24 % faster on the files above 30 KB (s4 17 %,
+s5 13 %, s6 12 %). What remains has no single hot spot: it scales linearly
+with the input, and is spread over node dispatch (`process`,
+`compileToFragments`), fragment objects (about 590,000 for s6) and the GC
+for them (20–40 % of the code generation time). Tried without a measurable
+gain, and left out: joining adjacent fragments of a node (9 % fewer
+fragments, changes the source maps' bytes), exact-size fragment arrays,
+setting `fragments` in the constructor, a larger young generation
+(`--max-semi-space-size`, 2–4 %). Larger gains need design changes:
+generating code into one buffer with source-map positions instead of
+fragment trees, and, on the parse side, potch building the plain AST
+directly (its conversion step, `convertNode`, is the largest single
+allocator, about 60 MB per compile of s5 and s6).
+
 ## How to reproduce
 
 The scripts live in `benchmark/potch/`:
