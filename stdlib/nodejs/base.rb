@@ -39,6 +39,51 @@ STDIN.read_proc = %x{function(_count) {
   return buf.toString('utf8', 0, count);
 }}
 
-STDIN.tty = true
-STDOUT.tty = true
-STDERR.tty = true
+# (whether they are terminals: set at start, see ARGV; asked with tty.isatty,
+# as process.stdin would put a piped stdin into non-blocking mode, where the
+# synchronous reads above find no data and end)
+%x{
+  function set_ttys() {
+    var tty = require('tty');
+    #{STDIN.tty = `tty.isatty(0)`};
+    #{STDOUT.tty = `tty.isatty(1)`};
+    #{STDERR.tty = `tty.isatty(2)`};
+  }
+  Opal.process_start_hooks.push(set_ttys);
+  set_ttys();
+}
+
+module NodeJS
+  # An exception nothing rescued ends the program as in CRuby: the at_exit
+  # blocks run, then it is reported on stderr (Exception#full_message) and
+  # the process exits with 1; a SystemExit exits with its status. (Before
+  # other handlers, such as the opal runner's.)
+  def self.uncaught_exception(error)
+    if ::SystemExit === error
+      ::Kernel.exit(error.status)
+    elsif ::Exception === error
+      begin
+        until ($__at_exit__ ||= []).empty?
+          $__at_exit__.pop.call
+        end
+      rescue ::Exception => at_exit_error
+        $stderr.write(at_exit_error.full_message)
+      end
+      $stderr.write(error.full_message)
+    else
+      `console.error(#{error})`
+    end
+    `Opal.exit(1)`
+  end
+end
+
+# (again at start: listeners of a startup snapshot's process aren't kept)
+%x{
+  function listen_uncaught() {
+    if (Opal.uncaught_exception_listener) process.removeListener('uncaughtException', Opal.uncaught_exception_listener);
+    Opal.uncaught_exception_listener = function(error) { #{NodeJS.uncaught_exception(`error`)} };
+    process.prependListener('uncaughtException', Opal.uncaught_exception_listener);
+  }
+  Opal.process_start_hooks.push(listen_uncaught);
+  listen_uncaught();
+}

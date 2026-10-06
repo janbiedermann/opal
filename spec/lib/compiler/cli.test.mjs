@@ -149,6 +149,30 @@ describe("CLI", () => {
     }
   });
 
+  test("an uncaught exception ends a program with Node.js's platform as in CRuby", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-uncaught-"));
+    try {
+      const run = (source) => {
+        const program = join(dir, "program.js");
+        const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", source], { encoding: "utf8" });
+        assert.equal(build.status, 0, build.stderr);
+        return spawnSync(process.execPath, [program], { encoding: "utf8" });
+      };
+      // at_exit blocks first, then the report on stderr (no highlighting:
+      // not a terminal), status 1
+      const raised = run('at_exit { puts "at_exit ran" }; puts "before"; raise ArgumentError, "boom"');
+      assert.equal(raised.stdout, "before\nat_exit ran\n");
+      assert.match(raised.stderr, /^[^\n]*: boom \(ArgumentError\)\n\tfrom /);
+      assert.ok(!raised.stderr.includes("throw exception") && !raised.stderr.includes("\x1b["), raised.stderr);
+      assert.equal(raised.status, 1);
+      // a SystemExit: its status, no report
+      const exited = run('at_exit { puts "bye" }; raise SystemExit.new(5)');
+      assert.deepEqual([exited.stdout, exited.stderr, exited.status], ["bye\n", "", 5]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a program with Node.js's platform needs npm packages only when it uses them", () => {
     // (as in a single executable application, where only Node's own
     // modules can be required)

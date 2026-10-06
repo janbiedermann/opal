@@ -94,10 +94,6 @@ opal_filter "Exception" do
   fails "SystemCallError.new raises TypeError if errno is not an Integer" # Expected TypeError (/no implicit conversion of String into Integer/) but no exception was raised (#<SystemCallError: foo> was returned)
   fails "SystemCallError.new raises TypeError if message is not a String" # Expected TypeError (/no implicit conversion of Symbol into String/) but no exception was raised (#<SystemCallError: foo> was returned)
   fails "SystemCallError.new requires at least one argument" # Expected ArgumentError but no exception was raised (#<SystemCallError: SystemCallError> was returned)
-  fails "SystemExit #initialize accepts a message only" # NoMethodError: undefined method `status' for #<SystemExit: message>
-  fails "SystemExit #initialize accepts a status and message" # NoMethodError: undefined method `status' for #<SystemExit: 42>
-  fails "SystemExit #initialize accepts a status only" # NoMethodError: undefined method `status' for #<SystemExit: 42>
-  fails "SystemExit #initialize accepts no arguments" # NoMethodError: undefined method `status' for #<SystemExit: SystemExit>
   fails "SystemExit sets the exit status and exits silently when raised when subclassed" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x9fe6a>
   fails "SystemExit sets the exit status and exits silently when raised" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x9fe6a>
   fails_badly "SystemExit#status returns the exit status"

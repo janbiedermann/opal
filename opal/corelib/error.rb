@@ -305,6 +305,27 @@ class ::NoMethodError
   end
 end
 
+class ::SystemExit
+  attr_reader :status
+
+  # SystemExit.new(status = true, message = nil): a status of true is 0,
+  # false 1 (as Kernel#exit takes them).
+  def initialize(*args)
+    status = 0
+    if `args[0] === true || args[0] === false`
+      status = args.shift ? 0 : 1
+    elsif ::Integer === args[0]
+      status = args.shift
+    end
+    super(*args)
+    @status = status
+  end
+
+  def success?
+    @status == 0
+  end
+end
+
 class ::StopIteration
   attr_reader :result
 end
