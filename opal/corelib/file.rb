@@ -802,9 +802,15 @@ class ::File < ::IO
       str = if filename.empty?
               ''
             else
-              last_dot_idx = filename[1..-1].rindex('.')
-              # extension name must contain at least one character .(something)
-              last_dot_idx.nil? || last_dot_idx + 1 == filename.length - 1 ? '' : filename[(last_dot_idx + 1)..-1]
+              last_dot_idx = filename.rindex('.')
+              if last_dot_idx.nil?
+                ''
+              else
+                # a leading run of dots is not an extension ("..", ".bashrc")
+                run_start = last_dot_idx
+                run_start -= 1 while run_start > 0 && filename[run_start - 1] == '.'
+                run_start.zero? ? '' : filename[last_dot_idx..-1]
+              end
             end
       `$str(str)`
     end

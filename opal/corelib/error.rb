@@ -5,7 +5,10 @@ class ::Exception < `Error`
   `Opal.prop(self.$$prototype, '$$is_exception', true)`
   `var stack_trace_limit`
 
-  `Error.stackTraceLimit = 100`
+  # (skipped while a Node.js startup snapshot is being built: modifying it
+  # in the builder script makes Node keep it over --stack-trace-limit; the
+  # snapshot's main function restores it, see exe_compiler.mjs)
+  `if (!(typeof require === 'function' && require('v8')?.startupSnapshot?.isBuildingSnapshot?.())) Error.stackTraceLimit = 100`
 
   def self.new(*args)
     %x{
@@ -250,7 +253,9 @@ class ::TypeError           < ::StandardError; end
 class ::ArgumentError       < ::StandardError; end
 class ::UncaughtThrowError    < ::ArgumentError; end
 class ::IndexError          < ::StandardError; end
-class ::StopIteration         < ::IndexError; end
+class ::StopIteration         < ::IndexError
+  attr_reader :result
+end
 class ::ClosedQueueError        < ::StopIteration; end
 class ::RangeError          < ::StandardError; end
 class ::FloatDomainError      < ::RangeError; end

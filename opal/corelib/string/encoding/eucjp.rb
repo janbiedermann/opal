@@ -47,27 +47,27 @@ require 'corelib/string/encoding/tables/jis_ext_inverted'
         // HALFWIDTH_KATAKANA
         else if( 0xFF61 <= unicode && unicode <= 0xFF9F ) {
           res.push(0x8E);
-          res.push(unicode - 0xFFC0);
+          res.push(unicode - 0xFEC0);
         }
         else {
           // KANJI
           var jis = JISInverted[ unicode ];
           if( jis ) {
-            res.push(( jis >> 8 ) - 0x80);
-            res.push(( jis & 0xFF ) - 0x80);
+            res.push(( jis >> 8 ) + 0x80);
+            res.push(( jis & 0xFF ) + 0x80);
           }
           else {
             // EXTENSION
             var ext = JISEXTInverted[ unicode ];
             if( ext ) {
               res.push(0x8F);
-              res.push(( ext >> 8 ) - 0x80);
-              res.push(( ext & 0xFF ) - 0x80);
+              res.push(( ext >> 8 ) + 0x80);
+              res.push(( ext & 0xFF ) + 0x80);
             }
             // UNKNOWN
             else {
-              res.push(( unknownJis >> 8 ) - 0x80);
-              res.push(( unknownJis & 0xFF ) - 0x80);
+              res.push(( unknownJis >> 8 ) + 0x80);
+              res.push(( unknownJis & 0xFF ) + 0x80);
             }
           }
         }
@@ -198,27 +198,27 @@ require 'corelib/string/encoding/tables/jis_ext_inverted'
         // HALFWIDTH_KATAKANA
         else if( 0xFF61 <= unicode && unicode <= 0xFF9F ) {
           set_byte(0x8E);
-          set_byte(unicode - 0xFFC0);
+          set_byte(unicode - 0xFEC0);
         }
         else {
           // KANJI
           var jis = JISInverted[ unicode ];
           if( jis ) {
-            set_byte(( jis >> 8 ) - 0x80);
-            set_byte(( jis & 0xFF ) - 0x80);
+            set_byte(( jis >> 8 ) + 0x80);
+            set_byte(( jis & 0xFF ) + 0x80);
           }
           else {
             // EXTENSION
             var ext = JISEXTInverted[ unicode ];
             if( ext ) {
               set_byte(0x8F);
-              set_byte(( ext >> 8 ) - 0x80);
-              set_byte(( ext & 0xFF ) - 0x80);
+              set_byte(( ext >> 8 ) + 0x80);
+              set_byte(( ext & 0xFF ) + 0x80);
             }
             // UNKNOWN
             else {
-              set_byte(( unknownJis >> 8 ) - 0x80);
-              set_byte(( unknownJis & 0xFF ) - 0x80);
+              set_byte(( unknownJis >> 8 ) + 0x80);
+              set_byte(( unknownJis & 0xFF ) + 0x80);
             }
           }
         }

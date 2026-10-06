@@ -1,6 +1,8 @@
 # backtick_javascript: true
 # helpers: platform, coerce_to, coerce_to_or_nil, coerce_to_or_raise, process_check_id
 
+require 'corelib/process/tms'
+
 module ::Process
   PRIO_PGRP = `$platform.PRIO_PGRP` || nil
   PRIO_PROCESS = `$platform.PRIO_PROCESS` || nil

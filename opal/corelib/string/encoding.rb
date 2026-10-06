@@ -967,14 +967,20 @@ end
 
   def decode(io_buffer)
     %x{
-      let result = scrubbing_decoder(self, 'ascii').decode(io_buffer.data_view);
+      // TextDecoder labels "ascii"/"latin1" mean windows-1252 in WHATWG,
+      // so bytes 0x80..0xFF must be mapped to the same code points here.
+      let bytes = new Uint8Array(io_buffer.data_view.buffer, io_buffer.data_view.byteOffset, io_buffer.data_view.byteLength), result = '';
+      for (let i = 0, length = bytes.length; i < length; i += 8192)
+        result += SFCC.apply(null, bytes.subarray(i, Math.min(i + 8192, length)));
       return $str(result, self);
     }
   end
 
   def decode!(io_buffer)
     %x{
-      let result = validating_decoder(self, 'ascii').decode(io_buffer.data_view);
+      let bytes = new Uint8Array(io_buffer.data_view.buffer, io_buffer.data_view.byteOffset, io_buffer.data_view.byteLength), result = '';
+      for (let i = 0, length = bytes.length; i < length; i += 8192)
+        result += SFCC.apply(null, bytes.subarray(i, Math.min(i + 8192, length)));
       return $str(result, self);
     }
   end
