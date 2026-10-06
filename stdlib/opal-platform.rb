@@ -11,7 +11,6 @@ headless_firefox = `typeof(opalheadlessfirefox) !== "undefined"`
 safari           = `typeof(opalsafari) !== "undefined"`
 gjs              = `typeof(window) !== "undefined" && typeof(GjsFileImporter) !== "undefined"`
 quickjs          = `typeof(window) === "undefined" && typeof(__loadScript) !== "undefined"`
-opal_miniracer   = `typeof(opalminiracer) !== "undefined"`
 
 OPAL_PLATFORM = if bun
                   'bun'
@@ -29,7 +28,5 @@ OPAL_PLATFORM = if bun
                   'gjs'
                 elsif quickjs
                   'quickjs'
-                elsif opal_miniracer
-                  'opal-miniracer'
                 else # possibly browser, which is the primary target
                 end
