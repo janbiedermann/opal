@@ -1,5 +1,6 @@
 # NOTE: run bin/format-filters after changing this file
 opal_unsupported_filter "freezing" do
+  fails "Hash literal freezes string keys on initialization" # NotImplementedError: String#reverse! not supported. Mutable String methods are not supported in Opal.
   fails "Marshal.load when called with freeze: true does not freeze classes" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)
   fails "Marshal.load when called with freeze: true does not freeze modules" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)
   fails "Marshal.load when called with freeze: true returns frozen arrays" # ArgumentError: [Marshal.load] wrong number of arguments (given 2, expected 1)
@@ -21,4 +22,5 @@ opal_unsupported_filter "freezing" do
   fails "String#replace raises a FrozenError on a frozen instance that is modified" # Expected FrozenError but got: NoMethodError (undefined method `replace' for "hello")
   fails "String#replace raises a FrozenError on a frozen instance when self-replacing" # Expected FrozenError but got: NoMethodError (undefined method `replace' for "hello")
   fails "String#succ! raises a FrozenError if self is frozen" # Expected FrozenError but got: NotImplementedError (String#succ! not supported. Mutable String methods are not supported in Opal.)
+  fails "Time#localtime on a frozen time does not raise an error if already in the right time zone" # NoMethodError: undefined method `localtime' for a Time
 end

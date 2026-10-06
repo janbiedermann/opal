@@ -18,6 +18,7 @@ opal_filter "File" do
   fails "File.absolute_path accepts a second argument of a directory from which to resolve the path" # Expected "C:/Users/Administrator/workspace/opal/spec/ruby/core/file/ruby/core/file/absolute_path_spec.rb" == "C:/Users/Administrator/workspace/opal/spec/ruby/core/file/absolute_path_spec.rb" to be truthy but was false
   fails "File.basename returns a new unfrozen String" # Expected "foo.rb" not to be identical to "foo.rb"
   fails "File.empty? returns true for NUL" # Expected false == true to be truthy but was false
+  fails "File.expand_path raises an Encoding::CompatibilityError if the external encoding is not compatible" # Expected CompatibilityError but no exception was raised
   fails "File.join inserts the separator in between empty strings and arrays" # Expected "" == "/" to be truthy but was false
   fails "File.join respects the given separator if only one part has a boundary separator" # Expected "usr/bin" == "usr//bin" to be truthy but was false
   fails "File.join returns a duplicate string when given a single argument" # Expected "usr" not to be identical to "usr"

@@ -115,7 +115,7 @@ describe("CLI", () => {
       const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", 'p Dir.glob("*.{rb,txt}").sort'], { encoding: "utf8" });
       assert.equal(build.status, 0, build.stderr);
       const npm = bundleNpmPackages(readFileSync(program, "utf8"), { cwd: dir, nodePath: "" });
-      assert.deepEqual([npm.packages, npm.missing], [["picomatch"], []]);
+      assert.deepEqual([npm.packages, npm.missing], [[], []]);
       writeFileSync(join(dir, "bundled.js"), npm.prelude + npm.wrap(readFileSync(program, "utf8")));
       // (without NODE_PATH, where picomatch can't be found)
       const env = { ...process.env };
