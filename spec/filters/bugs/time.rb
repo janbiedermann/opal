@@ -52,8 +52,6 @@ opal_filter "Time" do
   fails "Time#strftime should be able to print the commercial year with only two digits" # TypeError: no implicit conversion of Range into Integer
   fails "Time#strftime should be able to show default Logger format" # Expected "2001-12-03T04:05:06.000000 " == "2001-12-03T04:05:06.100000 " to be truthy but was false
   fails "Time#strftime should be able to show the commercial week day" # Expected "1" == "7" to be truthy but was false
-  fails "Time#strftime should be able to show the number of seconds since the unix epoch" # Expected "1104534000" == "1104537600" to be truthy but was false
-  fails "Time#strftime should be able to show the timezone of the date with a : separator" # Expected "-0000" == "+0000" to be truthy but was false
   fails "Time#strftime should be able to show the week number with the week starting on Sunday (%U) and Monday (%W)" # Expected "%U" == "14" to be truthy but was false
   fails "Time#strftime supports RFC 3339 UTC for unknown offset local time, -0000, as %-z" # Expected "-0000" == "+0000" to be truthy but was false
   fails "Time#strftime with %N formats the microseconds of the second with %6N" # Expected "000000" == "042000" to be truthy but was false
@@ -79,7 +77,6 @@ opal_filter "Time" do
   fails "Time#utc? does treat time with -00:00 offset as UTC" # NoMethodError: undefined method `localtime' for 2023-09-20 22:52:11 +0200
   fails "Time#utc? does treat time with Z offset as UTC" # ArgumentError: "+HH:MM", "-HH:MM", "UTC" expected for utc_offset: Z
   fails "Time#zone Encoding.default_internal is set returns an ASCII string" # NoMethodError: undefined method `default_internal' for Encoding
-  fails "Time#zone defaults to UTC when bad zones given" # Expected 3600 == 0 to be truthy but was false
   fails "Time#zone returns UTC when called on a UTC time" # ArgumentError: "+HH:MM", "-HH:MM", "UTC" expected for utc_offset: Z
   fails "Time.at :in keyword argument could be UTC offset as a 'UTC' String" # TypeError: no implicit conversion of Hash into Integer
   fails "Time.at :in keyword argument could be UTC offset as a String in '+HH:MM or '-HH:MM' format" # TypeError: no implicit conversion of Hash into Integer

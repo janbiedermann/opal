@@ -6,8 +6,13 @@ class DateTime < Date
       wrap Time.now
     end
 
+    # A time without a zone is at offset 0 (UTC), as in CRuby (Time.parse
+    # takes it as local time): the string is parsed as a UTC time.
     def parse(str)
-      wrap Time.parse(str)
+      utc = `Date.parse(str + (/\dT\d/.test(str) ? "Z" : " UTC"))` unless `/\d:\d\d(?::\d\d(?:[.,]\d+)?)?\s*(?:Z|[+-]\d{1,2}(?::?\d\d)?|(?!AM\b|PM\b)[A-Z]{2,5})\s*$/.test(str)`
+      return wrap Time.parse(str) if utc.nil? || `isNaN(utc)`
+
+      wrap Time.at(`utc / 1000`).utc
     end
   end
 

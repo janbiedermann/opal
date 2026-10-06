@@ -73,6 +73,7 @@ opal_unsupported_filter "Time" do
   fails "Time#nsec returns the nanoseconds part of a Time constructed with an Float number of microseconds" # NoMethodError: undefined method `nsec' for 1970-01-01 01:00:00 +0100
   fails "Time#nsec returns the nanoseconds part of a Time constructed with an Integer number of microseconds" # NoMethodError: undefined method `nsec' for 1970-01-01 01:00:00 +0100
   fails "Time#nsec returns the nanoseconds part of a Time constructed with an Rational number of microseconds" # NoMethodError: undefined method `nsec' for 1970-01-01 01:00:00 +0100
+  fails "Time#strftime should be able to show the number of seconds since the unix epoch" # Changing ENV['TZ'] at runtime (with_timezone) is not supported
   fails "Time#strftime with %L formats the milliseconds of the second" # Expected "000" == "100" to be truthy but was false
   fails "Time#strftime with %z formats a UTC time offset as '+0000'" # Expected "+0100" == "+0000" to be truthy but was false
   fails "Time#strftime with %z formats a local time with negative UTC offset as '-HHMM'" # Expected "+0100" == "-0800" to be truthy but was false
@@ -97,7 +98,9 @@ opal_unsupported_filter "Time" do
   fails "Time#utc_offset returns the correct offset for New Zealand around daylight savings time change" # Expected 7200 == 46800 to be truthy but was false
   fails "Time#utc_offset returns the correct offset for US Eastern time zone around daylight savings time change" # Expected 3600 == -18000 to be truthy but was false
   fails "Time#utc_offset returns the offset in seconds between the timezone of time and UTC" # Expected 3600 == 10800 to be truthy but was false
+  fails "Time#wday returns an integer representing the day of the week, 0..6, with Sunday being 0" # Changing ENV['TZ'] at runtime (with_timezone) is not supported
   fails "Time#zone Encoding.default_internal is set doesn't raise errors for a Time with a fixed offset" # NoMethodError: undefined method `default_internal' for Encoding
+  fails "Time#zone defaults to UTC when bad zones given" # Changing ENV['TZ'] at runtime (with_timezone) is not supported
   fails "Time#zone returns nil when getting the local time with a fixed offset" # NoMethodError: undefined method `getlocal' for 2005-02-27 22:50:00 -0100
   fails "Time#zone returns the correct timezone for a local time" # NoMethodError: undefined method `getlocal' for 2005-02-27 22:50:00 -0100
   fails "Time#zone returns the time zone used for time" # Expected "Central European Standard Time" == "EST" to be truthy but was false

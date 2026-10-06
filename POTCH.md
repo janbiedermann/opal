@@ -648,12 +648,10 @@ Later:
   inverted run~~ (done 2026-10-05): 41 filters removed (they pass in normal
   runs with three random seeds, in isolation, and in other time zones).
   Kept: the two `String#byteindex`/`byterindex` "raises a TypeError if
-  passed a Symbol" examples (no expectation runs), and four that pass only
-  in UTC (`Time#zone defaults to UTC when bad zones given`, `Time#strftime`
-  and `Date#strftime` seconds since the epoch, `DateTime.parse
-  YYYY-MM-DDTHH:MM:SS`): real bugs elsewhere, as the filters' messages
-  (recorded at UTC+1) show. Check inverted-run results in another time
-  zone too (`TZ=Europe/Berlin`).
+  passed a Symbol" examples (no expectation runs), and four that passed only
+  in UTC (since fixed: `Date#strftime` %s and `DateTime.parse` without a
+  zone; the two that change `ENV['TZ']` are unsupported filters now). Check
+  inverted-run results in another time zone too (`TZ=Europe/Berlin`).
 * the TODO of phase 3: the forking builder, undecided (investigated: worth
   it for a resident compiler, not for single builds; the `.rb.erb`/`.js.erb`
   processors and bundling the compiler once in opal-builder are done)

@@ -83,6 +83,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   runner uses, so use ESR 128. On a minimal EL10 system the browsers need
   `dnf install atk at-spi2-atk at-spi2-core libXcomposite libXdamage
   libXfixes libXrandr mesa-libgbm libxkbcommon alsa-lib gtk3 libXcursor`.
+- On a machine in UTC, time zone bugs stay hidden; run the ruby/spec suite in
+  other zones too (`TZ=America/Los_Angeles`, `TZ=Pacific/Chatham`) after
+  changes to Time, Date or DateTime.
 - `node --test` on Node 22 does not accept a directory; pass the files
   (`node --test spec/lib/potch/*.test.mjs`).
 - If an agent discovers information that required significant setup time, condense

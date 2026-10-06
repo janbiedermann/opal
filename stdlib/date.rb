@@ -351,9 +351,10 @@ class Date
     %x{
     //Adapted from http://www.physics.sfasu.edu/astro/javascript/julianday.html
 
-    var mm = #{@date}.getMonth() + 1,
-        dd = #{@date}.getDate(),
-        yy = #{@date}.getFullYear(),
+    // (the date's own fields: a DateTime's in its offset, not local time)
+    var mm = #{month},
+        dd = #{day},
+        yy = #{year},
         hr = 12, mn = 0, sc = 0,
         ggg, s, a, j1, jd;
 
@@ -454,14 +455,13 @@ class Date
     prev_year(-years)
   end
 
-  def strftime(format = '')
-    %x{
-      if (format == '') {
-        return #{to_s};
-      }
+  def strftime(format = '%F')
+    return @date.strftime(format) if is_a?(::DateTime)
 
-      return #{@date.strftime(format)}
-    }
+    # A Date is at midnight UTC (offset 0), as in CRuby: %s is the seconds
+    # since the epoch of that, %z +0000 and %Z +00:00.
+    format = `format.replace(/%(%|Z)/g, function (_, c) { return c === "%" ? "%%" : "+00:00"; })`
+    ::Time.utc(year, month, day).strftime(format)
   end
 
   def to_s
