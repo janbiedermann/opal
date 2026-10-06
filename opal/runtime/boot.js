@@ -538,6 +538,11 @@
           // its status (as the former Ruby CLI did).
           return Opal.run_end_procs_and_exit(error);
         }
+        if (Opal.uncaught_exception_listener) {
+          // Same handling as a synchronous uncaught exception (at_exit
+          // blocks, full_message on stderr, exit 1).
+          return Opal.uncaught_exception_listener(error);
+        }
         if (Opal.respond_to && Opal.respond_to(error, '$full_message')) {
           error = error.$full_message();
         }
@@ -549,11 +554,32 @@
       return Opal.last_promise;
     }
     else {
-      var ret = proc(Opal);
-      if (typeof Promise === 'function' && typeof ret === 'object' && ret instanceof Promise) {
-        Opal.last_promise = ret;
+      try {
+        var ret = proc(Opal);
+        if (typeof Promise === 'function' && typeof ret === 'object' && ret instanceof Promise) {
+          Opal.last_promise = ret;
+        }
+        return ret;
       }
-      return ret;
+      catch (error) {
+        if (error instanceof Opal.SystemExit) {
+          // exit() raises SystemExit; run the at_exit blocks and exit with
+          // its status (as the former Ruby CLI did).
+          return Opal.run_end_procs_and_exit(error);
+        }
+        if (Opal.uncaught_exception_listener) {
+          // Same handling as an asynchronous uncaught exception (at_exit
+          // blocks, full_message on stderr, exit 1).
+          return Opal.uncaught_exception_listener(error);
+        }
+        if (Opal.respond_to && Opal.respond_to(error, '$full_message')) {
+          error = error.$full_message(); // eslint-disable-line no-ex-assign
+        }
+        console.error(error.toString());
+        // Abort further execution
+        Opal.promise_unhandled_exception = true;
+        Opal.platform.exit(1);
+      }
     }
   }
 

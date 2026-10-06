@@ -14,7 +14,7 @@
 // For new platforms uncomment and use proper name:
 // if ("new platform name" === Opal.platform.name) {
 
-Opal.queue(async function() {
+Opal.queue(function() {
 
 const platform = Opal.platform;
 const not_implemented = platform.not_implemented;

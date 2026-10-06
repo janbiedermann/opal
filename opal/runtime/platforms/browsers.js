@@ -3,7 +3,7 @@
 //
 
 if (Opal.platform.is_browser) {
-Opal.queue(async function() {
+Opal.queue(function() {
 
 // used vars
 const platform = Opal.platform;

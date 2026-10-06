@@ -1,6 +1,6 @@
 // Driver for Node 22 or greater and GraalNodeJs
 if (Opal.platform.name == "node") {
-  Opal.queue(async function () {
+  Opal.queue(function () {
     const platform = Opal.platform;
 
     // imports
@@ -112,8 +112,16 @@ if (Opal.platform.name == "node") {
             value.match(/^Etc\/GMT[-+]\d$/) || // Etc/GMT+7
             value.match(/^\w+$/) // Japan
           )
-        )
-          value = "UTC";
+        ) {
+          // POSIX-style zones like "AST-3", "EST5EDT" or "PDT8:00:00"
+          // (the offset sign is inverted in TZ), as given by ruby/spec.
+          const posix = value.match(/^([A-Za-z]{3,5})([+-]?)(\d{1,2})(:\d{1,2}(:\d{1,2})?)?([A-Za-z]{3,5})?$/);
+          if (posix) {
+            const hours = parseInt(posix[3], 10);
+            value = (posix[2] === "-" ? `Etc/GMT-${hours}` : `Etc/GMT+${hours}`);
+          }
+          else value = "UTC";
+        }
       }
       return (process.env[key] = value);
     };
