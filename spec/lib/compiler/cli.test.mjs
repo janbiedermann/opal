@@ -3,7 +3,7 @@
 // and repl_spec.rb.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -16,7 +16,7 @@ import { isIncomplete } from "../../../lib/opal/compiler/cli/repl.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
-import { seaConfig } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
+import { seaConfig, seaUnsupported } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
 
 const FIXTURES = resolve(OPAL_ROOT, "spec", "lib", "fixtures");
 const FILE = join(FIXTURES, "opal_file.rb");
@@ -53,6 +53,30 @@ describe("CLI", () => {
     assert.deepEqual(new CLI({ evals: ["puts 1"] }).requires, ["opal"]);
     // (the code cache goes into the executable; no warning on every start)
     assert.deepEqual(seaConfig("main.js"), { main: "main.js", output: "sea-prep.blob", useCodeCache: true, disableExperimentalSEAWarning: true });
+  });
+
+  test("a Node.js executable needs a Node.js with the application fuse", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-sea-"));
+    try {
+      const fused = join(dir, "node-fused");
+      const plain = join(dir, "node-plain");
+      // (the sentinel across the 1 MB chunks the binary is read in)
+      writeFileSync(fused, Buffer.concat([Buffer.alloc((1 << 20) - 10), Buffer.from("NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2:0"), Buffer.alloc(100)]));
+      writeFileSync(plain, Buffer.alloc(3 << 20));
+      assert.equal(seaUnsupported(fused, "22.0.0"), null);
+      assert.match(seaUnsupported(plain, "22.0.0"), /node-plain \(v22\.0\.0\) has no single executable application fuse.*official Node\.js build/);
+      assert.match(seaUnsupported(fused, "18.20.0"), /is older than Node\.js 20/);
+      assert.match(seaUnsupported(join(dir, "missing"), "22.0.0"), /can't be read/);
+      // the CLI checks before compiling (with the Node.js running it)
+      if (seaUnsupported()) {
+        const { status, errors } = await outputOf({ exe_type: "node", runner: "compiler", evals: ["puts 1"], output: join(dir, "app") });
+        assert.equal(status, 69);
+        assert.match(errors, /--compile-to-exe node needs a Node\.js that supports single executable applications/);
+        assert.equal(existsSync(join(dir, "app")), false);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("a program with Node.js's platform needs npm packages only when it uses them", () => {
