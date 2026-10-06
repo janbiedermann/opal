@@ -533,6 +533,11 @@
       Opal.last_promise = Opal.last_promise.then(function() {
         if (!Opal.promise_unhandled_exception) return proc(Opal);
       })['catch'](function(error) {
+        if (error instanceof Opal.SystemExit) {
+          // exit() raises SystemExit; run the at_exit blocks and exit with
+          // its status (as the former Ruby CLI did).
+          return Opal.run_end_procs_and_exit(error);
+        }
         if (Opal.respond_to && Opal.respond_to(error, '$full_message')) {
           error = error.$full_message();
         }

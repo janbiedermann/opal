@@ -168,12 +168,12 @@ describe("processors", () => {
   test("JsProcessor maps to one fragment per line", () => {
     const processor = new JsProcessor("line1\n line2\n  line3", "file.js");
     const map = processor.sourceMap;
-    assert.deepEqual(map.fragments.map((f) => f.code), ["line1\n", " line2\n", "  line3\n", 'Opal.loaded(["file.js"]);']);
+    assert.deepEqual(map.fragments.map((f) => f.code), ["line1\n", " line2\n", "  line3\n", 'Opal.loaded("file.js");']);
   });
 
   test("JsProcessor adds loading code at the end of the source", () => {
     const processor = new JsProcessor("line1\n line2\n  line3", "file.js");
-    assert.equal(processor.source, 'line1\n line2\n  line3\nOpal.loaded(["file.js"]);');
+    assert.equal(processor.source, 'line1\n line2\n  line3\nOpal.loaded("file.js");');
   });
 
   test("RubyProcessor compiles ruby to js", () => {
