@@ -6,8 +6,21 @@ end
 
 `Opal.exit = process.exit`
 
-ARGV = `process.argv.slice(2)`
-ARGV.shift if ARGV.first == '--'
+# ARGV and $0 (the script, or the executable) are the process's: set again
+# at start when the program comes from a startup snapshot taken after this
+# file ran (Node.js executables run Opal.process_start_hooks then).
+ARGV = []
+alias $PROGRAM_NAME $0
+%x{
+  function set_argv() {
+    var argv = process.argv.slice(2);
+    if (argv[0] === '--') argv.shift();
+    #{ARGV.replace(`argv`)};
+    Opal.gvars['0'] = process.argv[1] == null ? nil : process.argv[1];
+  }
+  (Opal.process_start_hooks = Opal.process_start_hooks || []).push(set_argv);
+  set_argv();
+}
 
 STDOUT.write_proc = ->(string) { `process.stdout.write(string)` }
 STDERR.write_proc = ->(string) { `process.stderr.write(string)` }

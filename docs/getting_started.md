@@ -69,8 +69,13 @@ $ ./hello world
 ```
 
 The executable gets Node.js's platform (`ARGV`, `ENV`, `STDIN`, `File`,
-`Dir`, ... as with `require 'nodejs'`) and the V8 code cache of the program,
-and leaves out the source map. It is made from the Node.js that runs `opal`,
+`Dir`, ... as with `require 'nodejs'`) and leaves out the source map. It
+starts from a startup snapshot: the corelib and the platform are booted when
+the executable is built, and the other libraries (given with `-r` or
+required by the program) and the program itself run at start (a `puts 1`
+executable starts in about 30 ms, 70 ms without the snapshot). The
+platform's per-process state is set again at start
+(`Opal.process_start_hooks`: `ARGV`, `$0`). It is made from the Node.js that runs `opal`,
 which must have the single executable application fuse: the official builds
 have it, some Linux distributions' builds don't (`opal` checks this before
 compiling and says so, exiting with status 69). `postject` comes from npm

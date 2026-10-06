@@ -16,7 +16,7 @@ import { isIncomplete } from "../../../lib/opal/compiler/cli/repl.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
-import { seaConfig, seaUnsupported } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
+import { seaConfig, seaUnsupported, snapshotEntry } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
 
 const FIXTURES = resolve(OPAL_ROOT, "spec", "lib", "fixtures");
 const FILE = join(FIXTURES, "opal_file.rb");
@@ -51,8 +51,10 @@ describe("CLI", () => {
     assert.deepEqual(cli.requires, ["opal", "nodejs", "set"]);
     assert.equal(cli.runnerOptions.no_source_map, true);
     assert.deepEqual(new CLI({ evals: ["puts 1"] }).requires, ["opal"]);
-    // (the code cache goes into the executable; no warning on every start)
-    assert.deepEqual(seaConfig("main.js"), { main: "main.js", output: "sea-prep.blob", useCodeCache: true, disableExperimentalSEAWarning: true });
+    // (a startup snapshot, else the code cache, goes into the executable;
+    // no warning on every start)
+    assert.deepEqual(seaConfig("main.js", { snapshot: true }), { main: "main.js", output: "sea-prep.blob", disableExperimentalSEAWarning: true, useSnapshot: true });
+    assert.deepEqual(seaConfig("main.js"), { main: "main.js", output: "sea-prep.blob", disableExperimentalSEAWarning: true, useCodeCache: true });
   });
 
   test("a Node.js executable needs a Node.js with the application fuse", async () => {
@@ -74,6 +76,29 @@ describe("CLI", () => {
         assert.match(errors, /--compile-to-exe node needs a Node\.js that supports single executable applications/);
         assert.equal(existsSync(join(dir, "app")), false);
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a Node.js executable's startup snapshot boots the corelib and the platform", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-snapshot-"));
+    try {
+      const program = join(dir, "program.js");
+      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", 'puts ARGV.inspect; puts ENV["OPAL_SNAPSHOT_TEST"]; puts File.basename($PROGRAM_NAME); puts rand < 1'], { encoding: "utf8" });
+      assert.equal(build.status, 0, build.stderr);
+      const entry = snapshotEntry(readFileSync(program, "utf8"));
+      assert.ok(entry.includes("setDeserializeMainFunction"));
+      assert.equal(snapshotEntry("puts 1"), null); // (no platform: no place to cut)
+      writeFileSync(join(dir, "entry.js"), entry);
+      // built with other arguments and environment than it runs with
+      const blob = join(dir, "snapshot.blob");
+      const snapshot = spawnSync(process.execPath, ["--snapshot-blob", blob, "--build-snapshot", "entry.js", "built"], { cwd: dir, encoding: "utf8", env: { ...process.env, OPAL_SNAPSHOT_TEST: "build" } });
+      assert.equal(snapshot.status, 0, snapshot.stderr);
+      assert.ok(!/stackTraceLimit/.test(snapshot.stderr), snapshot.stderr);
+      // (process.argv[1] is the executable in a single executable application)
+      const run = spawnSync(process.execPath, ["--snapshot-blob", blob, "app", "a", "b"], { cwd: dir, encoding: "utf8", env: { ...process.env, OPAL_SNAPSHOT_TEST: "run" } });
+      assert.equal(run.stdout, '["a", "b"]\nrun\napp\ntrue\n', run.stderr);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
