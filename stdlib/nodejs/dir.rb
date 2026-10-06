@@ -50,8 +50,21 @@ class Dir
       `__os__.homedir()`
     end
 
-    def chdir(path)
+    # As in CRuby: the home directory without a path; with a block, the
+    # previous directory again after it, and the block's value.
+    def chdir(path = home)
+      path = path.to_path if path.respond_to?(:to_path)
+      unless block_given?
+        `process.chdir(#{path})`
+        return 0
+      end
+      previous = pwd
       `process.chdir(#{path})`
+      begin
+        yield path
+      ensure
+        `process.chdir(#{previous})`
+      end
     end
 
     def mkdir(path)
@@ -78,9 +91,11 @@ class Dir
       %x{
         return #{pattern}.flatMap((subpattern) => {
             const scanResult = __pm__().scan(subpattern, { tokens: true })
-            let base = scanResult.negated || scanResult.base === ''
-                ? process.cwd().split(__path__.sep).join(__path__.posix.sep)
-                : scanResult.base
+            // (a pattern without a base is relative to the current
+            // directory, and so are the paths it gives)
+            const relativeToCwd = scanResult.negated || scanResult.base === ''
+            const cwd = process.cwd().split(__path__.sep).join(__path__.posix.sep)
+            let base = relativeToCwd ? cwd : scanResult.base
             try {
                 const stat = __fs__.statSync(base)
                 if (scanResult.glob === '' && stat.isDirectory()) {
@@ -104,6 +119,7 @@ class Dir
                 } else {
                     files = __fs__.readdirSync(base).map(f => __path__.join(base, f))
                 }
+                if (relativeToCwd) files = files.map(f => __path__.relative(cwd, f).split(__path__.sep).join(__path__.posix.sep))
                 const isMatch = __pm__()(subpattern, {windows: true})
                 return files.filter(f => isMatch(f));
             } catch (e) {

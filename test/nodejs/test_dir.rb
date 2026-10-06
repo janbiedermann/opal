@@ -142,4 +142,21 @@ class TestNodejsDir < Test::Unit::TestCase
     result = Dir.glob(normalize_glob(base_path + '/**/*'))
     assert_equal(5, result.length)
   end
+
+  # (a pattern without a base is relative to the current directory, and so
+  # are the paths it gives, as in CRuby)
+  def test_dir_glob_relative
+    base_path = glob_base_test_dir + "/relative"
+    Dir.mkdir(base_path)
+    Dir.mkdir(base_path + '/a')
+    File.open(base_path + '/x.rb', "w") {}
+    File.open(base_path + '/y.txt', "w") {}
+    File.open(base_path + '/a/z.rb', "w") {}
+    Dir.chdir(base_path) do
+      assert_equal(["x.rb"], Dir.glob("*.rb"))
+      assert_equal(["x.rb", "y.txt"], Dir["*.{rb,txt}"].sort)
+      assert_equal(["a/z.rb", "x.rb"], Dir.glob("**/*.rb").sort)
+      assert_equal(["a/z.rb"], Dir.glob("a/*.rb"))
+    end
+  end
 end
