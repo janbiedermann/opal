@@ -1,5 +1,9 @@
 # backtick_javascript: true
 
+# ENV is the process's environment (so a change of ENV['TZ'] changes the
+# time zone, as in CRuby)
+require 'nodejs/env'
+
 module NodeJS
   VERSION = `process.version`
 end

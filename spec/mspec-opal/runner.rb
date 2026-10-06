@@ -57,7 +57,9 @@ class OSpecFilter
 end
 
 class Object
-  def opal_filter(description, &block)
+  # except: :nodejs leaves the filters out on Node.js (its platform loaded).
+  def opal_filter(description, except: nil, &block)
+    return if except == :nodejs && defined?(::NodeJS)
     OSpecFilter.main.register_filters(description, block)
   end
 

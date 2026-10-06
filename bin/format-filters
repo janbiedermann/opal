@@ -21,10 +21,11 @@ import("node:fs").then(async (fs) => {
     const groups = [];
     let group = null;
     for (const line of lines) {
-      const m = /^(opal_(?:unsupported_)?filter) *"([^"]+)" *do *\n/.exec(line);
+      // (options after the title: `opal_filter "X", except: :nodejs do`)
+      const m = /^(opal_(?:unsupported_)?filter) *"([^"]+)"((?:, *[^\n]*?)?) *do *\n/.exec(line);
       if (m) {
         if (group) throw new Error(`bad group for ${JSON.stringify(line)}!`);
-        group = { type: m[1], title: m[2], lines: [] };
+        group = { type: m[1], title: m[2], options: m[3], lines: [] };
       } else if (/^ {2}fails/.test(line)) {
         group.lines.push(line);
       } else if (/^end/.test(line)) {
@@ -37,7 +38,7 @@ import("node:fs").then(async (fs) => {
 
   const writeGroups = (groups) => "# NOTE: run bin/format-filters after changing this file\n" + groups.map((group, index) => {
     console.log(`- ${group.type} ${JSON.stringify(group.title)}...`);
-    return (index > 0 ? "\n" : "") + `${group.type} "${group.title}" do\n` + sortLines(group.lines).join("") + "end\n";
+    return (index > 0 ? "\n" : "") + `${group.type} "${group.title}"${group.options} do\n` + sortLines(group.lines).join("") + "end\n";
   }).join("");
 
   for (const path of glob("spec/filters/**/*.rb")) {

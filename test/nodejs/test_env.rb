@@ -58,5 +58,16 @@ class TestNodejsEnv < Test::Unit::TestCase
   def test_to_s
     assert_equal('ENV', ENV.to_s)
   end
+
+  def test_tz_changes_the_time_zone
+    old = ENV['TZ']
+    ENV['TZ'] = 'Asia/Kolkata'
+    assert_equal(19800, Time.local(2012, 11, 8).utc_offset)
+    ENV['TZ'] = 'UTC'
+    assert_equal(0, Time.local(2012, 11, 8).utc_offset)
+  ensure
+    old ? ENV['TZ'] = old : ENV.delete('TZ')
+  end
+
 end
 
