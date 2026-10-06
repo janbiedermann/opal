@@ -154,8 +154,6 @@ opal_filter "String" do
   fails "String#initialize with no arguments does not raise an exception when frozen" # Expected nil to be identical to "hello"
   fails "String#insert with index, other raises a FrozenError if self is frozen" # Expected FrozenError but got: NoMethodError (undefined method `insert' for "abcd")
   fails "String#insert with index, other should not call subclassed string methods" # NoMethodError: undefined method `insert' for "abcd"
-  fails "String#inspect when the string's encoding is different than the result's encoding and the string has both ASCII-compatible and ASCII-incompatible chars returns a string with the non-ASCII characters replaced by \\u notation" # Expected "\"hello привет\"" == "\"hello \\u043F\\u0440\\u0438\\u0432\\u0435\\u0442\"" to be truthy but was false
-  fails "String#inspect when the string's encoding is different than the result's encoding and the string's encoding is ASCII-compatible but the characters are non-ASCII returns a string with the non-ASCII characters replaced by \\x notation" # ArgumentError: unknown encoding name - EUC-JP
   fails "String#inspect works for broken US-ASCII strings" # Expected "\"©\"" == "\"\\xC2\\xA9\"" to be truthy but was false
   fails "String#intern ignores existing symbols with different encoding" # Expected #<Encoding:UTF-8> == #<Encoding:ISO-8859-1> to be truthy but was false
   fails "String#intern raises an EncodingError for UTF-8 String containing invalid bytes" # Expected "Ã".valid_encoding? to be falsy but was true

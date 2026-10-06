@@ -8,5 +8,6 @@ describe "A source in EUC-JP" do
     s.encode("UTF-8").should == "\u65E5\u672C"
     "Ž¶ŽÀŽ¶ŽÅ".bytes.should == [142, 182, 142, 192, 142, 182, 142, 197]
     __ENCODING__.should == Encoding::EUC_JP
+    s.inspect.should == %q("\x{C6FC}\x{CBDC}")
   end
 end

@@ -1374,6 +1374,18 @@ class ::String < `String`
               return '\\u' + ('0000' + char_code.toString(16).toUpperCase()).slice(-4);
             }
           });
+      // A string in an encoding other than UTF-8 (the result's encoding)
+      // shows its other non-ASCII characters escaped, as in CRuby: \\u00E9
+      // (\\u{1F600}) in UTF-16/UTF-32, else \\x{93FA} (its bytes).
+      let encoding = self.encoding, name = encoding.name;
+      if (!is_binary && name !== "UTF-8" && !encoding["$dummy?"]()) {
+        let unicode = name.startsWith("UTF-16") || name.startsWith("UTF-32");
+        escaped = escaped.replace(/[^\x00-\x7F]/gu, function (chr) {
+          let cp = chr.codePointAt(0);
+          if (unicode) return cp > 0xffff ? '\\u{' + cp.toString(16).toUpperCase() + '}' : '\\u' + ('0000' + cp.toString(16).toUpperCase()).slice(-4);
+          return '\\x{' + $str(chr, encoding).$bytes().map(function (b) { return ('00' + b.toString(16).toUpperCase()).slice(-2); }).join('') + '}';
+        });
+      }
       return '"' + escaped.replace(/\#[\$\@\{]/g, '\\$&') + '"';
       /* eslint-enable no-misleading-character-class */
     }

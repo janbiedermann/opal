@@ -10,6 +10,7 @@ describe "A source in Shift_JIS" do
     s.valid_encoding?.should == true
     s.encode("UTF-8").should == "\u65E5\u672C\u8A9E"
     "abc".encoding.should == Encoding::Shift_JIS
+    s.inspect.should == %q("\x{93FA}\x{967B}\x{8CEA}")
   end
 
   it "decodes byte escapes in the source encoding" do
