@@ -101,7 +101,7 @@ bm_array_union_numbers 9.232 i/s - 1 times in 0.108314s
 Results written to tmp/bench/1_opal-nodejs-2-0-0dev.txt
 ```
 
-`-R <runner>` (repeatable) selects the runners (default: nodejs; chrome, firefox, bun and deno work too) and `--ruby` runs the same benchmarks with the `ruby` on your `PATH`, to compare with MRI:
+`-R <runner>` (repeatable) selects the runners (default: nodejs; chrome and firefox work too) and `--ruby` runs the same benchmarks with the `ruby` on your `PATH`, to compare with MRI:
 
 ```
 $ node tasks/bench.mjs run --ruby benchmark/bm_array_flatten.rb benchmark/bm_array_union_numbers.rb
