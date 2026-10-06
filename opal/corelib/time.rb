@@ -468,7 +468,8 @@ class ::Time < `Date`
   end
 
   def gmt_offset
-    `(self.timezone != null) ? self.timezone * 60 : -self.getTimezoneOffset() * 60`
+    # (timezone is in hours, getTimezoneOffset in minutes west)
+    `(self.timezone != null) ? self.timezone * 3600 : -self.getTimezoneOffset() * 60`
   end
 
   def strftime(format)

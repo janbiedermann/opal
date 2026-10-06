@@ -336,7 +336,7 @@ class Date
   end
 
   def clone
-    date = Date.wrap(@date.dup)
+    date = self.class.wrap(@date.dup)
     `date.start = #{@start}`
     date
   end

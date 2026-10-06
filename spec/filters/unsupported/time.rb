@@ -6,7 +6,6 @@ opal_unsupported_filter "Time" do
   fails "Time#+ maintains microseconds precision" # Expected 0 == 999999 to be truthy but was false
   fails "Time#+ maintains nanoseconds precision" # NoMethodError: undefined method `nsec' for 1970-01-01 01:00:08 +0100
   fails "Time#+ maintains subseconds precision" # NoMethodError: undefined method `subsec' for 1970-01-01 01:00:08 +0100
-  fails "Time#+ returns a time with the same fixed offset as self" # Expected 60 == 3600 to be truthy but was false
   fails "Time#+ tracks microseconds" # Expected 0 == 123456 to be truthy but was false
   fails "Time#+ tracks nanoseconds" # NoMethodError: undefined method `nsec' for 1970-01-01 01:00:00 +0100
   fails "Time#- accepts arguments that can be coerced into Rational" # Mock '10' expected to receive to_r("any_args") exactly 1 times but received it 0 times
@@ -15,7 +14,6 @@ opal_unsupported_filter "Time" do
   fails "Time#- maintains precision" # Expected 1970-01-01 01:00:09 +0100 == 1970-01-01 01:00:09 +0100 to be falsy but was true
   fails "Time#- maintains subseconds precision" # NoMethodError: undefined method `subsec' for 1970-01-01 00:59:59 +0100
   fails "Time#- returns a time with nanoseconds precision between two time objects" # Expected 86399 == 86399.999999998 to be truthy but was false
-  fails "Time#- returns a time with the same fixed offset as self" # Expected 60 == 3600 to be truthy but was false
   fails "Time#- tracks microseconds" # Expected 122000 == 123456 to be truthy but was false
   fails "Time#- tracks nanoseconds" # NoMethodError: undefined method `nsec' for 1970-01-01 01:00:00 +0100
   fails "Time#<=> returns -1 if the first argument is a fraction of a microsecond before the second argument" # Expected 0 == -1 to be truthy but was false
@@ -39,15 +37,11 @@ opal_unsupported_filter "Time" do
   fails "Time#getlocal with an argument that responds to #to_r coerces using #to_r" # Mock 'rational' expected to receive to_r("any_args") exactly 1 times but received it 0 times
   fails "Time#getlocal with an argument that responds to #to_str coerces using #to_str" # Mock 'string' expected to receive to_str("any_args") exactly 1 times but received it 0 times
   fails "Time#getutc returns a new time which is the utc representation of time" # Expected 2007-01-09 05:00:00 UTC == 2007-01-09 12:00:00 UTC to be truthy but was false
-  fails "Time#gmt_offset given negative offset returns a negative offset" # Expected -180 == -10800 to be truthy but was false
-  fails "Time#gmt_offset given positive offset returns a positive offset" # Expected 180 == 10800 to be truthy but was false
   fails "Time#gmt_offset returns offset as Rational" # Expected 120.75000000000001 == 7245 to be truthy but was false
   fails "Time#gmt_offset returns the correct offset for Hawaii around daylight savings time change" # Expected 3600 == -36000 to be truthy but was false
   fails "Time#gmt_offset returns the correct offset for New Zealand around daylight savings time change" # Expected 7200 == 46800 to be truthy but was false
   fails "Time#gmt_offset returns the correct offset for US Eastern time zone around daylight savings time change" # Expected 3600 == -18000 to be truthy but was false
   fails "Time#gmt_offset returns the offset in seconds between the timezone of time and UTC" # Expected 3600 == 10800 to be truthy but was false
-  fails "Time#gmtoff given negative offset returns a negative offset" # Expected -180 == -10800 to be truthy but was false
-  fails "Time#gmtoff given positive offset returns a positive offset" # Expected 180 == 10800 to be truthy but was false
   fails "Time#gmtoff returns offset as Rational" # Expected 120.75000000000001 == 7245 to be truthy but was false
   fails "Time#gmtoff returns the correct offset for Hawaii around daylight savings time change" # Expected 3600 == -36000 to be truthy but was false
   fails "Time#gmtoff returns the correct offset for New Zealand around daylight savings time change" # Expected 7200 == 46800 to be truthy but was false
@@ -91,15 +85,12 @@ opal_unsupported_filter "Time" do
   fails "Time#usec returns the microseconds part of a Time constructed with an Float number of microseconds > 1" # Expected 0 == 3 to be truthy but was false
   fails "Time#usec returns the microseconds part of a Time constructed with an Integer number of microseconds" # Expected 999000 == 999999 to be truthy but was false
   fails "Time#usec returns the microseconds part of a Time constructed with an Rational number of microseconds > 1" # Expected 0 == 9 to be truthy but was false
-  fails "Time#utc_offset given negative offset returns a negative offset" # Expected -180 == -10800 to be truthy but was false
-  fails "Time#utc_offset given positive offset returns a positive offset" # Expected 180 == 10800 to be truthy but was false
   fails "Time#utc_offset returns offset as Rational" # Expected 120.75000000000001 == 7245 to be truthy but was false
   fails "Time#utc_offset returns the correct offset for Hawaii around daylight savings time change" # Expected 3600 == -36000 to be truthy but was false
   fails "Time#utc_offset returns the correct offset for New Zealand around daylight savings time change" # Expected 7200 == 46800 to be truthy but was false
   fails "Time#utc_offset returns the correct offset for US Eastern time zone around daylight savings time change" # Expected 3600 == -18000 to be truthy but was false
   fails "Time#utc_offset returns the offset in seconds between the timezone of time and UTC" # Expected 3600 == 10800 to be truthy but was false
   fails "Time#wday returns an integer representing the day of the week, 0..6, with Sunday being 0" # Changing ENV['TZ'] at runtime (with_timezone) is not supported
-  fails "Time#zone Encoding.default_internal is set doesn't raise errors for a Time with a fixed offset" # NoMethodError: undefined method `default_internal' for Encoding
   fails "Time#zone defaults to UTC when bad zones given" # Changing ENV['TZ'] at runtime (with_timezone) is not supported
   fails "Time#zone returns nil when getting the local time with a fixed offset" # NoMethodError: undefined method `getlocal' for 2005-02-27 22:50:00 -0100
   fails "Time#zone returns the correct timezone for a local time" # NoMethodError: undefined method `getlocal' for 2005-02-27 22:50:00 -0100
@@ -147,7 +138,6 @@ opal_unsupported_filter "Time" do
   fails "Time.new with a utc_offset argument raises ArgumentError if the hour value is greater than 23" # Expected ArgumentError but no exception was raised (2000-01-01 00:00:00 +2400 was returned)
   fails "Time.new with a utc_offset argument returns a Time with a UTC offset of the specified number of Integer seconds" # Expected 2.05 == 123 to be truthy but was false
   fails "Time.new with a utc_offset argument returns a Time with a UTC offset of the specified number of Rational seconds" # ArgumentError: Opal doesn't support other types for a timezone argument than Integer and String
-  fails "Time.new with a utc_offset argument returns a Time with a UTC offset specified as +HH:MM" # Expected 330 == 19800 to be truthy but was false
   fails "Time.new with a utc_offset argument returns a Time with a UTC offset specified as -HH:MM" # ArgumentError: "+HH:MM", "-HH:MM", "UTC" expected for utc_offset: -04:10:43
   fails "Time.new with a utc_offset argument returns a local Time if the argument is nil" # Expected 3600 == -28800 to be truthy but was false
   fails "Time.new with a utc_offset argument returns a non-UTC time" # Expected 2000-01-01 00:00:00 UTC.utc? to be falsy but was true
