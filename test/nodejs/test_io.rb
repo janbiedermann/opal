@@ -11,7 +11,7 @@ class TestNodejsIO < Test::Unit::TestCase
   end
 
   def test_binread_noexistent_should_raise_io_error
-    assert_raise IOError do
+    assert_raise Errno::ENOENT do
       IO.binread('tmp/nonexistent')
     end
   end

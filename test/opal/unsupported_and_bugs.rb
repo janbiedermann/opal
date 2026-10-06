@@ -70,6 +70,12 @@ end
 
 # These are only supposed to work on node compatible platforms
 if %w[node nodejs].include?(::Opal.JS[:platform].JS[:name])
+  # Some suites load only part of the tests; create the referenced test
+  # classes so that the filters below apply when the tests are loaded later.
+  for name in %w[TestEtc TestFileUtils TestOpalFile TestOpenURI TestPathname]
+    Object.const_set(name, Class.new(Test::Unit::TestCase)) unless Object.const_defined?(name)
+  end
+
   class TestEtc
     unsupported :test_ractor
   end

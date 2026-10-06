@@ -49,31 +49,25 @@ class TestNodejsFile < Test::Unit::TestCase
   end
 
   def test_read_binary_image
-    assert_match(/^\u0089PNG\r\n\u001A\n\u0000\u0000\u0000\rIHDR.*/, File.open('./test/nodejs/fixtures/cat.png', 'rb') {|f| f.read })
+    assert_equal([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], File.binread('./test/nodejs/fixtures/cat.png')[0, 8].bytes)
   end
 
   def test_read_binary_utf8_file
     binary_text = ::File.open('./test/nodejs/fixtures/utf8.txt', 'rb') {|f| f.read}
-    assert_equal(binary_text.encoding, Encoding::UTF_8)
-    assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
-    utf8_text = binary_text.force_encoding('utf-8')
-    assert_equal("çéà", utf8_text)
+    assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
+    assert_equal([0xC3, 0xA7, 0xC3, 0xA9, 0xC3, 0xA0], binary_text[0, 6].bytes)
   end
 
   def test_read_binary_iso88591_file
     binary_text = ::File.open('./test/nodejs/fixtures/iso88591.txt', 'rb') {|f| f.read}
-    assert_equal(binary_text.encoding, Encoding::UTF_8)
-    assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
-    utf8_text = binary_text.force_encoding('utf-8')
-    assert_equal("çéà", utf8_text)
+    assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
+    assert_equal([0xE7, 0xE9, 0xE0], binary_text[0, 3].bytes)
   end
 
   def test_read_binary_win1258_file
     binary_text = ::File.open('./test/nodejs/fixtures/win1258.txt', 'rb') {|f| f.read}
-    assert_equal(binary_text.encoding, Encoding::UTF_8)
-    assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
-    utf8_text = binary_text.force_encoding('utf-8')
-    assert_equal("çéà", utf8_text)
+    assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
+    assert_equal([0xE7, 0xE9, 0xE0], binary_text[0, 3].bytes)
   end
 
   def test_read_each_line

@@ -4,11 +4,21 @@
 require 'test/unit'
 require 'nodejs'
 require 'nodejs/dir'
+require 'fileutils'
 
 class TestNodejsDir < Test::Unit::TestCase
 
   def glob_base_test_dir
-    tmpdir + "/testing_nodejs_dir_glob_implementation_#{Time.now.to_i}"
+    @glob_base_test_dir ||= begin
+      index = 0
+      path = nil
+      loop do
+        path = tmpdir + "/testing_nodejs_dir_glob_implementation_#{Time.now.to_i}_#{Process.pid}_#{index += 1}"
+        break unless File.exist?(path)
+      end
+      FileUtils.mkdir_p(path)
+      path
+    end
   end
 
   def tmpdir
@@ -22,11 +32,11 @@ class TestNodejsDir < Test::Unit::TestCase
   def test_dir_entries
     path = tmpdir + "/testing_nodejs_dir_entries_implementation_#{Time.now.to_i}"
     Dir.mkdir(path)
-    result = Dir.entries(path)
+    result = Dir.children(path)
     assert_equal(0, result.length)
     File.open(path + '/bar', "w") {}
     File.open(path + '/baz', "w") {}
-    result = Dir.entries(path)
+    result = Dir.children(path)
     assert_equal(2, result.length)
   end
 
@@ -84,8 +94,7 @@ class TestNodejsDir < Test::Unit::TestCase
   def test_dir_glob_include_subdir
     base_path = glob_base_test_dir + "/include_subdir"
     path = base_path + "/subdir"
-    Dir.mkdir(path)
-    Dir.mkdir(path)
+    FileUtils.mkdir_p(path)
     File.open(path + '/bar', "w") {}
     File.open(path + '/baz', "w") {}
     result = Dir.glob(normalize_glob(base_path + '/*/*'))
@@ -94,7 +103,7 @@ class TestNodejsDir < Test::Unit::TestCase
 
   def test_dir_glob_recursive
     base_path = glob_base_test_dir + "/recursive"
-    Dir.mkdir(base_path)
+    FileUtils.mkdir_p(base_path)
     File.open(base_path + '/1', "w") {}
     File.open(base_path + '/2', "w") {}
     path = base_path + "/subdir"
@@ -107,7 +116,7 @@ class TestNodejsDir < Test::Unit::TestCase
 
   def test_dir_glob_any_directories
     base_path = glob_base_test_dir + "/recursive"
-    Dir.mkdir(base_path)
+    FileUtils.mkdir_p(base_path)
     File.open(base_path + '/1', "w") {}
     File.open(base_path + '/2', "w") {}
     path = base_path + "/subdir"
@@ -134,7 +143,7 @@ class TestNodejsDir < Test::Unit::TestCase
   def test_dir_glob_multiple_depth
     base_path = glob_base_test_dir + "/multiple_depth"
     path = base_path + "/1/2/3"
-    Dir.mkdir(path)
+    FileUtils.mkdir_p(path)
     File.open(path + '/foo', "w") {}
     File.open(path + '/bar', "w") {}
     result = Dir.glob(normalize_glob(base_path + '/**/foo'))
