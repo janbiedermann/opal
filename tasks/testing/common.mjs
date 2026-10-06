@@ -28,10 +28,10 @@ export function hostOs() {
 }
 
 // Runs a command (inheriting stdio); resolves to its exit status.
-export function run(cmd, args, { env = process.env, echo = true } = {}) {
+export function run(cmd, args, { env = process.env, echo = true, cwd = ROOT } = {}) {
   if (echo) console.log([cmd, ...args].join(" "));
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(cmd, args, { stdio: "inherit", env, cwd: ROOT });
+    const child = spawn(cmd, args, { stdio: "inherit", env, cwd });
     child.on("error", reject);
     child.on("exit", (code, signal) => resolvePromise(code === null ? (signal ? 128 + 1 : 1) : code));
   });

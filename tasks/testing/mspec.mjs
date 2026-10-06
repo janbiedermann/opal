@@ -89,6 +89,8 @@ ${envData(env)}
 require 'opal/full'
 require 'spec_helper'
 require 'securerandom'
+# Specs run with cwd = spec/; make the ruby_exe helper find the interpreter.
+Object.const_set(:RUBY_EXE, File.expand_path(RUBY_EXE, "${ROOT}"))
 ${benchmark}
 
 ${filterRequires}
@@ -123,8 +125,11 @@ export async function mspec(suite, platform = "nodejs", baseEnv = process.env) {
   writeRunner(filename, filterFiles(suite, platform, env), specFiles(env), env);
 
   const stubs = STUBS.map((s) => `-s${s}`);
-  const status = await runOpal(["-q", "tasks/testing/mspec_special_calls.mjs", "-Ispec/mspec/lib", "-Ispec", "-Ilib", ...stubs,
-    `-R${platform}`, "-Dwarning", "-A", "--enable-source-location", filename], { env });
+  // Specs run with cwd = spec/ so that relative paths in ruby/spec (like
+  // "../tmp" or paths relative to __FILE__) resolve as they do upstream.
+  const status = await runOpal(["-q", join(ROOT, "tasks/testing/mspec_special_calls.mjs"), `-I${join(ROOT, "spec/mspec/lib")}`, `-I${join(ROOT, "spec")}`, `-I${join(ROOT, "lib")}`, ...stubs,
+    `-R${platform}`, "-Dwarning", "-A", "--enable-source-location", join(ROOT, filename)],
+  { env, cwd: join(ROOT, "spec") });
   if (env.BM_FILEPATH) {
     console.log(`Benchmark results have been written to ${env.BM_FILEPATH}`);
   }
