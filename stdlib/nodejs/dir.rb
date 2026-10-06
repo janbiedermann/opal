@@ -1,11 +1,13 @@
 # backtick_javascript: true
 
 class Dir
-  @__pm__ = `require('picomatch')`
+  # (picomatch, an npm package, is loaded when a glob needs it: a program
+  # without one also works where only Node's own modules can be required,
+  # as in a single executable application)
+  `var __pm_module__ = null, __pm__ = function() { return __pm_module__ || (__pm_module__ = require('picomatch')); }`
   @__fs__ = `require('fs')`
   @__path__ = `require('path')`
   @__os__ = `require('os')`
-  `var __pm__ = #{@__pm__}`
   `var __fs__ = #{@__fs__}`
   `var __path__ = #{@__path__}`
   `var __os__ = #{@__os__}`
@@ -75,7 +77,7 @@ class Dir
       end
       %x{
         return #{pattern}.flatMap((subpattern) => {
-            const scanResult = __pm__.scan(subpattern, { tokens: true })
+            const scanResult = __pm__().scan(subpattern, { tokens: true })
             let base = scanResult.negated || scanResult.base === ''
                 ? process.cwd().split(__path__.sep).join(__path__.posix.sep)
                 : scanResult.base
@@ -102,7 +104,7 @@ class Dir
                 } else {
                     files = __fs__.readdirSync(base).map(f => __path__.join(base, f))
                 }
-                const isMatch = __pm__(subpattern, {windows: true})
+                const isMatch = __pm__()(subpattern, {windows: true})
                 return files.filter(f => isMatch(f));
             } catch (e) {
                 if (e.code === 'ENOENT' || e.code === 'EACCES' || e.code === 'ENOTDIR') {

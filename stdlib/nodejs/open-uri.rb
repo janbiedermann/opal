@@ -1,12 +1,13 @@
 # backtick_javascript: true
 
 module OpenURI
-  @__xmlhttprequest__ = `require('unxhr')`
-  `var __XMLHttpRequest__ = #{@__xmlhttprequest__}.XMLHttpRequest`
+  # (unxhr, an npm package, is loaded on the first request, see Dir)
+  `var __unxhr__ = null`
 
   def self.request(uri)
     %x{
-      var xhr = new __XMLHttpRequest__();
+      if (!__unxhr__) __unxhr__ = require('unxhr');
+      var xhr = new __unxhr__.XMLHttpRequest();
       xhr.open('GET', uri, false);
       xhr.responseType = 'arraybuffer';
       xhr.send();
