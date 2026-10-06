@@ -2,11 +2,16 @@
 
 # Copied from cruby and modified to skip unsupported syntaxes
 require 'test/unit'
-require 'tmpdir'
+require 'nodejs'
+require 'pathname'
 
-class TestOpalFile < Test::Unit::TestCase
+class TestNodejsFile < Test::Unit::TestCase
+  def tmpdir
+    `require('os').tmpdir()`
+  end
+
   def self.windows_platform?
-    RUBY_PLATFORM.include?('win') && !RUBY_PLATFORM.include?('darwin')
+    `process.platform`.start_with?('win')
   end
 
   def test_instantiate_without_open_mode
@@ -30,7 +35,7 @@ class TestOpalFile < Test::Unit::TestCase
   end
 
   def test_write_read
-    path = Dir.tmpdir + "/testing_nodejs_file_implementation_#{Time.now.to_i}"
+    path = tmpdir + "/testing_nodejs_file_implementation_#{Time.now.to_i}"
     contents = 'foobar'
     assert !File.exist?(path)
     File.write path, contents
@@ -44,32 +49,25 @@ class TestOpalFile < Test::Unit::TestCase
   end
 
   def test_read_binary_image
-    assert_match(/^\u0089PNG\r\n\u001A\n\u0000\u0000\u0000\rIHDR.*/, File.open('./test/opal/fixtures/cat.png', 'rb') {|f| f.read })
+    assert_equal([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], File.binread('./test/opal/fixtures/cat.png')[0, 8].bytes)
   end
 
   def test_read_binary_utf8_file
     binary_text = ::File.open('./test/opal/fixtures/utf8.txt', 'rb') {|f| f.read}
     assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
-    assert_match(/^\xC3\xA7\xC3\xA9\xC3\xA0/, binary_text)
-    assert_equal("çéà".bytes, binary_text.bytes)
-    utf8_text = binary_text.force_encoding('utf-8')
-    assert_equal("çéà", utf8_text)
+    assert_equal([0xC3, 0xA7, 0xC3, 0xA9, 0xC3, 0xA0], binary_text[0, 6].bytes)
   end
 
   def test_read_binary_iso88591_file
     binary_text = ::File.open('./test/opal/fixtures/iso88591.txt', 'rb') {|f| f.read}
     assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
-    assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
-    utf8_text = binary_text.force_encoding('utf-8')
-    assert_equal("çéà", utf8_text)
+    assert_equal([0xE7, 0xE9, 0xE0], binary_text[0, 3].bytes)
   end
 
   def test_read_binary_win1258_file
     binary_text = ::File.open('./test/opal/fixtures/win1258.txt', 'rb') {|f| f.read}
     assert_equal(binary_text.encoding, Encoding::ASCII_8BIT)
-    assert_match(/^\u00E7\u00E9\u00E0/, binary_text)
-    utf8_text = binary_text.force_encoding('utf-8')
-    assert_equal("çéà", utf8_text)
+    assert_equal([0xE7, 0xE9, 0xE0], binary_text[0, 3].bytes)
   end
 
   def test_read_each_line
@@ -132,7 +130,7 @@ class TestOpalFile < Test::Unit::TestCase
   def with_symlinks(&block)
     dir_symlink = 'test/opal/fixtures/symlink-to-directory'
     file_symlink = 'test/opal/fixtures/symlink-to-file'
-
+    
     File.symlink('.', dir_symlink)
     File.symlink('hello.rb', file_symlink)
     block.call(dir_symlink, file_symlink)

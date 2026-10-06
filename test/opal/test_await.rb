@@ -171,13 +171,14 @@ class TestAwait < Test::Unit::TestCase
       $taval = PromiseV2.value("very ").await + $taval
     RUBY
     test_autoawait_instance_exec_await: [<<~RUBY, 2*3*5*7*11*13],
-      # backtick_javascript: true
       #{autoawaitheader}
+      # await: *await*
+      # backtick_javascript: true
       $taval = 1
       module AutoawaitTemporary1
         $block_with_module_self = proc do
           # Ensure that block.$$s is generated:
-          self
+          self   
           # AutoawaitTemporary2.$$eval should be true, block.$$s should be unset
           `\#{AutoawaitTemporary2}.$$eval` && ($taval *= PromiseV2.value(2).await)
           `block.$$s === null` && ($taval *= PromiseV2.value(3).await)

@@ -1,6 +1,6 @@
 require 'test/unit'
 
-class TestOpalEnv < Test::Unit::TestCase
+class TestNodejsEnv < Test::Unit::TestCase
 
   def shared_test_env_has_key(method)
     assert_equal(false, ENV.send(method, 'should_never_be_set'))
@@ -69,3 +69,4 @@ class TestOpalEnv < Test::Unit::TestCase
   end
 
 end
+

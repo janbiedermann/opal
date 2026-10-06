@@ -1,5 +1,5 @@
 // Runs the Minitest suites (vendored CRuby tests and test/opal, and the
-// Node.js integration tests in test/nodejs) with exe/opal.
+// Node.js integration tests in test/opal) with exe/opal.
 //
 // Environment: FILES (a glob of test files, cruby suite), RANDOM_SEED,
 // USE_STRICT (node suite).
@@ -32,17 +32,17 @@ const CRUBY_FILES = [
 const NODE_FILES = [
   "nodejs",
   "opal-parser",
-  "nodejs/test_dir.rb",
-  "nodejs/test_env.rb",
-  "nodejs/test_error.rb",
-  "nodejs/test_file.rb",
-  "nodejs/test_file_encoding.rb",
-  "nodejs/test_io.rb",
-  "nodejs/test_opal_builder.rb",
-  "nodejs/test_string.rb",
-  "nodejs/test_await.rb",
-  "nodejs/test_tracepoint_end.rb",
-  "nodejs/test_yaml.rb",
+  "opal/test_dir.rb",
+  "opal/test_env.rb",
+  "opal/test_error.rb",
+  "opal/test_file.rb",
+  "opal/test_file_encoding.rb",
+  "opal/test_io.rb",
+  "opal/test_opal_builder.rb",
+  "opal/test_string.rb",
+  "opal/test_await.rb",
+  "opal/test_tracepoint_end.rb",
+  "opal/test_yaml.rb",
 ];
 
 export function writeRunner(filename, files, env) {
@@ -78,7 +78,7 @@ export async function minitestCruby(platform = "nodejs", env = process.env) {
   });
 }
 
-// The Node.js integration tests (test/nodejs).
+// The Node.js integration tests (test/opal).
 export function minitestNode(env = process.env) {
   const filename = "tmp/minitest_node_nodejs.rb";
   writeRunner(filename, NODE_FILES, env);

@@ -1,4 +1,5 @@
 require 'test/unit'
+require 'nodejs'
 require 'yaml'
 
 class TestYAML < Test::Unit::TestCase

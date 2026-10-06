@@ -1,6 +1,7 @@
 require 'test/unit'
+require 'nodejs'
 
-class TestOpalFileEncoding < Test::Unit::TestCase
+class TestNodejsFileEncoding < Test::Unit::TestCase
 
   def test_force_encoding_raw_text_to_utf8
     raw_text = 'çéà'

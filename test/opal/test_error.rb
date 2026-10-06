@@ -1,8 +1,9 @@
 # backtick_javascript: true
 
 require 'test/unit'
+require 'nodejs'
 
-class TestOpalError < Test::Unit::TestCase
+class TestNodejsError < Test::Unit::TestCase
 
   def test_should_preserve_stack
     raise ArgumentError.new('oops')

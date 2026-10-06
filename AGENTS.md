@@ -72,9 +72,6 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/release.mjs` (changelog,
   release preparation).
-- The Node.js stdlib needs `NODE_PATH=stdlib/nodejs/node_modules` (for
-  `picomatch`) when running Opal-built JS with plain `node` instead of
-  `exe/opal -Rnodejs`.
 - Browser runners without a system browser: download one with
   `npx @puppeteer/browsers install chrome-headless-shell@stable` (or
   `firefox@esr_128.14.0esr`) and point `GOOGLE_CHROME_BINARY` /
