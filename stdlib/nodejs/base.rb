@@ -26,36 +26,9 @@ alias $PROGRAM_NAME $0
   set_argv();
 }
 
-STDOUT.write_proc = ->(string) { `process.stdout.write(string)` }
-STDERR.write_proc = ->(string) { `process.stderr.write(string)` }
-
-`var __fs__ = require('fs')`
-STDIN.read_proc = %x{function(_count) {
-  // Ignore count, return as much as we can get
-  var buf = Buffer.alloc(65536), count;
-  try {
-    count = __fs__.readSync(this.fd, buf, 0, 65536, null);
-  }
-  catch { // Windows systems may raise EOF
-    return nil;
-  }
-  if (count == 0) return nil;
-  return buf.toString('utf8', 0, count);
-}}
-
-# (whether they are terminals: set at start, see ARGV; asked with tty.isatty,
-# as process.stdin would put a piped stdin into non-blocking mode, where the
-# synchronous reads above find no data and end)
-%x{
-  function set_ttys() {
-    var tty = require('tty');
-    #{STDIN.tty = `tty.isatty(0)`};
-    #{STDOUT.tty = `tty.isatty(1)`};
-    #{STDERR.tty = `tty.isatty(2)`};
-  }
-  Opal.process_start_hooks.push(set_ttys);
-  set_ttys();
-}
+# STDIN/STDOUT/STDERR are fd-based now (corelib/io.rb through $platform,
+# see runtime/platforms/node_compatible.js); their tty state comes from
+# the platform layer too.
 
 module NodeJS
   # An exception nothing rescued ends the program as in CRuby: the at_exit
@@ -64,7 +37,15 @@ module NodeJS
   # other handlers, such as the opal runner's.)
   def self.uncaught_exception(error)
     if ::SystemExit === error
-      ::Kernel.exit(error.status)
+      status = error.status
+      begin
+        until ($__at_exit__ ||= []).empty?
+          $__at_exit__.pop.call
+        end
+      rescue ::SystemExit => at_exit_error
+        status = at_exit_error.status
+      end
+      `Opal.exit(#{status})`
     elsif ::Exception === error
       begin
         until ($__at_exit__ ||= []).empty?

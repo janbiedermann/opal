@@ -1,7 +1,3 @@
-# backtick_javascript: true
-
-module ::Process
-  def self.pid
-    `Opal.Kernel.__process__.pid`
-  end
-end
+# The process class is now implemented by the common corelib on top of Opal.platform;
+# this file only keeps `require 'nodejs/process'` working.
+require 'corelib/process'

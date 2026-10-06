@@ -1,22 +1,3 @@
-# backtick_javascript: true
-
+# Pathname now lives in the generic stdlib;
+# this file only keeps `require 'nodejs/pathname'` working.
 require 'pathname'
-
-class Pathname
-  include Comparable
-
-  @__path__ = `require('path')`
-  `var __path__ = #{@__path__}`
-
-  def absolute?
-    `__path__.isAbsolute(#{@path.to_str})`
-  end
-
-  def relative?
-    !absolute?
-  end
-
-  def to_path
-    @path
-  end
-end
