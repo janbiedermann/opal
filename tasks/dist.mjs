@@ -40,9 +40,12 @@ for (const lib of files) {
   let log = `* building ${lib}...`.padEnd(width + "* building ... ".length);
   // Set requirable to true, unless building opal. This allows opal to be auto-loaded.
   const requirable = !["opal", "opal/mini", "opal/base"].includes(lib);
+  // (the libraries are standalone bundles: linked ES modules export only
+  // what the bundle uses, so terser drops the rest)
   const builder = new Builder({
     compilerOptions: { arity_check: false, dynamic_require_severity: "warning" },
     missingRequireSeverity: "error",
+    esmPrune: true,
   });
   builder.build(lib, { requirable });
 

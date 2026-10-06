@@ -711,10 +711,15 @@ implementation.
   `opal-parser.min.js` 960 → 577 KB (174 → 136). Compiled code with a
   direct `eval` keeps its names (terser leaves such scopes alone); a
   ruby/spec subset (7,622 examples) and spec/opal pass mangled as they do
-  unmangled. Not done: leaving out exports that nothing imports in the
-  ESM linker would let terser drop ~870 unused functions (another 5 %,
-  577 → 546 KB, gzipped 136 → 128), but modules shared through the ESM
-  registry with later scripts would then lack exports those import.
+  unmangled. The dist builds also leave
+  out the exports that nothing in the bundle imports (Builder option
+  `esmPrune`, 2026-10-06), so terser drops about 870 unused functions:
+  `opal-parser.min.js` 577 → 550 KB (gzipped 136 → 129),
+  `opal-builder.min.js` 609 → 583 KB (146 → 140). The imports are
+  collected over all the build's scripts (opal-builder links the
+  compiler's modules once and imports more of them), and the pruned
+  modules' ids in `Opal.$$esm_registry` get a suffix from what they keep,
+  so other scripts on a page share them only if they keep the same.
 * **ESM linker in the builder** (phase 3). It must handle potch's
   import/export cycles. The fallback is a prebuilt single-file potch made
   by `potch:assemble`; that is still in-repo, not a dependency.

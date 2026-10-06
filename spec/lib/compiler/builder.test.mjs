@@ -228,6 +228,41 @@ describe("ES modules in a build", () => {
   });
 });
 
+describe("ES modules in a pruned build (esmPrune)", () => {
+  test("modules export only what the build's modules use", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-esm-prune-"));
+    try {
+      writeFileSync(join(dir, "shared.mjs"), "export function used() { return 1; }\nexport function usedLater() { return 2; }\nexport function unused() { return 3; }\n");
+      writeFileSync(join(dir, "ns.mjs"), "export const n1 = 4;\nexport const n2 = 5;\n");
+      writeFileSync(join(dir, "a.mjs"), 'import { used } from "./shared.mjs";\nimport * as ns from "./ns.mjs";\nexport const a = used() + ns.n1;\nexport function aUnused() { return 0; }\n');
+      // (b.mjs shares shared.mjs, linked with a.mjs, and uses another export)
+      writeFileSync(join(dir, "b.mjs"), 'import { usedLater } from "./shared.mjs";\nexport const b = usedLater();\n');
+      writeFileSync(join(dir, "main.rb"), 'require "a.mjs"\nrequire "b.mjs"\n');
+      const builder = newBuilder({ esmPrune: true });
+      builder.appendPaths(dir);
+      builder.build("main.rb");
+      const code = builder.toString();
+      assert.ok(code.includes('__exports["used"]') && code.includes('__exports["usedLater"]'));
+      assert.ok(!code.includes('__exports["unused"]'));
+      assert.ok(code.includes('__exports["n2"]')); // (a namespace import uses all)
+      assert.ok(code.includes('__exports["aUnused"]')); // (entry modules export all)
+      assert.match(code, /__modules\["[^"]*shared\.mjs#[0-9a-f]+"\]/);
+      const a = builder.processed.find((p) => p.filename.endsWith("a.mjs")).source;
+      const b = builder.processed.find((p) => p.filename.endsWith("b.mjs")).source;
+      const Opal = { loaded() {} };
+      new Function("Opal", a + b)(Opal);
+      assert.deepEqual([Opal.esm.a.a, Opal.esm.b.b], [5, 2]);
+      // without esmPrune all exports stay
+      const plain = newBuilder();
+      plain.appendPaths(dir);
+      plain.build("main.rb");
+      assert.ok(plain.toString().includes('__exports["unused"]'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("ESM linker", () => {
   test("links the compiler into a working script", () => {
     const ns = (0, eval)(link(join(OPAL_ROOT, "lib", "opal", "compiler", "index.mjs")));
