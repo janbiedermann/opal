@@ -47,3 +47,17 @@ test("no conflict", () => {
   }
   assert.deepEqual(errors('"café \\u00e9 \\xe9"'), []);
 });
+
+// A symbol whose bytes aren't valid in its encoding is an "invalid symbol"
+// (Prism checks the bytes; potch has decoded text, see
+// parse_symbol_encoding_validate_utf8).
+test("invalid symbols", () => {
+  const invalid = (source) => parseWithMetadata(source).errors.map((e) => e.message).includes("invalid symbol");
+  // non-UTF-8 bytes in a symbol made UTF-8 by a \u escape
+  assert.equal(invalid(latin1(':"\u00e9\\u00e9"')), true);
+  assert.equal(invalid(latin1('{"\u00e9\\u00e9": 1}')), true);
+  assert.equal(invalid(latin1(':"\\u00e9\u00e9"')), false);
+  // \x escapes that aren't UTF-8 in a UTF-8 source
+  for (const source of [':"\\xe9"', ':"\\xe9\\x80"', ':"a\\xffb"', '{"\\xe9": 1}']) assert.equal(invalid(source), true, source);
+  for (const source of [':"\\xc3\\xa9"', ':"\\uFFFD"', ':"\\u{fffd}"', ':"\uFFFD"', "%s(\\xe9)", '"\\xe9"']) assert.equal(invalid(source), false, source);
+});
