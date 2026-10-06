@@ -6,6 +6,9 @@
 //   -r, --require LIBRARY  build LIBRARY too (accepted for compatibility)
 //   -o, --output FILE      write the built lib to FILE (defaults to STDOUT)
 //   -I, --include DIR      append a load path
+// (Node's on-disk cache of compiled modules, as in exe/opal)
+process.getBuiltinModule?.("node:module").enableCompileCache?.();
+
 import("../lib/opal/compiler/builder/builder.mjs").then(({ Builder }) => {
   const usage = "Usage: opal-build [options] -- [libname]\n\n" +
     "Options:\n" +

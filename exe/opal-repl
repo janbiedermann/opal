@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 // opal-repl: the Opal REPL (same as `opal --repl`).
+// (Node's on-disk cache of compiled modules, as in exe/opal)
+process.getBuiltinModule?.("node:module").enableCompileCache?.();
+
 import("../lib/opal/compiler/cli/cli.mjs")
   .then((cli) => cli.main(["--repl", ...process.argv.slice(2)]))
   .then((status) => { process.exitCode = status; });

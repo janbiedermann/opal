@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 // opal: compile and run Ruby code with Opal (lib/opal/compiler/cli).
 // Error codes are taken from /usr/include/sysexits.h
+
+// Node's on-disk cache of the compiled toolchain modules makes starting
+// faster (NODE_COMPILE_CACHE picks its directory, NODE_DISABLE_COMPILE_CACHE
+// turns it off).
+process.getBuiltinModule?.("node:module").enableCompileCache?.();
+
 import("../lib/opal/compiler/cli/cli.mjs")
   .then((cli) => cli.main(process.argv.slice(2)))
   .then((status) => { process.exitCode = status; });
