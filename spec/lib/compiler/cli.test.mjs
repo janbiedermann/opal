@@ -17,6 +17,7 @@ import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
 import { seaConfig, seaUnsupported, snapshotEntry } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
+import { npmRequires, bundleNpmPackages } from "../../../lib/opal/compiler/cli/npm_bundler.mjs";
 
 const FIXTURES = resolve(OPAL_ROOT, "spec", "lib", "fixtures");
 const FILE = join(FIXTURES, "opal_file.rb");
@@ -99,6 +100,50 @@ describe("CLI", () => {
       // (process.argv[1] is the executable in a single executable application)
       const run = spawnSync(process.execPath, ["--snapshot-blob", blob, "app", "a", "b"], { cwd: dir, encoding: "utf8", env: { ...process.env, OPAL_SNAPSHOT_TEST: "run" } });
       assert.equal(run.stdout, '["a", "b"]\nrun\napp\ntrue\n', run.stderr);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a Node.js executable has the npm packages the program requires", () => {
+    assert.deepEqual(npmRequires('require("picomatch"); Opal.require("corelib/x"); self.$require("y"); require("fs"); require("node:path"); require("./z")'), ["picomatch"]);
+    const dir = mkdtempSync(join(tmpdir(), "opal-npm-"));
+    try {
+      writeFileSync(join(dir, "a.rb"), "");
+      writeFileSync(join(dir, "b.txt"), "");
+      const program = join(dir, "program.js");
+      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", 'p Dir.glob("*.{rb,txt}").sort'], { encoding: "utf8" });
+      assert.equal(build.status, 0, build.stderr);
+      const npm = bundleNpmPackages(readFileSync(program, "utf8"), { cwd: dir, nodePath: "" });
+      assert.deepEqual([npm.packages, npm.missing], [["picomatch"], []]);
+      writeFileSync(join(dir, "bundled.js"), npm.prelude + npm.wrap(readFileSync(program, "utf8")));
+      // (without NODE_PATH, where picomatch can't be found)
+      const env = { ...process.env };
+      delete env.NODE_PATH;
+      const run = spawnSync(process.execPath, ["bundled.js"], { cwd: dir, encoding: "utf8", env });
+      assert.equal(run.stdout, '["a.rb", "b.txt"]\n', run.stderr);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("open-uri works in a Node.js executable's startup snapshot", () => {
+    // (a worker thread can't load net there; the executable runs itself
+    // as a helper for the request)
+    const dir = mkdtempSync(join(tmpdir(), "opal-snapshot-http-"));
+    try {
+      const program = join(dir, "program.js");
+      const source = 'require "open-uri"; begin; open("http://127.0.0.1:1/"); rescue OpenURI::HTTPError => e; puts "error: #{e.message}"; end';
+      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", source], { encoding: "utf8" });
+      assert.equal(build.status, 0, build.stderr);
+      const code = readFileSync(program, "utf8");
+      const npm = bundleNpmPackages(code, { cwd: dir, nodePath: "" });
+      writeFileSync(join(dir, "entry.js"), npm.prelude + npm.wrap(snapshotEntry(code)));
+      const blob = join(dir, "snapshot.blob");
+      const snapshot = spawnSync(process.execPath, ["--snapshot-blob", blob, "--build-snapshot", "entry.js"], { cwd: dir, encoding: "utf8" });
+      assert.equal(snapshot.status, 0, snapshot.stderr);
+      const run = spawnSync(process.execPath, ["--snapshot-blob", blob, "app"], { cwd: dir, encoding: "utf8" });
+      assert.match(run.stdout, /^error: 0 .*ECONNREFUSED/, run.stderr);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

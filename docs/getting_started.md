@@ -79,8 +79,11 @@ platform's per-process state is set again at start
 which must have the single executable application fuse: the official builds
 have it, some Linux distributions' builds don't (`opal` checks this before
 compiling and says so, exiting with status 69). `postject` comes from npm
-(`npx`). In an executable only Node's own modules can be required, so
-`Dir.glob` (picomatch) and `open-uri` (unxhr) aren't available in one.
+(`npx`). In an executable only Node's own modules can be required: the npm
+packages the program requires (CommonJS ones, found from the current
+directory, Opal's `stdlib/nodejs` and `NODE_PATH`; e.g. picomatch for
+`Dir.glob`) are bundled into it, and `open-uri` makes its requests by
+running the executable again as a helper.
 
 ## FAQ
 

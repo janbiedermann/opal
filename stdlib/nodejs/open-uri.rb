@@ -42,7 +42,9 @@ module OpenURI
 
   def self.request(uri)
     %x{
-      var result = __sync_get__(uri);
+      // (an executable with a startup snapshot has its own, see
+      // lib/opal/compiler/cli/exe_compiler.mjs)
+      var result = (Opal.sync_http_get || __sync_get__)(uri);
       if (result.error !== undefined) {
         // (as unxhr had it: status 0, the error in statusText.errno)
         // (no responseText: open-uri takes a status 0 with one for a success)
