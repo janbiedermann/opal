@@ -293,6 +293,56 @@ objects saved. Generating code into one buffer instead of fragment trees
 would need every node class to generate its code in order; they compute
 the code of their children first and then wrap it.
 
+### Faster potch parser core (2026-10-06)
+
+`pm_parse` (potch's parser, now about 70 % of its time) is a close port of
+Prism's C code; a profile shows the time spread over the lexer and the
+expression parser, the constant pool and GC, with no single hot spot.
+Three changes, all keeping the AST JSON-identical (16,347 files) and the
+compiler's output unchanged (13,074 files):
+
+* the optional locations a node creator doesn't set (`opening_loc`,
+  `closing_loc`, ...; a call node had five) share one frozen
+  `{ start: null, end: null }` instead of a new object each (the one
+  place that changed such a location in place assigns a new one now)
+* `lex_keyword` compares the first character before `startsWith` (an
+  identifier was compared with every keyword of its length)
+* the conversion caches the flag arrays per node type and flags value,
+  without building a key string per node
+
+`pm_parse` alone is about 6 % faster (310 → 291 ms for six large files).
+Parse here is potch with the conversion and the transforms, best of two
+medians each:
+
+| file | bytes | parse_ms before | parse_ms after | total_ms before | total_ms after |
+|---|---:|---:|---:|---:|---:|
+| s0_201b.rb | 201 | 0.09 | 0.08 | 0.20 | 0.20 |
+| synth_deep_nest.rb | 206 | 0.30 | 0.30 | 0.68 | 0.64 |
+| s1_324b.rb | 324 | 0.26 | 0.23 | 0.68 | 0.63 |
+| synth_method_chain.rb | 4006 | 0.77 | 0.59 | 1.99 | 1.82 |
+| synth_binop_chain.rb | 5892 | 1.96 | 1.39 | 4.27 | 3.24 |
+| s2_pack.rb | 6019 | 1.18 | 1.09 | 3.21 | 3.02 |
+| s3_34kb.rb | 34065 | 5.73 | 4.46 | 16.79 | 15.99 |
+| s4_114kb.rb | 114391 | 13.62 | 12.29 | 42.48 | 40.79 |
+| synth_big_array.rb | 338895 | 40.30 | 37.40 | 81.06 | 74.06 |
+| synth_many_locals.rb | 317790 | 71.23 | 56.34 | 162.61 | 143.17 |
+| synth_many_methods.rb | 408902 | 127.74 | 123.14 | 368.97 | 358.57 |
+| s5_639kb.rb | 638935 | 60.09 | 54.64 | 188.70 | 179.76 |
+| synth_many_strings.rb | 648890 | 154.27 | 145.04 | 473.07 | 455.12 |
+| s6_mega_2.5mb.rb | 2555740 | 248.06 | 203.07 | 763.82 | 713.06 |
+
+Tried without a gain, and left out: caching the constant pool ids by
+source position (a `Map` of 90,000 number keys costs more than the
+string lookups it saves), an open-addressing table hashing the source's
+characters without making strings (V8's native string hashing and `Map`
+are faster than a JS loop), and a cache of the last interned slice (helps
+some files, slows others). V8 does optimize the huge functions
+(`parser_lex`, `parse_expression_prefix`), so splitting them wouldn't
+help. What remains is the parser's own work, the GC of the AST (the
+output) and the token snapshots: `parser.previous` is a new object per
+token, because more than 400 places keep references to tokens as C keeps
+copies.
+
 ## How to reproduce
 
 The scripts live in `benchmark/potch/`:
