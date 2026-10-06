@@ -66,13 +66,6 @@ class Object
   alias opal_unsupported_filter opal_filter
 end
 
-# MSpec relies on File.readable? to do method detection on backtraces
-class File
-  def self.readable?(path)
-    false
-  end
-end
-
 class OSpecFormatter
   def self.main
     @main ||= self.new
@@ -80,20 +73,20 @@ class OSpecFormatter
 
   def default_formatter
     formatters = {
+      'applescript'  => ColoredDottedFormatter,
       'browser'      => BrowserFormatter,
-      'server'       => BrowserFormatter,
-      'chrome'       => DottedFormatter,
-      'firefox'      => DottedFormatter,
-      'safari'       => DottedFormatter,
-      'bun'          => NodeJSFormatter,
-      'deno'         => NodeJSFormatter,
-      'node'         => NodeJSFormatter,
-      'nodejs'       => NodeJSFormatter,
-      'gjs'          => ColoredDottedFormatter,
+      'chrome'       => ColoredDottedFormatter,
+      'dotted'       => DottedFormatter,
+      'edge'         => ColoredDottedFormatter,
+      'firefox'      => ColoredDottedFormatter,
+      'node'         => ColoredDottedFormatter,
+      'nodedoc'      => DocFormatter,
+      'nodejs'       => ColoredDottedFormatter,
+      'nodejsdoc'    => DocFormatter,
+      'osascript'    => ColoredDottedFormatter,
       'quickjs'      => ColoredDottedFormatter,
-      'nodedoc'      => NodeJSDocFormatter,
-      'nodejsdoc'    => NodeJSDocFormatter,
-      'dotted'       => DottedFormatter
+      'safari'       => ColoredDottedFormatter,
+      'server'       => BrowserFormatter
     }
 
     formatter = formatters.fetch(ENV['FORMATTER']) do

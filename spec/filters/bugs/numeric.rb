@@ -6,5 +6,5 @@ opal_filter "Numeric" do
   fails "Numeric#remainder returns the result of calling self#% with other if self and other are greater than 0" # Mock '#<NumericSpecs::Subclass:0x5c1d0>' expected to receive %(#<MockObject:0x5c1d4 @name="Passed Object" @null=nil>) exactly 1 times but received it 0 times
   fails "Numeric#remainder returns the result of calling self#% with other if self and other are less than 0" # Mock '#<NumericSpecs::Subclass:0x5c1a0>' expected to receive %(#<MockObject:0x5c1a4 @name="Passed Object" @null=nil>) exactly 1 times but received it 0 times
   fails "Numeric#remainder returns the result of calling self#% with other if self is 0" # Mock '#<NumericSpecs::Subclass:0x5c1be>' expected to receive %(#<MockObject:0x5c1c2 @name="Passed Object" @null=nil>) exactly 1 times but received it 0 times
-  fails "Numeric#singleton_method_added raises a TypeError when trying to define a singleton method on a Numeric" # Expected TypeError but no exception was raised ("test" was returned)  
+  fails "Numeric#singleton_method_added raises a TypeError when trying to define a singleton method on a Numeric" # Expected TypeError but no exception was raised ("test" was returned)
 end

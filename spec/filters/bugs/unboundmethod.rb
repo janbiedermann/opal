@@ -20,7 +20,7 @@ opal_filter "UnboundMethod" do
   fails "UnboundMethod#original_name returns the original name even when aliased twice" # NoMethodError: undefined method `original_name' for #<UnboundMethod: UnboundMethodSpecs::Methods#foo (defined in UnboundMethodSpecs::Methods in ruby/core/unboundmethod/fixtures/classes.rb:30)>
   fails "UnboundMethod#original_name returns the original name" # NoMethodError: undefined method `original_name' for #<UnboundMethod: UnboundMethodSpecs::Methods#foo (defined in UnboundMethodSpecs::Methods in ruby/core/unboundmethod/fixtures/classes.rb:30)>
   fails "UnboundMethod#source_location sets the first value to the path of the file in which the method was defined" # Expected "ruby/core/unboundmethod/fixtures/classes.rb" == "./ruby/core/unboundmethod/fixtures/classes.rb" to be truthy but was false
-  fails "UnboundMethod#source_location works for eval with a given line" # Expected ["(eval)", 0] == ["foo", 100] to be truthy but was false  
+  fails "UnboundMethod#source_location works for eval with a given line" # Expected ["(eval)", 0] == ["foo", 100] to be truthy but was false
   fails "UnboundMethod#super_method after aliasing an inherited method returns the expected super_method" # NoMethodError: undefined method `super_method' for #<UnboundMethod: MethodSpecs::InheritedMethods::C#meow (defined in MethodSpecs::InheritedMethods::C in ruby/core/method/fixtures/classes.rb:233)>
   fails "UnboundMethod#super_method after changing an inherited methods visibility returns the expected super_method" # NoMethodError: undefined method `super_method' for #<UnboundMethod: MethodSpecs::InheritedMethods::C#derp (defined in MethodSpecs::InheritedMethods::B in ruby/core/method/fixtures/classes.rb:233)>
   fails "UnboundMethod#super_method returns nil when the parent's method is removed" # NoMethodError: undefined method `super_method' for #<UnboundMethod: #<Class:0x4b228>#foo (defined in #<Class:0x4b228> in ruby/core/unboundmethod/super_method_spec.rb:21)>
@@ -28,5 +28,5 @@ opal_filter "UnboundMethod" do
   fails "UnboundMethod#super_method returns the method that would be called by super in the method" # NoMethodError: undefined method `super_method' for #<UnboundMethod: UnboundMethodSpecs::C#overridden (defined in UnboundMethodSpecs::C in ruby/core/unboundmethod/fixtures/classes.rb:91)>
   fails "UnboundMethod#to_s does not show the defining module if it is the same as the origin" # Expected "#<UnboundMethod:0x10a0c>".start_with? "#<UnboundMethod: UnboundMethodSpecs::A#baz" to be truthy but was false
   fails "UnboundMethod#to_s returns a String including all details" # Expected "#<UnboundMethod:0x10a92>".start_with? "#<UnboundMethod: UnboundMethodSpecs::Methods(UnboundMethodSpecs::Mod)#from_mod" to be truthy but was false
-  fails "UnboundMethod#to_s the String shows the method name, Module defined in and Module extracted from" # Expected "#<UnboundMethod:0x10a48>" =~ /\bfrom_mod\b/ to be truthy but was nil  
+  fails "UnboundMethod#to_s the String shows the method name, Module defined in and Module extracted from" # Expected "#<UnboundMethod:0x10a48>" =~ /\bfrom_mod\b/ to be truthy but was nil
 end

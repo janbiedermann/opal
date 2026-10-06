@@ -26,7 +26,7 @@ class ::Regexp < `RegExp`
 
     def escape(string)
       %x{
-        string = $coerce_to(string, #{::String}, 'to_str');
+        string = $coerce_to(string, Opal.String, 'to_str');
         return Opal.escape_regexp(string);
       }
     end
@@ -95,7 +95,7 @@ class ::Regexp < `RegExp`
           return $annotate_regexp(new RegExp(regexp), regexp.$$source, regexp.$$options);
         }
 
-        regexp = #{::Opal.coerce_to!(regexp, ::String, :to_str)};
+        regexp = Opal.coerce_to_or_raise(regexp, Opal.String, "to_str");
 
         if (regexp.charAt(regexp.length - 1) === '\\' && regexp.charAt(regexp.length - 2) !== '\\') {
           #{::Kernel.raise ::RegexpError, "too short escape sequence: /#{regexp}/"}
@@ -129,7 +129,7 @@ class ::Regexp < `RegExp`
   end
 
   def ===(string)
-    `#{match(::Opal.coerce_to?(string, ::String, :to_str))} !== nil`
+    `#{match(`Opal.coerce_to_or_nil(string, Opal.String, "to_str")`)} !== nil`
   end
 
   def =~(string)
@@ -185,7 +185,7 @@ class ::Regexp < `RegExp`
 
       if (pos === undefined) {
         if (string === nil) return #{$~ = nil};
-        var m = self.exec($coerce_to(string, #{::String}, 'to_str'));
+        var m = self.exec($coerce_to(string, Opal.String, 'to_str'));
         if (m) {
           #{$~ = ::MatchData.new(`self`, `m`)};
           return block === nil ? #{$~} : #{yield $~};
@@ -194,13 +194,13 @@ class ::Regexp < `RegExp`
         }
       }
 
-      pos = $coerce_to(pos, #{::Integer}, 'to_int');
+      pos = $coerce_to(pos, Opal.Integer, 'to_int');
 
       if (string === nil) {
         return #{$~ = nil};
       }
 
-      string = $coerce_to(string, #{::String}, 'to_str');
+      string = $coerce_to(string, Opal.String, 'to_str');
 
       if (pos < 0) {
         pos += string.length;
@@ -233,16 +233,16 @@ class ::Regexp < `RegExp`
       }
 
       if (pos === undefined) {
-        return string === nil ? false : self.test($coerce_to(string, #{::String}, 'to_str'));
+        return string === nil ? false : self.test($coerce_to(string, Opal.String, 'to_str'));
       }
 
-      pos = $coerce_to(pos, #{::Integer}, 'to_int');
+      pos = $coerce_to(pos, Opal.Integer, 'to_int');
 
       if (string === nil) {
         return false;
       }
 
-      string = $coerce_to(string, #{::String}, 'to_str');
+      string = $coerce_to(string, Opal.String, 'to_str');
 
       if (pos < 0) {
         pos += string.length;
@@ -463,7 +463,7 @@ class MatchData
           Array.prototype.splice.apply(args, a);
         }
 
-        index = #{::Opal.coerce_to!(`args[i]`, ::Integer, :to_int)};
+        index = Opal.coerce_to_or_raise(args[i], Opal.Integer, "to_int");
 
         if (index < 0) {
           index += #{@matches}.length;

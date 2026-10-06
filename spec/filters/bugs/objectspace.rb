@@ -62,5 +62,5 @@ opal_filter "ObjectSpace" do
   fails "ObjectSpace::WeakMap#length is correct" # NotImplementedError: #length can't be implemented on top of JS interfaces
   fails "ObjectSpace::WeakMap#member? reports true if the pair exists and the value is nil" # NotImplementedError: #size can't be implemented on top of JS interfaces
   fails "ObjectSpace::WeakMap#size is correct" # NotImplementedError: #size can't be implemented on top of JS interfaces
-  fails "ObjectSpace::WeakMap#values is correct" # NotImplementedError: #values can't be implemented on top of JS interfaces  
+  fails "ObjectSpace::WeakMap#values is correct" # NotImplementedError: #values can't be implemented on top of JS interfaces
 end
