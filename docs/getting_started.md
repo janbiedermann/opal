@@ -58,6 +58,24 @@ builder.appendPaths("../my_lib");
 
 or list it in an [Opalfile](opalfile.md). Now, any Ruby files in this directory can be discovered.
 
+### Standalone Executables
+
+`--compile-to-exe node` builds a standalone executable from a program, a
+Node.js [single executable application](https://nodejs.org/api/single-executable-applications.html):
+
+```
+$ exe/opal --compile-to-exe node -o hello hello.rb
+$ ./hello world
+```
+
+The executable gets Node.js's platform (`ARGV`, `ENV`, `STDIN`, `File`,
+`Dir`, ... as with `require 'nodejs'`) and the V8 code cache of the program,
+and leaves out the source map. It is made from the Node.js that runs `opal`,
+which must have the single executable application fuse: the official builds
+have it, some Linux distributions' builds don't. `postject` comes from npm
+(`npx`). In an executable only Node's own modules can be required, so
+`Dir.glob` (picomatch) and `open-uri` (unxhr) aren't available in one.
+
 ## FAQ
 
 ### Why Does Opal Exist?

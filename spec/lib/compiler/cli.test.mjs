@@ -16,6 +16,7 @@ import { isIncomplete } from "../../../lib/opal/compiler/cli/repl.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
+import { seaConfig } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
 
 const FIXTURES = resolve(OPAL_ROOT, "spec", "lib", "fixtures");
 const FILE = join(FIXTURES, "opal_file.rb");
@@ -43,6 +44,32 @@ describe("CLI", () => {
     const run = spawnSync(process.execPath, [EXE, "--no-source-map", FILE], { encoding: "utf8" });
     assert.equal(run.stdout, "hi from opal!\n");
     assert.equal(run.status, 0);
+  });
+
+  test("a Node.js executable gets Node.js's platform and no source map", () => {
+    const cli = new CLI({ exe_type: "node", runner: "compiler", evals: ["puts 1"], requires: ["set"] });
+    assert.deepEqual(cli.requires, ["opal", "nodejs", "set"]);
+    assert.equal(cli.runnerOptions.no_source_map, true);
+    assert.deepEqual(new CLI({ evals: ["puts 1"] }).requires, ["opal"]);
+    // (the code cache goes into the executable; no warning on every start)
+    assert.deepEqual(seaConfig("main.js"), { main: "main.js", output: "sea-prep.blob", useCodeCache: true, disableExperimentalSEAWarning: true });
+  });
+
+  test("a program with Node.js's platform needs npm packages only when it uses them", () => {
+    // (as in a single executable application, where only Node's own
+    // modules can be required)
+    const dir = mkdtempSync(join(tmpdir(), "opal-nodejs-platform-"));
+    try {
+      const out = join(dir, "program.js");
+      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", out, "-e", "puts ARGV.inspect"], { encoding: "utf8" });
+      assert.equal(build.status, 0, build.stderr);
+      const env = { ...process.env };
+      delete env.NODE_PATH;
+      const run = spawnSync(process.execPath, [out, "--", "a"], { encoding: "utf8", env, cwd: dir });
+      assert.equal(run.stdout, '["a"]\n', run.stderr);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("raises with lib_only and a file or evals", () => {
