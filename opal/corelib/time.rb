@@ -594,7 +594,8 @@ class ::Time < `Date`
                 hours   = Math.floor(Math.abs(offset) / 60),
                 minutes = Math.abs(offset) % 60;
 
-            result += offset < 0 ? "+" : "-";
+            // (minutes west of UTC; UTC itself is +0000, as in CRuby)
+            result += offset <= 0 ? "+" : "-";
             result += hours < 10 ? "0" : "";
             result += hours;
 
