@@ -69,6 +69,11 @@ jobs:
             fetchdepth: '0'
             base_ref: ${{ github.base_ref }}
             command: node tasks/codesize.mjs
+          - name: compiler-performance
+            permissive: true
+            fetchdepth: '0'
+            base_ref: ${{ github.base_ref }}
+            command: node tasks/compiler-performance.mjs
 
     runs-on: ${{ matrix.combo.os || 'ubuntu-latest' }}
     continue-on-error: ${{ matrix.combo.permissive || false }}

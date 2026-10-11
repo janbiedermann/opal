@@ -77,8 +77,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
   code size of the opal/mini, opal/base, opal/full and full-stdlib bundles,
-  compared with master; results in tmp/codesize), `node tasks/release.mjs`
-  (changelog, release preparation).
+  compared with master; results in tmp/codesize), `node
+  tasks/compiler-performance.mjs` (compiler speed on the potch corpus,
+  compared with master; results in tmp/compiler_performance), `node
+  tasks/release.mjs` (changelog, release preparation).
 - The Node.js stdlib needs `NODE_PATH=stdlib/nodejs/node_modules` (for
   `picomatch`) when running Opal-built JS with plain `node` instead of
   `exe/opal -Rnodejs`.
