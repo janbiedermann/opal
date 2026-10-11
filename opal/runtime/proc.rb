@@ -20,6 +20,7 @@ module ::Opal
   def self.lambda(block, blockopts)
     %x{
       block.$$is_lambda = true;
+      block.$$p = nil;
 
       $apply_blockopts(block, blockopts);
 

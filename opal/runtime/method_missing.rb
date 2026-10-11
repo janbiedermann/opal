@@ -71,14 +71,15 @@ module ::Opal
         // Copy any given block onto the method_missing dispatcher
         this.$method_missing.$$p = method_missing_stub.$$p;
 
-        // Set block property to null ready for the next call (stop false-positives)
-        method_missing_stub.$$p = null;
+        // Set block property to nil ready for the next call (stop false-positives)
+        method_missing_stub.$$p = nil;
 
         // call method missing with correct args (remove '$' prefix on method name)
         return this.$method_missing.apply(this, $prepend_ary(method_name.slice(1), arguments));
       };
 
       method_missing_stub.$$stub = true;
+      method_missing_stub.$$p = nil;
 
       return method_missing_stub;
     }

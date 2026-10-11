@@ -34,7 +34,7 @@ module ::Opal
     // Foward calls to define_method on the top object to Object
     function top_define_method() {
       var block = top_define_method.$$p;
-      top_define_method.$$p = null;
+      top_define_method.$$p = nil;
       return Opal.send($Object, 'define_method', arguments, block)
     };
   }
