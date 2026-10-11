@@ -8,11 +8,10 @@ module SecureRandom
   %x{
     var gen_random_bytes;
 
-    if ((Opal.global.crypto   && Opal.global.crypto.getRandomValues) ||
-        (Opal.global.msCrypto && Opal.global.msCrypto.getRandomValues)) {
-      // This method is available in all non-ancient web browsers.
+    if (Opal.global.crypto && Opal.global.crypto.getRandomValues) {
+      // This method is available in all supported browsers.
 
-      var crypto = Opal.global.crypto || Opal.global.msCrypto;
+      var crypto = Opal.global.crypto;
       gen_random_bytes = function(count) {
         var storage = new Uint8Array(count);
         crypto.getRandomValues(storage);

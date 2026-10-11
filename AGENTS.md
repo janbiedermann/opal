@@ -59,6 +59,11 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   with `rubocop` and `rubocop-performance` (optional).
 
 ## Notes
+- The JavaScript target is ES2024: current and previous Chrome (including
+  Android 14), Firefox, Safari (including iOS 18 and macOS) and Node.js 22.
+  IE11 and other ES5-era engines are not supported, so generated code and the
+  runtime may use `?.`, `??`, `??=`, class fields, `Object.hasOwn`, `Array.at`,
+  `Object.groupBy`, `Promise.withResolvers` and the RegExp `v` flag.
 - The list of MSpec files is in `spec/ruby_specs` and filters live in
   `spec/filters` (`bin/format-filters` sorts them, `bin/remove-filters`
   removes the ones given on stdin).
