@@ -57,6 +57,14 @@ function transformByReAndHash(regexp, transformer, hash) {
   return regexp.replace(transformer, (i) => hash.get(i) || i);
 }
 
+// Ruby writes hex escapes with one or two digits (\x0, \x1F) and allows
+// \x{...}; JS only knows \xHH (exactly two digits) and \u{...}.
+function fixHexEscapes(regexp) {
+  return regexp
+    .replace(/(?<!\\)((?:\\\\)*)\\x\{([0-9A-Fa-f]+)\}/g, "$1\\u{$2}")
+    .replace(/(?<!\\)((?:\\\\)*)\\x([0-9A-Fa-f])(?![0-9A-Fa-f])/g, "$1\\x0$2");
+}
+
 function addFlag(flags, flag) {
   return flags.includes(flag) ? flags : flags + flag;
 }
@@ -122,6 +130,8 @@ export function transformRegexp(originalRegexp, flags, warn = () => {}) {
 
   flags = addFlag(flags, "u"); // always be unicode aware to handle surrogates correctly
 
+  originalRegexp = fixHexEscapes(originalRegexp);
+
   // First step - easy replacements
   const regexp = transformByReAndHash(originalRegexp, ESCAPES_REGEXP, REGEXP_EQUIVALENTS);
 
@@ -150,7 +160,7 @@ export function transformRegexp(originalRegexp, flags, warn = () => {}) {
       escaping = false;
       if (char === "A" || char === "z") {
         stringBasedRegexp = true;
-      } else if (char === "p" || char === "P") {
+      } else if (char === "p" || char === "P" || char === "u") {
         unicodeCharacterClass = 1;
       }
     } else if (char === "\\") {
@@ -178,12 +188,12 @@ export function transformRegexp(originalRegexp, flags, warn = () => {}) {
       depth -= 1;
     } else if (char === "{") {
       // escape { to \\{ unless it belongs to
-      // a unicode character class \p{...} or \P{...} or
+      // a unicode escape \p{...}, \P{...} or \u{...} or
       // a quantifier x{1}, x{1,} or x{1,2}
       if (unicodeCharacterClass === 1) {
         // look behind
         const prevChars = regexp.slice(i - 2, i);
-        if (prevChars === "\\p" || prevChars === "\\P") {
+        if (prevChars === "\\p" || prevChars === "\\P" || prevChars === "\\u") {
           unicodeCharacterClass = 2;
         } else {
           unicodeCharacterClass = false;
@@ -203,7 +213,7 @@ export function transformRegexp(originalRegexp, flags, warn = () => {}) {
       }
     } else if (char === "}") {
       // escape } to \\} unless it belongs to
-      // a unicode character class \p{...} or \P{...} or
+      // a unicode escape \p{...}, \P{...} or \u{...} or
       // a quantifier x{1}, x{1,} or x{1,2}
       if (unicodeCharacterClass === 2) {
         unicodeCharacterClass = false;
