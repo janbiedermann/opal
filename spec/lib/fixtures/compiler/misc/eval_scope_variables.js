@@ -6,7 +6,7 @@
   x = 2;
   z = $rb_plus(z, 1);
   w = 3;
-  $send([1], 'each', [], function $$1(){
+  $send([1], 'each', [], () => {
     return (x = $rb_plus(x, w))});
   return ["w", "x", "z"];
 })(Opal, self);
