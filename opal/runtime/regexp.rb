@@ -2,6 +2,8 @@
 # use_strict: true
 # opal_runtime_mode: true
 
+require 'corelib/regexp_transpiler.mjs'
+
 module ::Opal
   # Escape Regexp special chars letting the resulting string be used to build
   # a new Regexp.
@@ -36,7 +38,7 @@ module ::Opal
 
   # Transform a regular expression from Ruby syntax to JS syntax.
   def self.transform_regexp(regexp, flags)
-    Opal::RegexpTranspiler.transform_regexp(regexp, flags)
+    `Opal.esm['corelib/regexp_transpiler'].transformRegexp(regexp, flags, function(msg) { Opal.Kernel.$warn(msg); })`
   end
 
   # Combine multiple regexp parts together

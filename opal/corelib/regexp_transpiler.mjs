@@ -1,6 +1,6 @@
 // Transforms a regular expression from Ruby syntax to JS syntax, as much
-// as possible. Port of opal/opal/regexp_transpiler.rb (which corelib also
-// uses at runtime) and the regexp tables of opal/opal/regexp_anchors.rb.
+// as possible. Used by the compiler at compile time (nodes/regexp.mjs) and
+// by the runtime (Opal.transform_regexp in runtime/regexp.rb).
 
 // A map of some Ruby regexp patterns to their JS representations
 const REGEXP_EQUIVALENTS = new Map(Object.entries({
@@ -62,8 +62,7 @@ function addFlag(flags, flag) {
 }
 
 // Removes the whitespace and comments of an extended (x) regexp, except in
-// character classes and escapes (keep in sync with stripExtended in
-// opal/opal/regexp_transpiler.rb).
+// character classes and escapes.
 export function stripExtended(regexp) {
   const length = regexp.length;
   let out = "", i = 0, depth = 0, c;

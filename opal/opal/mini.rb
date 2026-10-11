@@ -13,7 +13,6 @@
 ::Object.require 'corelib/range'
 ::Object.require 'corelib/proc'
 ::Object.require 'corelib/method'
-::Object.require 'opal/regexp_transpiler'
 ::Object.require 'opal/regexp_anchors'
 ::Object.require 'corelib/variables'
 ::Object.require 'corelib/string/encoding'
