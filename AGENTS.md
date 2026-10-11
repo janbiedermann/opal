@@ -14,7 +14,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 ## Directory overview
 - `lib/opal/` holds the toolchain, written in JavaScript (`.mjs`):
   - `lib/opal/potch/` is potch, Opal's built-in Ruby parser: a JS port of
-    Prism 1.9. See `docs/potch.md` and `POTCH.md`.
+    Prism 1.9. See `docs/potch.md`.
   - `lib/opal/compiler/` is the compiler (`index.mjs`, `nodes/`,
     `transforms/`), the builder (`builder/`) and the CLI with its runners
     (`cli/`). `exe/opal` runs the CLI.

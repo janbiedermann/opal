@@ -1,8 +1,7 @@
 # potch
 
 potch is Opal's built-in Ruby parser. It lives in `lib/opal/potch/` and is
-maintained as part of Opal; see `POTCH.md` for the plan to make it the
-compiler's only parser.
+maintained as part of Opal.
 
 It is a JS port of the [Prism](https://github.com/ruby/prism) Ruby parser, at
 version 1.9.0 - the version that ships with Ruby 4.0.

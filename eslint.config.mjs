@@ -1,7 +1,7 @@
 import globals from "globals";
 import js from "@eslint/js";
 
-// ES modules of the potch parser (see POTCH.md). The parts
+// ES modules of the potch parser. The parts
 // in lib/opal/potch/parts/ are import-less fragments assembled into potch.mjs,
 // so only potch's own style rules apply there.
 const potchFiles = [

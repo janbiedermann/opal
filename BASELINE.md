@@ -1,6 +1,6 @@
 # Compiler performance baseline
 
-Measured on 2026-10-04, before any potch integration work (see `POTCH.md`).
+Measured on 2026-10-04, before any potch integration work.
 It records how fast today's compiler (whitequark `parser` gem + rewriters +
 code generators) is, so the JS compiler built on potch can be compared with
 it.
@@ -92,7 +92,7 @@ size, not because the output differs.
 * potch parses the 2.5 MB file in 187 ms. For every file, potch's parse is
   faster than CRuby's rewrite step alone.
 
-## The JS compiler (POTCH.md phase 2)
+## The JS compiler
 
 The same corpus and run counts with the JS compiler in `lib/opal/compiler`
 on Node.js (`node benchmark/potch/bench_compiler.mjs tmp/bench_corpus`),

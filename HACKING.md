@@ -149,7 +149,7 @@ Comparison of the Asciidoctor (a real-life Opal application) compile and run:
 
 ## Parser and compiler
 
-Opal's parser is potch, a JavaScript port of [Prism](https://github.com/ruby/prism) in `lib/opal/potch` (see `docs/potch.md`). The compiler, builder and CLI are in `lib/opal/compiler`; `POTCH.md` describes how they came to be. `exe/opal --sexp -e '...'` prints the syntax tree of some code, and `spec/lib/fixtures/compiler` holds examples of compiled code (regenerate the expected outputs with `node tasks/compiler/update_fixtures.mjs` and review the diff).
+Opal's parser is potch, a JavaScript port of [Prism](https://github.com/ruby/prism) in `lib/opal/potch` (see `docs/potch.md`). The compiler, builder and CLI are in `lib/opal/compiler`. `exe/opal --sexp -e '...'` prints the syntax tree of some code, and `spec/lib/fixtures/compiler` holds examples of compiled code (regenerate the expected outputs with `node tasks/compiler/update_fixtures.mjs` and review the diff).
 
 ## Profiling
 
