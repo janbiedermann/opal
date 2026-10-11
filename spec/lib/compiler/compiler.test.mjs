@@ -108,9 +108,10 @@ test("should compile undef calls", () => {
 });
 
 describe("method names", () => {
-  test("generates a named function for method", () => includes("def test_method; []; end", "function $$test_method()"));
-  test("when function name is reserved generates a valid named function", () => includes("def Array; []; end", "function $$Array()"));
-  test("when function name is not valid generates a name in a safe way", () => includes("def test_method?; []; end", "function $test_method$ques$1()"));
+  test("omits the function name when the body never uses it", () => includes("def test_method; []; end", "function ()"));
+  test("generates a named function for method", () => includes("def test_method; yield; end", "function $$test_method()"));
+  test("when function name is reserved generates a valid named function", () => includes("def Array; yield; end", "function $$Array()"));
+  test("when function name is not valid generates a name in a safe way", () => includes("def test_method?; yield; end", "function $test_method$ques$1()"));
 });
 
 test("debugger special method generates debugger keyword in javascript", () => {
@@ -220,6 +221,34 @@ describe("truthy check", () => {
     includes("bar = 4\nfoo = 42 if (bar)", "if ($truthy(bar)");
     includes("foo = 42 if (Test)", "if ($truthy($$('Test'))");
   });
+  test("drops $truthy for backtick JS that is statically a boolean", () => {
+    const js = { backtick_javascript: true };
+    const unwrapped = (code, part) => {
+      const out = compiled(code, js);
+      assert.ok(out.includes(part), `expected ${JSON.stringify(part)} in:\n${out}`);
+      assert.ok(!out.includes("$truthy"), `unexpected $truthy in:\n${out}`);
+    };
+    unwrapped("foo = 42 if `a === b`", "if ((a === b))");
+    unwrapped("foo = 42 if `a == null`", "if ((a == null))");
+    unwrapped("foo = 42 if `!a`", "if ((!a))");
+    unwrapped("foo = 42 if `a.test(b)`", "if ((a.test(b)))");
+    unwrapped("foo = 42 if `a === b || c === d`", "if ((a === b || c === d))");
+    unwrapped("foo = 42 if `typeof a !== 'undefined' && !b`", "if ((typeof a !== 'undefined' && !b))");
+    unwrapped("foo = 42 if `a instanceof Foo`", "if ((a instanceof Foo))");
+    unwrapped("def foo\n  unless `a === b || c === d`\n    1\n  end\n  2\nend", "if (!(a === b || c === d)) {");
+  });
+  test("keeps $truthy for backtick JS of unknown truthiness", () => {
+    const js = { backtick_javascript: true };
+    const kept = (code, part) => {
+      const out = compiled(code, js);
+      assert.ok(out.includes(part), `expected ${JSON.stringify(part)} in:\n${out}`);
+    };
+    kept("foo = 42 if `a && b`", "if ($truthy(a && b))");
+    kept("foo = 42 if `a || b === c`", "if ($truthy(a || b === c))");
+    kept("foo = 42 if `a === b && c`", "if ($truthy(a === b && c))");
+    kept("foo = 42 if `a < 0 ? -a : a`", "if ($truthy(a < 0 ? -a : a))");
+    kept("foo = 42 if `foo.bar`", "if ($truthy(foo.bar))");
+  });
 });
 
 test("Regexp flags skips the unsupported ones", () => includes("/foobar/nix", "/foobar/i"));
@@ -246,7 +275,7 @@ describe("x-strings", () => {
     inc("def foo\n  789\n  `#$bar * 456`\nend", "  return $gvars.bar * 456;\n");
     inc("def foo\n  789\n  `#@bar * 456`\nend", "  return self.bar * 456;\n");
     inc("def foo\n  789\n  `456 * #@bar`\nend", "  return 456 * self.bar;\n");
-    inc('if `compare === nil`\n  raise ArgumentError, "comparison of #{a.class} with #{b.class} failed"\nend', "  if ($truthy(compare === nil)) {\n");
+    inc('if `compare === nil`\n  raise ArgumentError, "comparison of #{a.class} with #{b.class} failed"\nend', "  if ((compare === nil)) {\n");
     inc("def <<(count)\n  count = Opal.coerce_to! count, Integer, :to_int\n  `#{count} > 0 ? self << #{count} : self >> -#{count}`\nend",
       "  return count > 0 ? self << count : self >> -count;\n");
     for (const body of [

@@ -11,6 +11,7 @@ class ::Proc < `Function`
       ::Kernel.raise ::ArgumentError, 'tried to create a Proc object without a block'
     end
 
+    `block.$$p = nil`
     block
   end
 

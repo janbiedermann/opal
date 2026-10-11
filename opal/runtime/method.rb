@@ -69,6 +69,7 @@ module ::Opal
 
       body.displayName = jsid;
       body.$$owner = mod;
+      body.$$p = nil;
 
       var proto = mod.$$prototype;
 
@@ -255,7 +256,7 @@ module ::Opal
       var wrapped = function() {
         var block = wrapped.$$p;
 
-        wrapped.$$p = null;
+        wrapped.$$p = nil;
 
         return Opal.send(this, body, arguments, block);
       };

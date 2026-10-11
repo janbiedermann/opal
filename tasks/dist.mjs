@@ -22,14 +22,12 @@ const formats = (process.env.FORMATS || "js,min,gz").split(",");
 const width = Math.max(...files.map((f) => f.length));
 
 // terser from node_modules (needs `bin/yarn install`): compressed and
-// mangled, keeping the names of Opal's functions ($$name: methods and
-// blocks, which backtraces show). Mangling makes opal.min.js 27 % and
-// opal-parser.min.js 40 % smaller; compiled code with a direct eval (Kernel#eval
+// mangled. Mangling makes opal.min.js 27 % and opal-parser.min.js 40 %
+// smaller; compiled code with a direct eval (Kernel#eval
 // with a binding) keeps its names, as terser leaves such scopes alone.
-const KEEP_FNAMES = /^\$\$/;
 async function uglify(source) {
   const { minify } = await import(pathToFileURL(join(OPAL_ROOT, "node_modules", "terser", "main.js")).href);
-  const result = await minify(source, { compress: { keep_fnames: KEEP_FNAMES }, mangle: { keep_fnames: KEEP_FNAMES } });
+  const result = await minify(source, { compress: true, mangle: true });
   return result.code;
 }
 

@@ -22,11 +22,17 @@ module ::Opal
   `String.prototype["$+"] = function(other) { return this + other; }`
 
   # Helper for dynamic strings like "menu today: #{meal[:name]} for only #{meal[:price]}"
+  # Parts that are not strings are converted with Opal.to_s.
   def self.dstr
     %x{
       let res = arguments[0];
+      if (typeof res !== "string" && !res.$$is_string) res = Opal.to_s(res);
       if (arguments.length > 1) {
-        for (let i = 1; i < arguments.length; i++) { res = res["$+"](arguments[i]); }
+        for (let i = 1; i < arguments.length; i++) {
+          let part = arguments[i];
+          if (typeof part !== "string" && !part.$$is_string) part = Opal.to_s(part);
+          res = res["$+"](part);
+        }
       } else if (typeof res === "string") {
         res = Opal.str(res);
       }

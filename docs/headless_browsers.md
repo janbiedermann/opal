@@ -2,7 +2,7 @@
 
 ## Requirements
 
-First of all, make sure that you have Chrome, at least version 59.0, installed or Firefox, at least version 106.
+First of all, make sure that you have Chrome, at least version 59.0, installed or Firefox, at least version 112 (the Firefox runner uses WebDriver BiDi).
 
 ## Using the runners
 
@@ -43,12 +43,12 @@ By default headless browser runner explicitly sets exit code to 1 when there was
       from -e:1:1:in `undefined'
     1
 
-You can change final exit code by using `Kernel#exit`.
+You can change final exit code by using `Kernel#exit`, but make sure to require `opal/platform` in your code.
 
-    $ opal -Rchrome -e "exit(0)"; echo $?
+    $ opal -Rchrome -ropal/platform -e "exit(0)"; echo $?
     0
 
-    $ opal -Rchrome -e "exit(1)"; echo $?
+    $ opal -Rchrome -ropal/platform -e "exit(1)"; echo $?
     1
 
 ## Known limitations
@@ -62,34 +62,37 @@ You can change final exit code by using `Kernel#exit`.
 
 ### Chrome
 
-Under the hood when you call `opal -Rchrome -e 'your code'` Opal uses chrome runner that is defined in
-`lib/opal/cli_runners/chrome.rb`. This runner tries to connect to `localhost:9222` (9222 is a default port for a headless chrome server)
-or runs the server on its own. It detects your platform and uses a default path to the Chrome executable
-(`Opal::CliRunners::Chrome#chrome_executable`), but you can override it by specifying `GOOGLE_CHROME_BINARY` environment
-variable.
+Under the hood when you call `opal -Rchrome -e 'your code'` Opal uses the Chrome runner defined in
+`lib/opal/compiler/cli/runners/browsers.mjs`. This runner tries to connect to `localhost:9222` (9222 is a default port for a headless chrome server)
+or runs the server on its own. It detects your platform and uses a default path to the Chrome executable,
+but you can override it by specifying `GOOGLE_CHROME_BINARY` environment variable.
 
-When the server is up and running it passes compiled js code to `lib/opal/cli_runners/cdp_interface.rb`
-as a plain input using stdin (basically, it's a second part of the runner).
-`cdp_interface.rb` is a node js + Opal script that does the main job. It runs any provided code on the running chrome server,
-catches errors and forwards console messages.
+When the server is up and running it passes the prepared directory to `lib/opal/compiler/cli/runners/cdp_interface.mjs`
+as a subprocess. `cdp_interface.mjs` does the main job: it serves the compiled code over HTTP, drives Chrome over
+the Chrome DevTools Protocol (CDP), catches errors and forwards console messages.
 
 ### Firefox
 
 This runner tries to connect to `localhost:9333` (9333 is the default port for a headless firefox server used by Opal to prevent accidental
 connection to a lingering Chrome at port 9222)
-or runs the server on its own. It detects your platform and uses a default path to the Firefox executable
-(`Opal::CliRunners::Firefox#firefox_executable`), but you can override it by specifying `MOZILLA_FIREFOX_BINARY` environment
-variable.
+or runs the server on its own. It detects your platform and uses a default path to the Firefox executable,
+but you can override it by specifying `MOZILLA_FIREFOX_BINARY` environment variable.
 
-When the server is up and running it passes compiled js code to `lib/opal/cli_runners/cdp_interface.rb`
-as a plain input using stdin (basically, it's a second part of the runner).
-`cdp_interface.rb` is a node js + Opal script that does the main job. It runs any provided code on the running firefox server,
-catches errors and forwards console messages.
+When the server is up and running it passes the prepared directory to `lib/opal/compiler/cli/runners/bidi_interface.mjs`
+as a subprocess. `bidi_interface.mjs` does the main job: it serves the compiled code over HTTP and drives Firefox
+directly over the WebDriver BiDi protocol (the standard successor of CDP, served by Firefox itself at
+`ws://127.0.0.1:PORT/session`, no driver needed; see https://w3c.github.io/webdriver-bidi/).
+
+Note that headless Firefox dismisses `prompt`/`alert`/`confirm` dialogs right away, so instead of the BiDi
+`browsingContext.userPromptOpened`/`handleUserPrompt` commands, the runner injects a preload script that
+routes these dialogs to its HTTP server (`/prompt` reads a line from stdin, the `opalheadlessbrowserexit`
+alert reaches `/exit`).
 
 ## Using a remote chrome or firefox server
 
 If you want to change a default browser port or your browser server is running on a different host:port
-you can override default values by specifying `OPAL_CDP_HOST` and `OPAL_CDP_PORT` environment variables:
+you can override default values by specifying `OPAL_CDP_HOST` and `OPAL_CDP_PORT` environment variables
+(`OPAL_BIDI_HOST` and `OPAL_BIDI_PORT` for the Firefox runner; the `OPAL_CDP_*` names are accepted there too):
 
       $ OPAL_CDP_HOST=10.10.10.10 CHROME_PORT=8080 opal -Rchrome -e "puts 42"
       Connecting to 10.10.10.10:8080...

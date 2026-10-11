@@ -28,8 +28,8 @@ jobs:
           - name: mspec-chrome
             command: node tasks/test.mjs -R chrome mspec
           - name: mspec-firefox
-            # the Firefox runner uses CDP, which Firefox removed in version 129
-            firefox: '128.14.0esr'
+            # the Firefox runner uses WebDriver BiDi (Firefox >= 112)
+            firefox: 'latest'
             command: xvfb-run node tasks/test.mjs -R firefox mspec
           - name: mspec-bun
             bun: true
@@ -62,7 +62,18 @@ jobs:
           - name: performance
             permissive: true
             fetchdepth: '0'
+            base_ref: ${{ github.base_ref }}
             command: node tasks/performance.mjs
+          - name: codesize
+            permissive: true
+            fetchdepth: '0'
+            base_ref: ${{ github.base_ref }}
+            command: node tasks/codesize.mjs
+          - name: compiler-performance
+            permissive: true
+            fetchdepth: '0'
+            base_ref: ${{ github.base_ref }}
+            command: node tasks/compiler-performance.mjs
 
     runs-on: ${{ matrix.combo.os || 'ubuntu-latest' }}
     continue-on-error: ${{ matrix.combo.permissive || false }}
@@ -106,4 +117,8 @@ jobs:
         if: ${{ matrix.combo.firefox }}
         run: |
           echo "MOZILLA_FIREFOX_BINARY=${{ steps.setup-firefox.outputs.firefox-path }}" >> $GITHUB_ENV
+      - name: set environment variables GIT_BASE_REF
+        if: ${{ matrix.combo.base_ref }}
+        run: |
+          echo "GIT_BASE_REF=${{ matrix.combo.base_ref }}" >> $GITHUB_ENV
       - run: ${{ matrix.combo.command }}

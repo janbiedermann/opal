@@ -179,10 +179,11 @@ Holds the **stdlib currently supported by Opal**. This includes `Observable`,
 
 ## Browser support
 
-* Internet Explorer 11
+Opal generates and runs code for browsers that support ES2024:
+
+* Chrome (Current - 1) or Current, including Chrome on Android 14 and later
 * Firefox (Current - 1) or Current
-* Chrome (Current - 1) or Current
-* Safari (Current - 1) or Current
+* Safari (Current - 1) or Current, including Safari on iOS 18 and on macOS
 * Opera (Current - 1) or Current
 
 Any problems encountered using the browsers listed above should be reported as bugs.
@@ -191,9 +192,8 @@ Any problems encountered using the browsers listed above should be reported as b
 the browser and the version that preceded it. For example, if the current
 version of a browser is 24.x, we support the 24.x and 23.x versions.
 
-12.1x or (Current - 1) or Current denotes that we support Opera 12.1x as well
-as the last 2 versions of Opera. For example, if the current Opera version is 20.x,
-then we support Opera 12.1x, 19.x and 20.x but not Opera 15.x through 18.x.
+Node.js 22 or later is supported as well and is the version used by the
+toolchain.
 
 ## Contributors
 

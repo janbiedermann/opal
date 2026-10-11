@@ -111,7 +111,7 @@ lib/opal/compiler/           # the new JS compiler
   compiler.mjs               #   options, magic comments, helpers, scope/unique-name state
   fragment.mjs               #   Fragment + location
   source_map/*.mjs           #   file, index, map, vlq
-  regexp_transpiler.mjs
+  regexp_transpiler.mjs      #   (moved to opal/runtime/regexp_transpiler.mjs)
   nodes/*.mjs                #   code generators, keyed by Prism node type
   transforms/*.mjs           #   the few AST transforms Prism does not make unnecessary
   builder/*.mjs              #   (phase 3) builder, path reader, processors, cache, DCE
@@ -525,9 +525,10 @@ CLI changes:
   the self-hosted JS compiler replaces it. `stdlib/nodejs/opal-paths.rb.erb`
   (its gem paths) is gone.
 
-* Browser runners: on Chrome 154 (headless shell) and Firefox ESR 128,
-  mspec_opal 684 examples, mspec_ruby 16,292 and minitest_cruby 208 runs
-  pass with 0 failures and 0 errors.
+* Browser runners: mspec_opal (684 examples) and mspec_ruby pass on Chrome
+  (headless shell, CDP) and on Firefox 157 (WebDriver BiDi) with 0 failures
+  and 0 errors; they passed on Chrome 154 and Firefox ESR 128 (CDP) before,
+  together with minitest_cruby (208 runs).
 * Specs: `spec/lib/compiler/builder.test.mjs` and `cli.test.mjs` port the
   builder, processor, path reader, project, post-processor, DCE, CLI,
   runner, server and REPL RSpec specs (`bin/rake compiler`: 245 specs).
@@ -537,9 +538,15 @@ CLI changes:
 
 Remaining:
 * Safari and the applescript runner are untested (macOS only).
-* The Firefox runner talks CDP, which Firefox removed in version 129 (only
-  WebDriver BiDi remains); it works with Firefox ESR 128. Moving it to
-  BiDi is a separate task (the Ruby runner had the same limitation).
+* ~~The Firefox runner talks CDP, which Firefox removed in version 129
+  (only WebDriver BiDi remains); it works with Firefox ESR 128. Moving it
+  to BiDi is a separate task~~ (done 2026-10-11): the Firefox runner drives
+  Firefox directly over WebDriver BiDi (`runners/bidi_interface.mjs`,
+  `ws://127.0.0.1:PORT/session`, no geckodriver; Firefox >= 112). Headless
+  Firefox auto-dismisses dialogs, so `prompt`/`alert`/`confirm` are
+  overridden by a preload script routed through the runner's HTTP server;
+  the shared HTTP server, secret and stdin reader live in
+  `runners/browser_server.mjs`. Chrome stays on CDP.
 * ~~opal-builder bundles the compiler twice~~ (done: linked modules live in
   `Opal.$$esm_registry` and each is linked once per build; opal-builder went
   from 3,276 to 1,680 kB).
@@ -601,8 +608,11 @@ Opal is Node.js-only: no Ruby file remains in `lib/`, and neither a
 Gemfile, gemspec, Rakefile nor rake task.
 
 Moved (Ruby that Opal programs load at runtime, same require paths):
-`lib/opal/regexp_{transpiler,anchors}.rb` to `opal/opal/` (corelib uses
-them), `lib/opal/source_map*.rb` (the opal-source-maps library) and
+`lib/opal/regexp_{transpiler,anchors}.rb` to `opal/runtime/` — the
+transpiler deduplicated to its JS form `opal/runtime/regexp_transpiler.mjs`
+(used by the compiler and, through `Opal.esm`, by `Regexp.new`; the Ruby
+copy in `opal/opal/` is gone), the anchors as `opal/runtime/regexp_anchors.rb`
+—, `lib/opal/source_map*.rb` (the opal-source-maps library) and
 `lib/opal/version.rb` to `stdlib/opal/`.
 
 Deleted: the Ruby compiler, parser, rewriters, builder, CLI, runners, cache,
@@ -628,8 +638,8 @@ Ported to Node.js before deleting:
   its output is identical to CRuby's), `tasks/release.mjs` (changelog from
   the GitHub releases, release preparation, asset upload)
 * the CI workflow (Node.js jobs: Linux on Node 22 and 24, macOS, Windows,
-  Chrome, Firefox ESR 128, Bun, Deno, Safari, strict mode, timezone, lint,
-  performance)
+  Chrome, Firefox (WebDriver BiDi), Bun, Deno, Safari, strict mode,
+  timezone, lint, performance)
 * AGENTS.md, README.md, HACKING.md and the docs. The guides for gem-based
   integrations (sprockets, rails, sinatra, roda, rspec, jquery, configuring
   gems) are marked as Opal 1.x.
@@ -643,7 +653,8 @@ Still possible with Ruby, but optional: RuboCop on the Ruby code
 Later:
 * ~~fix the Ruby compiler bugs kept for parity~~ (done, see "Phase 2 results")
 * ~~optimize the transform tree walks~~ (done: 3–9× faster, see BASELINE.md)
-* move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)
+* ~~move the Firefox runner to WebDriver BiDi (Firefox 129+ has no CDP)~~
+  (done 2026-10-11, see "Phase 3 progress")
 * ~~review the 47 filtered ruby/spec examples that pass in the full
   inverted run~~ (done 2026-10-05): 41 filters removed (they pass in normal
   runs with three random seeds, in isolation, and in other time zones).

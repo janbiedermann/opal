@@ -100,6 +100,8 @@ export default [
       sourceType: "module",
       globals: {
           ...globals.node,
+          // Node 22 exposes a global WebSocket, used by the Firefox runner
+          WebSocket: "readonly",
       },
     },
 

@@ -512,6 +512,7 @@ module ::Kernel
     end
 
     `block.$$is_lambda = false`
+    `block.$$p = nil`
     block
   end
 
