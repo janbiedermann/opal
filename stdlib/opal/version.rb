@@ -4,7 +4,7 @@ module Opal
   # WHEN RELEASING:
   # Remember to update RUBY_ENGINE_VERSION in opal/corelib/constants.rb and
   # VERSION in lib/opal/compiler/version.mjs too!
-  VERSION = '2.0.0dev'
+  VERSION = '3.0.0dev'
 
   # Only major and minor parts of version
   VERSION_MAJOR_MINOR = VERSION.split('.').first(2).join('.').freeze
