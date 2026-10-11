@@ -28,7 +28,6 @@ import { ROOT } from "./testing/common.mjs";
 const CODESIZE = join(ROOT, "tmp", "codesize");
 const ENTRIES = join(CODESIZE, "entries");
 const TERSER = join(ROOT, "node_modules", "terser", "main.js");
-const KEEP_FNAMES = /^\$\$/; // Opal's $$name functions, shown in backtraces
 
 const failures = [];
 const sh = (cmd, options = {}) => execSync(cmd, { cwd: ROOT, stdio: "inherit", shell: true, ...options });
@@ -60,9 +59,7 @@ function bundles() {
 
 async function uglify(source, mangle) {
   const { minify } = await import(pathToFileURL(TERSER).href);
-  const options = mangle
-    ? { compress: { keep_fnames: KEEP_FNAMES }, mangle: { keep_fnames: KEEP_FNAMES } }
-    : { compress: true, mangle: false };
+  const options = mangle ? { compress: true, mangle: true } : { compress: true, mangle: false };
   const result = await minify(source, options);
   return result.code;
 }

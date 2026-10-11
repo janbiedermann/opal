@@ -108,9 +108,10 @@ test("should compile undef calls", () => {
 });
 
 describe("method names", () => {
-  test("generates a named function for method", () => includes("def test_method; []; end", "function $$test_method()"));
-  test("when function name is reserved generates a valid named function", () => includes("def Array; []; end", "function $$Array()"));
-  test("when function name is not valid generates a name in a safe way", () => includes("def test_method?; []; end", "function $test_method$ques$1()"));
+  test("omits the function name when the body never uses it", () => includes("def test_method; []; end", "function ()"));
+  test("generates a named function for method", () => includes("def test_method; yield; end", "function $$test_method()"));
+  test("when function name is reserved generates a valid named function", () => includes("def Array; yield; end", "function $$Array()"));
+  test("when function name is not valid generates a name in a safe way", () => includes("def test_method?; yield; end", "function $test_method$ques$1()"));
 });
 
 test("debugger special method generates debugger keyword in javascript", () => {
