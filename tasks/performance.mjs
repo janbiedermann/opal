@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Tracks performance regressions (run by CI): compares the current checkout with a previous ref (GITHUB_BASE_REF
+// Tracks performance regressions (run by CI): compares the current checkout with a previous ref (GIT_BASE_REF
 // or master) by
 //   * the V8 optimization status of corelib methods
 //   * compiling Asciidoctor (a real-life Opal application), running it and
@@ -111,7 +111,7 @@ function stat(name) {
 
 function compare() {
   const thisRef = execSync("git describe --tags --always", { cwd: ROOT, encoding: "utf8" }).trim();
-  const ref = process.env.GITHUB_BASE_REF || "master";
+  const ref = process.env.GIT_BASE_REF || "master";
 
   console.log("\n* Preparing asciidoctor...");
   prepare();

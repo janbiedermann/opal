@@ -62,7 +62,13 @@ jobs:
           - name: performance
             permissive: true
             fetchdepth: '0'
+            base_ref: ${{ github.base_ref }}
             command: node tasks/performance.mjs
+          - name: codesize
+            permissive: true
+            fetchdepth: '0'
+            base_ref: ${{ github.base_ref }}
+            command: node tasks/codesize.mjs
 
     runs-on: ${{ matrix.combo.os || 'ubuntu-latest' }}
     continue-on-error: ${{ matrix.combo.permissive || false }}
@@ -106,4 +112,8 @@ jobs:
         if: ${{ matrix.combo.firefox }}
         run: |
           echo "MOZILLA_FIREFOX_BINARY=${{ steps.setup-firefox.outputs.firefox-path }}" >> $GITHUB_ENV
+      - name: set environment variables GIT_BASE_REF
+        if: ${{ matrix.combo.base_ref }}
+        run: |
+          echo "GIT_BASE_REF=${{ matrix.combo.base_ref }}" >> $GITHUB_ENV
       - run: ${{ matrix.combo.command }}
