@@ -77,10 +77,14 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `exe/opal -Rnodejs`.
 - Browser runners without a system browser: download one with
   `npx @puppeteer/browsers install chrome-headless-shell@stable` (or
-  `firefox@esr_128.14.0esr`) and point `GOOGLE_CHROME_BINARY` /
+  `firefox@stable`) and point `GOOGLE_CHROME_BINARY` /
   `MOZILLA_FIREFOX_BINARY` at it. As root, Chrome needs
-  `CHROME_OPTS=--no-sandbox`. Firefox 129+ dropped CDP, which the Firefox
-  runner uses, so use ESR 128. On a minimal EL10 system the browsers need
+  `CHROME_OPTS=--no-sandbox`. The Firefox runner drives Firefox directly
+  over WebDriver BiDi (Firefox >= 112; Firefox 129+ dropped CDP, BiDi is
+  its only remote protocol), the Chrome runner stays on CDP. A stray
+  Firefox left on the runner port (9333) keeps an active BiDi session and
+  later runs fail with "Maximum number of active sessions" - kill
+  lingering `firefox` processes. On a minimal EL10 system the browsers need
   `dnf install atk at-spi2-atk at-spi2-core libXcomposite libXdamage
   libXfixes libXrandr mesa-libgbm libxkbcommon alsa-lib gtk3 libXcursor`.
 - On a machine in UTC, time zone bugs stay hidden; run the ruby/spec suite in
