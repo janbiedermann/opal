@@ -60,6 +60,7 @@ function transformByReAndHash(regexp, transformer, hash) {
 // Ruby writes hex escapes with one or two digits (\x0, \x1F) and allows
 // \x{...}; JS only knows \xHH (exactly two digits) and \u{...}.
 function fixHexEscapes(regexp) {
+  if (regexp.indexOf("\\x") === -1) return regexp;
   return regexp
     .replace(/(?<!\\)((?:\\\\)*)\\x\{([0-9A-Fa-f]+)\}/g, "$1\\u{$2}")
     .replace(/(?<!\\)((?:\\\\)*)\\x([0-9A-Fa-f])(?![0-9A-Fa-f])/g, "$1\\x0$2");
@@ -99,6 +100,7 @@ const RUBY_ONLY_PROPERTIES = new Set(["Alnum", "Alpha", "Blank", "Cntrl", "Digit
 // Ruby writes a script name bare (\p{Han}); JS only accepts bare script names
 // with the v flag, so they become \p{Script=Han}. \p{^Han} is \P{Script=Han}.
 function fixUnicodeProperties(regexp) {
+  if (regexp.indexOf("\\p") === -1 && regexp.indexOf("\\P") === -1) return regexp;
   return regexp.replace(/(?<!\\)((?:\\\\)*)\\([pP])\{(\^)?([A-Za-z_]+)\}/g, (all, backslashes, letter, negated, name) => {
     if (JS_UNICODE_PROPERTIES.has(name) || RUBY_ONLY_PROPERTIES.has(name)) return all;
     const out = negated ? (letter === "p" ? "P" : "p") : letter;
