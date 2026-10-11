@@ -27,6 +27,34 @@ describe("hex escapes", () => {
   });
 });
 
+describe("unicode properties", () => {
+  it("writes a bare Ruby script name as \\p{Script=...}", () => {
+    assert.deepEqual(t("[\\p{Han}\\p{Hiragana}]+", ""), ["[\\p{Script=Han}\\p{Script=Hiragana}]+", "u"]);
+    assert.deepEqual(t("\\p{Latin}+", ""), ["\\p{Script=Latin}+", "u"]);
+  });
+
+  it("writes the negated form as \\P{Script=...}", () => {
+    assert.deepEqual(t("\\p{^Han}", ""), ["\\P{Script=Han}", "u"]);
+    assert.deepEqual(t("\\P{^Han}", ""), ["\\p{Script=Han}", "u"]);
+  });
+
+  it("leaves the properties JS knows and the \\p{...=...} form alone", () => {
+    for (const name of ["Word", "Alphabetic", "L", "Lu", "Lowercase_Letter", "White_Space", "Emoji"]) {
+      assert.deepEqual(t(`\\p{${name}}`, ""), [`\\p{${name}}`, "u"]);
+    }
+    assert.deepEqual(t("\\p{Script=Han}", ""), ["\\p{Script=Han}", "u"]);
+    assert.deepEqual(t("\\p{Script_Extensions=Han}", ""), ["\\p{Script_Extensions=Han}", "u"]);
+  });
+
+  it("leaves the POSIX names JS has no equivalent for as they were", () => {
+    assert.deepEqual(t("\\p{Alnum}", ""), ["\\p{Alnum}", "u"]);
+  });
+
+  it("leaves an escaped backslash before the p alone", () => {
+    assert.deepEqual(t("\\\\p{Han}", ""), ["\\\\p\\{Han\\}", "u"]);
+  });
+});
+
 describe("unicode escapes", () => {
   it("keeps the braces of \\u{...}", () => {
     assert.deepEqual(t("\\u{1F600}", ""), ["\\u{1F600}", "u"]);

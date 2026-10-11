@@ -65,6 +65,47 @@ function fixHexEscapes(regexp) {
     .replace(/(?<!\\)((?:\\\\)*)\\x([0-9A-Fa-f])(?![0-9A-Fa-f])/g, "$1\\x0$2");
 }
 
+// The \p{...} properties JS accepts with the u flag: the general categories,
+// their long names and the binary properties.
+const JS_UNICODE_PROPERTIES = new Set(Object.keys({
+  L: 1, Lu: 1, Ll: 1, Lt: 1, Lm: 1, Lo: 1, M: 1, Mn: 1, Mc: 1, Me: 1, N: 1, Nd: 1, Nl: 1, No: 1,
+  P: 1, Pc: 1, Pd: 1, Ps: 1, Pe: 1, Pi: 1, Pf: 1, Po: 1, S: 1, Sm: 1, Sc: 1, Sk: 1, So: 1,
+  Z: 1, Zs: 1, Zl: 1, Zp: 1, C: 1, Cc: 1, Cf: 1, Co: 1, Cs: 1, Cn: 1,
+  Cased_Letter: 1, Control: 1, Currency_Symbol: 1, Dash_Punctuation: 1, Decimal_Number: 1,
+  Enclosing_Mark: 1, Final_Punctuation: 1, Format: 1, Initial_Punctuation: 1, Letter: 1,
+  Letter_Number: 1, Line_Separator: 1, Lowercase_Letter: 1, Mark: 1, Math_Symbol: 1,
+  Modifier_Letter: 1, Modifier_Symbol: 1, Nonspacing_Mark: 1, Number: 1, Open_Punctuation: 1,
+  Other: 1, Other_Letter: 1, Other_Number: 1, Other_Punctuation: 1, Other_Symbol: 1,
+  Paragraph_Separator: 1, Private_Use: 1, Punctuation: 1, Separator: 1, Space_Separator: 1,
+  Spacing_Mark: 1, Surrogate: 1, Symbol: 1, Titlecase_Letter: 1, Unassigned: 1,
+  Uppercase_Letter: 1,
+  Alphabetic: 1, Any: 1, ASCII: 1, Assigned: 1, Bidi_Control: 1, Bidi_Mirrored: 1,
+  Case_Ignorable: 1, Cased: 1, Changes_When_Casefolded: 1, Changes_When_Casemapped: 1,
+  Changes_When_Lowercased: 1, Changes_When_NFKC_Casefolded: 1, Changes_When_Titlecased: 1,
+  Changes_When_Uppercased: 1, Default_Ignorable_Code_Point: 1, Deprecated: 1, Diacritic: 1,
+  Emoji: 1, Emoji_Component: 1, Emoji_Modifier: 1, Emoji_Modifier_Base: 1, Emoji_Presentation: 1,
+  Extended_Pictographic: 1, Hyphen: 1, ID_Continue: 1, ID_Start: 1, Ideographic: 1,
+  Join_Control: 1, Logical_Order_Exception: 1, Lowercase: 1, Math: 1,
+  Noncharacter_Code_Point: 1, Pattern_Syntax: 1, Pattern_White_Space: 1, Quotation_Mark: 1,
+  Radical: 1, Regional_Indicator: 1, Sentence_Break: 1, Soft_Dotted: 1,
+  Terminal_Punctuation: 1, Unified_Ideograph: 1, Uppercase: 1, Variation_Selector: 1,
+  White_Space: 1, Word: 1,
+}));
+
+// The POSIX class names Ruby accepts in \p{...} but JS doesn't; they stay as
+// they were (they were never supported).
+const RUBY_ONLY_PROPERTIES = new Set(["Alnum", "Alpha", "Blank", "Cntrl", "Digit", "Graph", "Lower", "Print", "Punct", "Space", "Upper", "XDigit"]);
+
+// Ruby writes a script name bare (\p{Han}); JS only accepts bare script names
+// with the v flag, so they become \p{Script=Han}. \p{^Han} is \P{Script=Han}.
+function fixUnicodeProperties(regexp) {
+  return regexp.replace(/(?<!\\)((?:\\\\)*)\\([pP])\{(\^)?([A-Za-z_]+)\}/g, (all, backslashes, letter, negated, name) => {
+    if (JS_UNICODE_PROPERTIES.has(name) || RUBY_ONLY_PROPERTIES.has(name)) return all;
+    const out = negated ? (letter === "p" ? "P" : "p") : letter;
+    return `${backslashes}\\${out}{Script=${name}}`;
+  });
+}
+
 function addFlag(flags, flag) {
   return flags.includes(flag) ? flags : flags + flag;
 }
@@ -130,7 +171,7 @@ export function transformRegexp(originalRegexp, flags, warn = () => {}) {
 
   flags = addFlag(flags, "u"); // always be unicode aware to handle surrogates correctly
 
-  originalRegexp = fixHexEscapes(originalRegexp);
+  originalRegexp = fixUnicodeProperties(fixHexEscapes(originalRegexp));
 
   // First step - easy replacements
   const regexp = transformByReAndHash(originalRegexp, ESCAPES_REGEXP, REGEXP_EQUIVALENTS);
