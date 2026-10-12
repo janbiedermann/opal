@@ -95,6 +95,14 @@ class ::String < `String`
       return boxed;
     }
 
+    let UTF8_ENCODING; // the Encoding::UTF-8 object, taken on first use
+
+    // Whether a string is UTF-8 encoded, which is what its bytes follow.
+    function is_utf8_encoded(string) {
+      if (UTF8_ENCODING === undefined) UTF8_ENCODING = #{::Encoding::UTF_8};
+      return string.binary_encoding === UTF8_ENCODING;
+    }
+
     // The whitespace of the default separator of String#split.
     function is_whitespace(code) {
       return code === 32 || code === 0xa0 || (code >= 9 && code <= 13);
@@ -2334,12 +2342,47 @@ class ::String < `String`
     %x{
       n = $coerce_to(n, Opal.Integer, 'to_int');
 
-      var result = 0,
-          length = self.length,
-          i = 0;
+      const string = self.valueOf(), length = string.length;
+      let result = 0, i = 0;
 
+      // The ASCII run, where the characters are the bytes of the string.
       for (; i < length; i++) {
-        result += self.charCodeAt(i);
+        const code = string.charCodeAt(i);
+        if (code > 0x7f) break;
+        result += code;
+      }
+
+      if (i < length) {
+        if (is_utf8_encoded(self)) {
+          // The UTF-8 bytes, summed without building the array of them.
+          let code_point;
+          for (; i < length; i++) {
+            code_point = string.charCodeAt(i);
+            if (code_point >= 0xD800 && code_point <= 0xDBFF) {
+              code_point = string.codePointAt(i);
+              if (code_point > 0xFFFF) i++;
+            }
+            if (code_point < 0x80) {
+              result += code_point;
+            } else if (code_point < 0x800) {
+              result += (code_point >> 0x6 | 0xC0) + (code_point & 0x3F | 0x80);
+            } else if (code_point < 0xD800) {
+              result += (code_point >> 0xC | 0xE0) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
+            } else if (code_point < 0xE000) {
+              result += 0xEF + 0xBF + 0xBD;
+            } else if (code_point < 0x10000) {
+              result += (code_point >> 0xC | 0xE0) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
+            } else {
+              result += (code_point >> 0x12 | 0xF0) + (code_point >> 0xC & 0x3F | 0x80) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
+            }
+          }
+        } else {
+          result = 0;
+          const bytes = #{binary_encoding.bytes(self)};
+          for (let j = 0, bytes_length = bytes.length; j < bytes_length; j++) {
+            result += bytes[j];
+          }
+        }
       }
 
       if (n <= 0) {

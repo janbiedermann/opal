@@ -193,37 +193,49 @@ end
 
 ::Encoding.register 'UTF-8', aliases: ['CP65001'], ascii: true do
   def bytes(str)
-    res = []
     %x{
-      let code_point;
-      for (const c of str) {
-        code_point = c.codePointAt(0);
+      const string = str.valueOf(), length = string.length;
+      // Array#push is a Ruby method, so the arrays are filled by index here.
+      if (!/[\u0080-\uFFFF]/.test(string)) {
+        // Every character of the string is one byte.
+        const bytes = new Array(length);
+        for (let i = 0; i < length; i++) bytes[i] = string.charCodeAt(i);
+        return bytes;
+      }
+      const bytes = [];
+      let count = 0, code_point;
+      for (let i = 0; i < length; i++) {
+        code_point = string.charCodeAt(i);
+        if (code_point >= 0xD800 && code_point <= 0xDBFF) {
+          code_point = string.codePointAt(i);
+          if (code_point > 0xFFFF) i++;
+        }
         if (code_point < 0x80) {
-          res.push(code_point);
+          bytes[count++] = code_point;
         } else if (code_point < 0x800) {
-          res.push(code_point >> 0x6 | 0xC0);
-          res.push(code_point & 0x3F | 0x80);
+          bytes[count++] = code_point >> 0x6 | 0xC0;
+          bytes[count++] = code_point & 0x3F | 0x80;
         } else if (code_point < 0xD800) {
-          res.push(code_point >> 0xC | 0xE0);
-          res.push(code_point >> 0x6 & 0x3F | 0x80);
-          res.push(code_point & 0x3F | 0x80);
+          bytes[count++] = code_point >> 0xC | 0xE0;
+          bytes[count++] = code_point >> 0x6 & 0x3F | 0x80;
+          bytes[count++] = code_point & 0x3F | 0x80;
         } else if (code_point < 0xE000) {
-          res.push(0xEF);
-          res.push(0xBF);
-          res.push(0xBD);
+          bytes[count++] = 0xEF;
+          bytes[count++] = 0xBF;
+          bytes[count++] = 0xBD;
         } else if (code_point < 0x10000) {
-          res.push(code_point >> 0xC | 0xE0);
-          res.push(code_point >> 0x6 & 0x3F | 0x80);
-          res.push(code_point & 0x3F | 0x80);
-        } else if (code_point < 0x110000) {
-          res.push(code_point >> 0x12 | 0xF0);
-          res.push(code_point >> 0xC & 0x3F | 0x80);
-          res.push(code_point >> 0x6 & 0x3F | 0x80);
-          res.push(code_point & 0x3F | 0x80);
+          bytes[count++] = code_point >> 0xC | 0xE0;
+          bytes[count++] = code_point >> 0x6 & 0x3F | 0x80;
+          bytes[count++] = code_point & 0x3F | 0x80;
+        } else {
+          bytes[count++] = code_point >> 0x12 | 0xF0;
+          bytes[count++] = code_point >> 0xC & 0x3F | 0x80;
+          bytes[count++] = code_point >> 0x6 & 0x3F | 0x80;
+          bytes[count++] = code_point & 0x3F | 0x80;
         }
       }
+      return bytes;
     }
-    res
   end
 
   def bytesize(str, index)
@@ -358,9 +370,21 @@ end
 
   def each_byte(str)
     %x{
-      let code_point;
-      for (const c of str) {
-        code_point = c.codePointAt(0);
+      const string = str.valueOf(), length = string.length;
+      let i = 0, code_point;
+      // The ASCII run, where every character is one byte.
+      for (; i < length; i++) {
+        code_point = string.charCodeAt(i);
+        if (code_point > 0x7f) break;
+        #{yield `code_point`};
+      }
+      if (i === length) return;
+      for (; i < length; i++) {
+        code_point = string.charCodeAt(i);
+        if (code_point >= 0xD800 && code_point <= 0xDBFF) {
+          code_point = string.codePointAt(i);
+          if (code_point > 0xFFFF) i++;
+        }
         if (code_point < 0x80) {
           #{yield `code_point`};
         } else if (code_point < 0x800) {
@@ -378,7 +402,7 @@ end
           #{yield `code_point >> 0xC | 0xE0`};
           #{yield `code_point >> 0x6 & 0x3F | 0x80`};
           #{yield `code_point & 0x3F | 0x80`};
-        } else if (code_point < 0x110000) {
+        } else {
           #{yield `code_point >> 0x12 | 0xF0`};
           #{yield `code_point >> 0xC & 0x3F | 0x80`};
           #{yield `code_point >> 0x6 & 0x3F | 0x80`};
@@ -929,15 +953,24 @@ end
 
 ::Encoding.register 'ASCII-8BIT', aliases: ['BINARY'], ascii: true do
   def bytes(str)
-    res = []
     %x{
-      for (let char_code, i = 0, length = str.length; i < length; i++) {
-        char_code = str.charCodeAt(i);
-        if (char_code > 0xff) res.push(char_code >> 8);
-        res.push(char_code & 0xff);
+      const string = str.valueOf(), length = string.length;
+      if (!/[\u0100-\uFFFF]/.test(string)) {
+        // Every character of the string is one byte, and Array#push is a Ruby
+        // method, so the array is filled by index.
+        const bytes = new Array(length);
+        for (let i = 0; i < length; i++) bytes[i] = string.charCodeAt(i);
+        return bytes;
       }
+      const bytes = [];
+      let count = 0, char_code;
+      for (let i = 0; i < length; i++) {
+        char_code = string.charCodeAt(i);
+        if (char_code > 0xff) bytes[count++] = char_code >> 8;
+        bytes[count++] = char_code & 0xff;
+      }
+      return bytes;
     }
-    res
   end
 
   def bytesize(str, index)
@@ -987,8 +1020,9 @@ end
 
   def each_byte(str)
     %x{
-      for (let char_code, i = 0, length = str.length; i < length; i++) {
-        char_code = str.charCodeAt(i);
+      const string = str.valueOf();
+      for (let char_code, i = 0, length = string.length; i < length; i++) {
+        char_code = string.charCodeAt(i);
         if (char_code > 0xff) #{yield `char_code >> 8`};
         #{yield `char_code & 0xff`};
       }
