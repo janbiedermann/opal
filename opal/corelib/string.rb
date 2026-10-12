@@ -1336,12 +1336,12 @@ class ::String < `String`
           const code = string.charCodeAt(i);
           if (code >= 0xD800 && code <= 0xDBFF) end++;
           else if (code === 13 && string.charCodeAt(end) === 10) end++;
-          #{yield `$str(string.slice(i, end), encoding)`};
+          #{yield `box_string(string.slice(i, end), encoding)`};
           i = end;
         }
         return self;
       }
-      for (const cluster of grapheme_segmenter().segment(string)) #{yield `$str(cluster.segment, encoding)`};
+      for (const cluster of grapheme_segmenter().segment(string)) #{yield `box_string(cluster.segment, encoding)`};
     }
 
     self
@@ -1474,7 +1474,7 @@ class ::String < `String`
     %x{
       const encoding = self.encoding, clusters = grapheme_clusters_of(self);
       const result = new Array(clusters.length);
-      for (let i = 0, length = clusters.length; i < length; i++) result[i] = $str(clusters[i], encoding);
+      for (let i = 0, length = clusters.length; i < length; i++) result[i] = box_string(clusters[i], encoding);
       return result;
     }
   end
