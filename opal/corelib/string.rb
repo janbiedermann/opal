@@ -1155,15 +1155,10 @@ class ::String < `String`
       if (char_class === null) return 0;
 
       // The character class is built above out of escaped characters, so it is
-      // already a valid JavaScript pattern. A character class always matches a
-      // whole character, so when the set has no astral character every match
-      // is one UTF-16 unit and the difference of the lengths is the number of
-      // matches; otherwise the matches are counted one by one.
+      // already a valid JavaScript pattern, and it always matches a whole
+      // character, so its matches are the characters of the sets.
       const string = self.valueOf();
       const regexp = new RegExp(char_class, 'gu');
-      if (!has_surrogates(char_class)) {
-        return string.length - string.replace(regexp, '').length;
-      }
       let count = 0;
       while (regexp.exec(string) !== null) { count++; }
       return count;
@@ -1181,7 +1176,15 @@ class ::String < `String`
       let char_class = char_class_from_char_sets(sets);
       if (char_class === null) return self;
 
-      return $str(self.valueOf().replace(new RegExp(char_class, 'gu'), ''), self.encoding);
+      // The pieces between the matches are joined, which costs less than
+      // letting the regular expression build the whole replaced string.
+      const string = self.valueOf(), regexp = new RegExp(char_class, 'gu');
+      let result = '', start = 0, match;
+      while ((match = regexp.exec(string)) !== null) {
+        result += string.slice(start, match.index);
+        start = match.index + match[0].length;
+      }
+      return box_string(result + string.slice(start), self.encoding);
     }
   end
 
@@ -2612,8 +2615,8 @@ class ::String < `String`
 
       if (from.length == 0) return self;
 
-      var i, in_range, c, ch, start, end, length;
-      var subs = {};
+      var i, in_range, c, ch, start, end, length, size;
+      var subs = new Map();
       var from_chars = [...from];
       var from_length = from_chars.length;
       var to_chars = [...to];
@@ -2633,7 +2636,7 @@ class ::String < `String`
 
       if (inverse) {
         for (i = 0; i < from_length; i++) {
-          subs[from_chars[i]] = true;
+          subs.set(from_chars[i].codePointAt(0), true);
         }
       } else {
         if (to_length > 0) {
@@ -2650,47 +2653,70 @@ class ::String < `String`
         }
 
         for (i = 0; i < from_length; i++) {
-          subs[from_chars[i]] = to_chars[i];
+          subs.set(from_chars[i].codePointAt(0), to_chars[i]);
         }
       }
 
       let new_str = '',
           sub;
 
+      // The characters are read by index and looked up by code point, which
+      // costs less than iterating them and indexing an object by their strings.
+      const string = self.valueOf(),
+            string_length = string.length;
+
       if (is_tr_s) {
         var last_substitute = null
-        for (const ch of self) {
-          sub = subs[ch]
+        for (i = 0; i < string_length; i++) {
+          c = string.charCodeAt(i);
+          size = 1;
+          if (c >= 0xD800 && c <= 0xDBFF && i + 1 < string_length &&
+              string.charCodeAt(i + 1) >= 0xDC00 && string.charCodeAt(i + 1) <= 0xDFFF) {
+            c = string.codePointAt(i);
+            size = 2;
+          }
+          sub = subs.get(c);
           if (inverse) {
-            if (sub == null) {
+            if (sub === undefined) {
               if (last_substitute == null) {
                 new_str = new_str + global_sub;
                 last_substitute = true;
               }
             } else {
+              ch = size === 1 ? string[i] : string.slice(i, i + 2);
               new_str = new_str + ch;
               last_substitute = null;
             }
           } else {
-            if (sub != null) {
+            if (sub !== undefined) {
               if (last_substitute == null || last_substitute !== sub) {
                 new_str = new_str + sub;
                 last_substitute = sub;
               }
             } else {
+              ch = size === 1 ? string[i] : string.slice(i, i + 2);
               new_str = new_str + ch;
               last_substitute = null;
             }
           }
+          i += size - 1;
         }
       } else {
-        for (const ch of self) {
-          sub = subs[ch];
-          if (inverse) {
-            new_str = new_str + (sub == null ? global_sub : ch);
-          } else {
-            new_str = new_str + (sub != null ? sub : ch);
+        for (i = 0; i < string_length; i++) {
+          c = string.charCodeAt(i);
+          size = 1;
+          if (c >= 0xD800 && c <= 0xDBFF && i + 1 < string_length &&
+              string.charCodeAt(i + 1) >= 0xDC00 && string.charCodeAt(i + 1) <= 0xDFFF) {
+            c = string.codePointAt(i);
+            size = 2;
           }
+          sub = subs.get(c);
+          if (inverse) {
+            new_str = new_str + (sub === undefined ? global_sub : (size === 1 ? string[i] : string.slice(i, i + 2)));
+          } else {
+            new_str = new_str + (sub !== undefined ? sub : (size === 1 ? string[i] : string.slice(i, i + 2)));
+          }
+          i += size - 1;
         }
       }
       return new_str;
