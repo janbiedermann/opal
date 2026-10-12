@@ -95,6 +95,51 @@ class ::String < `String`
       return boxed;
     }
 
+    // The whitespace of the default separator of String#split.
+    function is_whitespace(code) {
+      return code === 32 || code === 0xa0 || (code >= 9 && code <= 13);
+    }
+
+    // The pieces of a string between the runs of whitespace, which is what
+    // splitting it with the default separator regular expression gives.
+    function split_on_whitespace(string) {
+      const result = [];
+      let index = 0, length = string.length;
+      while (index < length && is_whitespace(string.charCodeAt(index))) index++;
+      let start = index;
+      while (index < length) {
+        if (is_whitespace(string.charCodeAt(index))) {
+          result.push(string.slice(start, index));
+          while (index < length && is_whitespace(string.charCodeAt(index))) index++;
+          start = index;
+        } else {
+          index++;
+        }
+      }
+      result.push(string.slice(start));
+      return result;
+    }
+
+    // The pieces of a string between the matches of a global regular
+    // expression, which is what String#split returns. It gives up with null for
+    // the cases split treats differently: a match of zero length, and capture
+    // groups, whose values split returns as pieces too.
+    function split_by_matches(string, regexp) {
+      const result = [];
+      let start = 0, match;
+      regexp.lastIndex = 0;
+      while ((match = regexp.exec(string)) !== null) {
+        if (match[0].length === 0 || match.length > 1) {
+          regexp.lastIndex = 0;
+          return null;
+        }
+        result.push(string.slice(start, match.index));
+        start = match.index + match[0].length;
+      }
+      result.push(string.slice(start));
+      return result;
+    }
+
     function first_char(str) {
       return String.fromCodePoint(str.codePointAt(0));
     }
@@ -2017,6 +2062,7 @@ class ::String < `String`
           match,
           match_count = 0,
           valid_result_length = 0,
+          split_whitespace = false,
           i, max;
 
       if (pattern.$$is_regexp) {
@@ -2034,13 +2080,22 @@ class ::String < `String`
           pattern = /[\f\n\r\t\v\u0020\u00a0]+/gmu;
           string = string.replace(/^[\f\n\r\t\v\u0020\u00a0]+/u, '');
           if (string.length === 0) return [];
+          split_whitespace = true;
         } else if (pattern.length > 0 && (starts_with_low_surrogate(pattern) || ends_with_high_surrogate(pattern))) {
           result = [string];
         }
       }
 
       if (!result) {
-        result = (pattern.length === 0) ? [...string] : string.split(pattern);
+        if (split_whitespace) {
+          result = split_on_whitespace(string);
+        } else if (pattern.$$is_regexp) {
+          result = split_by_matches(string, pattern) || string.split(pattern);
+        } else if (pattern.length === 0) {
+          result = [...string];
+        } else {
+          result = string.split(pattern);
+        }
 
         if (!(result.length === 1 && result[0] === string)) {
           // Only a regular expression can produce undefined for a group that
