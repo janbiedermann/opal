@@ -1296,7 +1296,7 @@ class ::String < `String`
         return #{enum_for :gsub, pattern};
       }
 
-      var result = '', match_data = nil, index = 0, match, _replacement;
+      var result = '', match_data = nil, last_match = null, index = 0, match, _replacement;
 
       if (pattern.$$is_regexp) {
         pattern = $global_regexp(pattern);
@@ -1305,22 +1305,34 @@ class ::String < `String`
         pattern = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'gmu');
       }
 
+      // The escapes of the replacement are resolved for every match, but a
+      // replacement holding none of them is used as it is.
+      var plain_replacement = (replacement !== undefined && replacement.$$is_string &&
+        !/[\\&`'+0-9]/.test(replacement)) ? replacement : null;
+
       var lastIndex, s = self.valueOf();
       while (true) {
         match = pattern.exec(s);
 
         if (match === null) {
-          #{$~ = nil}
           result = result + s.slice(index);
           break;
         }
 
-        match_data = #{::MatchData.new `pattern`, `match`};
+        if (replacement === undefined) {
+          // The block sees $~ of every match, so every one becomes a MatchData.
+          match_data = #{::MatchData.new `pattern`, `match`};
+        } else {
+          last_match = match;
+        }
 
         if (replacement === undefined) {
           lastIndex = pattern.lastIndex;
           _replacement = block(match[0]);
           pattern.lastIndex = lastIndex; // save and restore lastIndex
+        }
+        else if (plain_replacement !== null) {
+          _replacement = plain_replacement;
         }
         else if (replacement.$$is_hash) {
           _replacement = #{`replacement`[`match[0]`].to_s};
@@ -1359,7 +1371,11 @@ class ::String < `String`
         index = pattern.lastIndex;
       }
 
-      #{$~ = `match_data`}
+      if (match_data !== nil) {
+        #{$~ = `match_data`}
+      }
+      else if (last_match !== null) { #{$~ = ::MatchData.new(`pattern`, `last_match`)} }
+      else { #{$~ = nil} }
       return result;
     }
   end
@@ -1834,9 +1850,11 @@ class ::String < `String`
 
   def scan(pattern, no_matchdata: false, &block)
     %x{
-      var result = [],
-          match_data = nil,
-          match, match_o, captures;
+      var result = [], match_data = nil, last_match = null, match, match_o, captures;
+
+      // A block sees $~ of every match, without one only the last match is
+      // turned into a MatchData.
+      var every_match = #{!no_matchdata} && block !== nil;
 
       if (pattern.$$is_regexp) {
         pattern = $global_regexp(pattern);
@@ -1846,13 +1864,17 @@ class ::String < `String`
       }
 
       while ((match = pattern.exec(self)) != null) {
-        match_data = #{::MatchData.new `pattern`, `match`, no_matchdata: no_matchdata};
+        if (every_match) {
+          match_data = #{::MatchData.new `pattern`, `match`, no_matchdata: no_matchdata};
+        } else {
+          last_match = match;
+        }
         if (match.length === 1) {
           match_o = $str(match[0], self.encoding);
           if (block === nil) result.push(match_o);
           else Opal.yield1(block, match_o);
         } else {
-          captures = #{`match_data`.captures.map { |c| c ? `$str(c, self.encoding)` : c }};
+          captures = match.slice(1).map((group) => group === undefined ? nil : $str(group, self.encoding));
           if (block === nil) result.push(captures);
           else Opal.yield1(block, captures);
         }
@@ -1861,7 +1883,11 @@ class ::String < `String`
         }
       }
 
-      if (!no_matchdata) #{$~ = `match_data`};
+      if (#{!no_matchdata}) {
+        if (match_data !== nil) { #{$~ = `match_data`} }
+        else if (last_match !== null) { #{$~ = ::MatchData.new(`pattern`, `last_match`)} }
+        else { #{$~ = nil} }
+      }
 
       return (block !== nil ? self : result);
     }
@@ -1933,7 +1959,12 @@ class ::String < `String`
       } else {
         pattern = $coerce_to(pattern, Opal.String, 'to_str');
 
-        if (!pattern["$valid_encoding?"]()) #{raise ArgumentError, 'pattern has invalid encoding'};
+        // An ASCII-only pattern of an ASCII-compatible encoding is always
+        // valid, and valid_encoding? is a Ruby call.
+        var pattern_s = pattern.valueOf();
+        if ((pattern.encoding && pattern.encoding.ascii === false) || !/^[\x00-\x7F]*$/.test(pattern_s)) {
+          if (!pattern["$valid_encoding?"]()) #{raise ArgumentError, 'pattern has invalid encoding'};
+        }
         if (pattern === ' ') {
           pattern = /[\f\n\r\t\v\u0020\u00a0]+/gmu;
           string = string.replace(/^[\f\n\r\t\v\u0020\u00a0]+/u, '');
@@ -1947,8 +1978,12 @@ class ::String < `String`
         result = (pattern.length === 0) ? [...string] : string.split(pattern);
 
         if (!(result.length === 1 && result[0] === string)) {
-          while ((i = result.indexOf(undefined)) !== -1) {
-            result.splice(i, 1);
+          // Only a regular expression can produce undefined for a group that
+          // did not participate in a match.
+          if (pattern.$$is_regexp) {
+            while ((i = result.indexOf(undefined)) !== -1) {
+              result.splice(i, 1);
+            }
           }
 
           if (limit === 0) {
@@ -1988,7 +2023,19 @@ class ::String < `String`
           }
         }
       }
-      result = result.map((substr) => $str(substr, self.encoding));
+      // Box the pieces with the encoding resolved once instead of looking it
+      // up for every piece.
+      var encoding = self.encoding;
+      if (encoding && encoding.name && encoding.names) {
+        result = result.map((substr) => {
+          const str = new String(substr);
+          str.encoding = encoding;
+          str.binary_encoding = encoding;
+          return str;
+        });
+      } else {
+        result = result.map((substr) => $str(substr, encoding));
+      }
       if (block && block !== nil) {
         for (const substr of result) {#{yield `substr`}}
         return self;
@@ -2073,26 +2120,31 @@ class ::String < `String`
 
           replacement = $coerce_to(replacement, Opal.String, 'to_str').valueOf();
 
-          replacement = replacement.replace(/([\\]+)([0-9+&`'])/g, function (original, slashes, command) {
-            if (slashes.length % 2 === 0) {
-              return original;
-            }
-            switch (command) {
-            case "+":
-              for (var i = match.length - 1; i > 0; i--) {
-                if (match[i] !== undefined) {
-                  return slashes.slice(1) + match[i];
-                }
+          if (!/[\\&`'+0-9]/.test(replacement)) {
+            // A replacement holding none of the escapes is used as it is.
+            result = s.slice(0, match.index) + replacement + s.slice(match.index + match[0].length);
+          } else {
+            replacement = replacement.replace(/([\\]+)([0-9+&`'])/g, function (original, slashes, command) {
+              if (slashes.length % 2 === 0) {
+                return original;
               }
-              return '';
-            case "&": return slashes.slice(1) + match[0];
-            case "`": return slashes.slice(1) + s.slice(0, match.index);
-            case "'": return slashes.slice(1) + s.slice(match.index + match[0].length);
-            default:  return slashes.slice(1) + (match[command] || '');
-            }
-          }).replace(/\\\\/g, '\\');
+              switch (command) {
+              case "+":
+                for (var i = match.length - 1; i > 0; i--) {
+                  if (match[i] !== undefined) {
+                    return slashes.slice(1) + match[i];
+                  }
+                }
+                return '';
+              case "&": return slashes.slice(1) + match[0];
+              case "`": return slashes.slice(1) + s.slice(0, match.index);
+              case "'": return slashes.slice(1) + s.slice(match.index + match[0].length);
+              default:  return slashes.slice(1) + (match[command] || '');
+              }
+            }).replace(/\\\\/g, '\\');
 
-          result = s.slice(0, match.index) + replacement + s.slice(match.index + match[0].length);
+            result = s.slice(0, match.index) + replacement + s.slice(match.index + match[0].length);
+          }
         }
       }
 
