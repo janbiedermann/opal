@@ -103,6 +103,15 @@ class ::String < `String`
       return UTF8_ENCODING;
     }
 
+    let BINARY_ENCODING; // the Encoding::ASCII-8BIT object, taken on first use
+
+    // The Encoding::ASCII-8BIT object, taken once. Its strings hold one
+    // character per byte, so their byte indexes are their character indexes.
+    function binary8_encoding() {
+      if (BINARY_ENCODING === undefined) BINARY_ENCODING = #{::Encoding::ASCII_8BIT};
+      return BINARY_ENCODING;
+    }
+
     // Whether a string is UTF-8 encoded, which is what its bytes follow.
     function is_utf8_encoded(string) {
       return string.binary_encoding === utf8_encoding();
@@ -187,6 +196,36 @@ class ::String < `String`
         i++;
       }
       return idx;
+    }
+
+    // The byte index of the character starting at a UTF-16 index.
+    function utf8_byte_index(string, char_index) {
+      let bytes = 0;
+      for (let i = 0; i < char_index; i++) {
+        const code = string.codePointAt(i);
+        bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+        if (code > 0xffff) i++;
+      }
+      return bytes;
+    }
+
+    // The UTF-16 index of the character a byte offset lands on, -1 when the
+    // offset is not on a character boundary and -2 when it is past the string.
+    function utf8_char_index(string, byte_offset) {
+      let bytes = 0, i = 0, length = string.length, code;
+      while (bytes < byte_offset && i < length) {
+        code = string.codePointAt(i);
+        bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+        i += code > 0xffff ? 2 : 1;
+      }
+      if (bytes < byte_offset) return -2;
+      return bytes === byte_offset ? i : -1;
+    }
+
+    // Whether a UTF-16 index starts a character instead of its second unit.
+    function starts_a_character(string, index) {
+      const code = string.charCodeAt(index);
+      return code < 0xDC00 || code > 0xDFFF;
     }
 
     // multi byte character aware find_byte_index_of, args:
@@ -850,6 +889,28 @@ class ::String < `String`
         return offset + #{binary_encoding.bytesize(`str`, `index - 1`)};
       }
       search = $coerce_to(search, Opal.String, 'to_str').valueOf();
+
+      // A search string at a positive byte offset on a character boundary is
+      // found with indexOf, then the characters before it are measured.
+      if (search.length > 0 && offset >= 0) {
+        const string = self.valueOf(), encoding = self.binary_encoding;
+        if (encoding === utf8_encoding()) {
+          const char_index = utf8_char_index(string, offset);
+          if (char_index === -2) return nil;
+          if (char_index !== -1) {
+            let found = string.indexOf(search, char_index);
+            while (found !== -1 && !starts_a_character(string, found)) found = string.indexOf(search, found + 1);
+            if (found !== -1) return utf8_byte_index(string, found);
+            return nil;
+          }
+        } else if (encoding === binary8_encoding()) {
+          if (offset > string.length) return nil;
+          const found = string.indexOf(search, offset);
+          if (found !== -1) return found;
+          return nil;
+        }
+      }
+
       index = find_byte_index_of(self.valueOf(), search, search.$length(), offset, false);
       if (index === -1) return nil;
       return index;
@@ -894,6 +955,26 @@ class ::String < `String`
         return #{binary_encoding.bytesize(`self`, `index - 1`)};
       }
       search = $coerce_to(search, Opal.String, 'to_str').valueOf();
+
+      // The same lookup as byteindex, from the byte offset backwards.
+      if (search.length > 0 && offset >= 0) {
+        const string = self.valueOf(), encoding = self.binary_encoding;
+        if (encoding === utf8_encoding()) {
+          let char_limit = utf8_char_index(string, offset);
+          if (char_limit === -2) char_limit = string.length; // an offset past the end is its end
+          if (char_limit !== -1) {
+            let found = string.lastIndexOf(search, char_limit);
+            while (found !== -1 && !starts_a_character(string, found)) found = string.lastIndexOf(search, found - 1);
+            if (found !== -1) return utf8_byte_index(string, found);
+            return nil;
+          }
+        } else if (encoding === binary8_encoding()) {
+          const found = string.lastIndexOf(search, offset > string.length ? string.length : offset);
+          if (found !== -1) return found;
+          return nil;
+        }
+      }
+
       index = find_byte_index_of(self.valueOf(), search, search.$length(), offset, true);
       if (index === -1) return nil;
       return index;
