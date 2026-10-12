@@ -3,7 +3,7 @@
 // and repl_spec.rb.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -45,6 +45,24 @@ describe("CLI", () => {
     const run = spawnSync(process.execPath, [EXE, "--no-source-map", FILE], { encoding: "utf8" });
     assert.equal(run.stdout, "hi from opal!\n");
     assert.equal(run.status, 0);
+  });
+
+  test("the node runner runs the program with the NODE_EXE executable", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-node-exe-"));
+    try {
+      const wrapper = join(dir, "marked-node");
+      writeFileSync(wrapper, `#!/bin/sh\necho a marked node\nexec ${process.execPath} "$@"\n`);
+      chmodSync(wrapper, 0o755);
+      const run = spawnSync(process.execPath, [EXE, "--no-source-map", "-Rnode", FILE], { encoding: "utf8", env: { ...process.env, NODE_EXE: wrapper } });
+      assert.equal(run.stdout, "a marked node\nhi from opal!\n", run.stderr);
+      assert.equal(run.status, 0);
+      // (a missing one is reported instead of running the program with node)
+      const missing = spawnSync(process.execPath, [EXE, "--no-source-map", "-Rnode", FILE], { encoding: "utf8", env: { ...process.env, NODE_EXE: join(dir, "no-such-node") } });
+      assert.match(missing.stderr, /no-such-node \(from NODE_EXE\) not found/);
+      assert.notEqual(missing.status, 0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("a Node.js executable gets Node.js's platform and no source map", () => {

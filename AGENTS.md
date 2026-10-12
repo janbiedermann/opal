@@ -100,6 +100,8 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 - On a machine in UTC, time zone bugs stay hidden; run the ruby/spec suite in
   other zones too (`TZ=America/Los_Angeles`, `TZ=Pacific/Chatham`) after
   changes to Time, Date or DateTime.
+- The node runner runs the `node` found in `PATH`; `NODE_EXE` points it at
+  another Node.js binary and `NODE_OPTS` adds its arguments.
 - `node --test` on Node 22 does not accept a directory; pass the files
   (`node --test spec/lib/potch/*.test.mjs`).
 - If an agent discovers information that required significant setup time, condense
