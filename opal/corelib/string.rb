@@ -286,6 +286,36 @@ class ::String < `String`
       return GRAPHEME_SEGMENTER;
     }
 
+    // The characters that continue the grapheme cluster before them: the marks
+    // and the format characters (which include the prepend ones), the joiners
+    // of Hangul jamo and of regional indicators, the pictographs joining with a
+    // zero width joiner, and the few characters Intl.Segmenter segments like
+    // marks without being a mark, a format character or a pictograph. A string
+    // holding none of them has one grapheme cluster per character.
+    /* eslint-disable-next-line no-misleading-character-class */
+    const CLUSTER_JOINING = /[\p{M}\p{Nl}\p{Cf}\u0D4E\u0E33\u0EB3\uFF9E-\uFF9F\u1100-\u11FF\u{11000}-\u{11FFF}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\uA960-\uA97C\uD7B0-\uD7FF]|\p{Extended_Pictographic}/u;
+
+    // The grapheme clusters of a string, as plain JavaScript strings.
+    function grapheme_clusters_of(string) {
+      const result = [];
+      if (!has_lone_surrogate(string) && !CLUSTER_JOINING.test(string)) {
+        // One cluster per character, with the CR LF pair kept together.
+        let i = 0;
+        const length = string.length;
+        while (i < length) {
+          let end = i + 1;
+          const code = string.charCodeAt(i);
+          if (code >= 0xD800 && code <= 0xDBFF) end++;
+          else if (code === 13 && string.charCodeAt(end) === 10) end++;
+          result.push(string.slice(i, end));
+          i = end;
+        }
+        return result;
+      }
+      for (const cluster of grapheme_segmenter().segment(string)) result.push(cluster.segment);
+      return result;
+    }
+
     function char_class_from_char_sets(sets) {
       // Escape the characters of a generated character class. Only the few
       // characters that are special inside a class need a backslash, and doing
@@ -1268,8 +1298,26 @@ class ::String < `String`
 
   def each_grapheme_cluster(&block)
     return enum_for(:each_grapheme_cluster) { length } unless block_given?
-    clusters = `grapheme_segmenter().segment(self)`
-    `for (const cluster of clusters) #{yield `$str(cluster.segment, self.encoding)`}`
+
+    %x{
+      const string = self.valueOf(), encoding = self.encoding;
+      if (!has_lone_surrogate(string) && !CLUSTER_JOINING.test(string)) {
+        // One cluster per character, with the CR LF pair kept together.
+        let i = 0;
+        const length = string.length;
+        while (i < length) {
+          let end = i + 1;
+          const code = string.charCodeAt(i);
+          if (code >= 0xD800 && code <= 0xDBFF) end++;
+          else if (code === 13 && string.charCodeAt(end) === 10) end++;
+          #{yield `$str(string.slice(i, end), encoding)`};
+          i = end;
+        }
+        return self;
+      }
+      for (const cluster of grapheme_segmenter().segment(string)) #{yield `$str(cluster.segment, encoding)`};
+    }
+
     self
   end
 
@@ -1397,7 +1445,11 @@ class ::String < `String`
   def grapheme_clusters(&block)
     return each_grapheme_cluster(&block) if block_given?
 
-    each_grapheme_cluster.to_a
+    %x{
+      const encoding = self.encoding, result = [];
+      for (const cluster of grapheme_clusters_of(self)) result.push($str(cluster, encoding));
+      return result;
+    }
   end
 
   def gsub(pattern, replacement = undefined, &block)
