@@ -8,6 +8,36 @@ class ::String
     // Format Parser
     var eachDirectiveAndCount = Opal.PackUnpack.eachDirectiveAndCount;
 
+    // The format of unpack, without its comments, its whitespace and its
+    // NUL bytes. Formats are short, so scanning one costs less than the
+    // regular expressions that would remove those parts.
+    function clean_unpack_format(format, strip_comments) {
+      var i = 0, length = format.length, code, out = null;
+
+      for (; i < length; i++) {
+        code = format.charCodeAt(i);
+        if (code === 0 || code === 32 || (code >= 9 && code <= 13) || (strip_comments && code === 35)) {
+          out = format.slice(0, i);
+          break;
+        }
+      }
+
+      if (out === null) return format;
+
+      for (; i < length; i++) {
+        code = format.charCodeAt(i);
+        if (strip_comments && code === 35) {
+          // A comment ends before the next line break, which is whitespace.
+          while (i < length && format.charCodeAt(i) !== 10) i++;
+          i--;
+        } else if (code !== 0 && code !== 32 && (code < 9 || code > 13)) {
+          out += format[i];
+        }
+      }
+
+      return out;
+    }
+
     function flattenArray(callback) {
       return function(data) {
         var array = callback(data);
@@ -530,19 +560,21 @@ class ::String
 
     function readNTimesAndMerge(callback) {
       return function(buffer, count) {
-        var chunk = [], chunkData;
+        var chunk = [], chunkData, part, i, size;
 
         if (count === Infinity) {
           while (buffer.length > 0) {
             chunkData = callback(buffer);
             buffer = chunkData.rest;
-            chunk = chunk.concat(chunkData.chunk);
+            part = chunkData.chunk;
+            for (i = 0, size = part.length; i < size; i++) chunk[chunk.length] = part[i];
           }
         } else {
-          for (var i = 0; i < count; i++) {
+          for (i = 0; i < count; i++) {
             chunkData = callback(buffer);
             buffer = chunkData.rest;
-            chunk = chunk.concat(chunkData.chunk);
+            part = chunkData.chunk;
+            for (var j = 0, jsize = part.length; j < jsize; j++) chunk[chunk.length] = part[j];
           }
         }
 
@@ -718,11 +750,10 @@ class ::String
   def unpack(format, offset: 0)
     ::Kernel.raise ::ArgumentError, "offset can't be negative" if offset < 0
     format = ::Opal.coerce_to!(format, ::String, :to_str)
-                   .gsub(/#.*/, '')
-                   .gsub(/\s/, '')
-                   .delete("\000")
 
     %x{
+      format = clean_unpack_format(format, true);
+
       var output = [];
 
       // A very optimized handler for U*.
@@ -744,7 +775,7 @@ class ::String
 
       #{::Kernel.raise ::ArgumentError, 'offset outside of string' if offset > `buffer`.length}
 
-      buffer = buffer.slice(offset);
+      if (offset > 0) buffer = buffer.slice(offset);
 
 
       // optimization
@@ -755,7 +786,7 @@ class ::String
 
       function autocomplete(array, size) {
         while (array.length < size) {
-          array.push(nil);
+          array[array.length] = nil;
         }
 
         return array;
@@ -797,7 +828,14 @@ class ::String
           }
         }
 
-        output = output.concat(part);
+        // A handler may return a single value instead of a list of them.
+        if (Array.isArray(part)) {
+          for (var i = 0, size = part.length; i < size; i++) {
+            output[output.length] = part[i];
+          }
+        } else {
+          output[output.length] = part;
+        }
       });
 
       return output;
@@ -805,7 +843,53 @@ class ::String
   end
 
   def unpack1(format, offset: 0)
-    format = ::Opal.coerce_to!(format, ::String, :to_str).gsub(/\s/, '').delete("\000")
+    ::Kernel.raise ::ArgumentError, "offset can't be negative" if offset < 0
+    format = ::Opal.coerce_to!(format, ::String, :to_str)
+
+    %x{
+      format = clean_unpack_format(format, false);
+
+      // The first directive alone is what unpack1 reads, so a single value
+      // of a known size needs neither the parser nor the chunk readers.
+      var directive = format.charCodeAt(0), size = 0, signed = false, big_endian = false;
+
+      switch (directive) {
+        case 67: /* C */ size = 1; break;
+        case 99: /* c */ size = 1; signed = true; break;
+        case 83: /* S */ size = 2; break;
+        case 115: /* s */ size = 2; signed = true; break;
+        case 118: /* v */ size = 2; break;
+        case 86: /* V */ size = 4; break;
+        case 110: /* n */ size = 2; big_endian = true; break;
+        case 76: /* L */ size = 4; break;
+        case 108: /* l */ size = 4; signed = true; break;
+        case 78: /* N */ size = 4; big_endian = true; break;
+        case 81: /* Q */ size = 8; break;
+        case 113: /* q */ size = 8; signed = true; break;
+      }
+
+      if (size > 0) {
+        var bytes = self.$bytes();
+
+        #{::Kernel.raise ::ArgumentError, 'offset outside of string' if offset > `bytes`.length}
+
+        if (bytes.length - offset >= size) {
+          var value = 0, i;
+          if (big_endian) {
+            for (i = 0; i < size; i++) value = value * 256 + bytes[offset + i];
+          } else {
+            for (i = size - 1; i >= 0; i--) value = value * 256 + bytes[offset + i];
+          }
+          if (signed) {
+            var limit = Math.pow(2, size * 8);
+            if (value >= limit / 2) value -= limit;
+          }
+          return value;
+        }
+
+        return nil;
+      }
+    }
 
     unpack(format[0], offset: offset)[0]
   end
