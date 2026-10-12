@@ -70,6 +70,31 @@ class ::String < `String`
       return surrogate_range.test(str);
     }
 
+    // A JavaScript string is valid UTF-8 unless it holds a lone surrogate, so
+    // the encoders do not have to be asked when every surrogate is paired.
+    var lone_surrogate = new RegExp('[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|' +
+      '(^|[^\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]');
+
+    function has_lone_surrogate(str) {
+      return lone_surrogate.test(str);
+    }
+
+    // The encoding of a string, ready to be shared by the strings built out of
+    // its pieces, or null when it is not an Encoding object yet.
+    function resolved_encoding(string) {
+      const encoding = string.encoding;
+      return (encoding && encoding.name && encoding.names) ? encoding : null;
+    }
+
+    // Box a piece of a string with an encoding that is already resolved.
+    // Opal.str does the same with three calls and an encoding lookup.
+    function box_string(str, encoding) {
+      const boxed = new String(str);
+      boxed.encoding = encoding;
+      boxed.binary_encoding = encoding;
+      return boxed;
+    }
+
     function first_char(str) {
       return String.fromCodePoint(str.codePointAt(0));
     }
@@ -896,9 +921,21 @@ class ::String < `String`
 
   def chars(&block)
     return each_char(&block) if block_given?
-    # cannot use the shortcut [...self] here,
-    # because encoding must be set on each char
-    each_char.to_a
+    %x{
+      // Building the array here avoids the enumerator of each_char.to_a, and
+      // the encoding is resolved once for all of the pieces.
+      const encoding = resolved_encoding(self);
+      if (!encoding) return #{each_char.to_a};
+      const string = self.valueOf(), result = [];
+      if (!has_surrogates(string)) {
+        for (let i = 0, length = string.length; i < length; i++) {
+          result.push(box_string(string[i], encoding));
+        }
+      } else {
+        for (const c of string) { result.push(box_string(c, encoding)); }
+      }
+      return result;
+    }
   end
 
   def chomp(separator = $/)
@@ -991,8 +1028,19 @@ class ::String < `String`
   def codepoints(&block)
     # If a block is given, which is a deprecated form, works the same as each_codepoint.
     return each_codepoint(&block) if block_given?
-
-    each_codepoint.to_a
+    %x{
+      const string = self.valueOf();
+      if (string.encoding?.name === 'UTF-8' && !has_lone_surrogate(string)) {
+        const result = [];
+        for (let i = 0, length = string.length; i < length; i++) {
+          let code = string.charCodeAt(i);
+          if (code >= 0xD800 && code <= 0xDBFF) { code = string.codePointAt(i); i++; }
+          result.push(code);
+        }
+        return result;
+      }
+      return #{each_codepoint.to_a};
+    }
   end
 
   # concat - not supported, mutates string
@@ -1141,9 +1189,15 @@ class ::String < `String`
   def each_char(&block)
     return enum_for(:each_char) { size } unless block_given?
     %x{
-      for (let c of self) {
-        c = $str(c, self.encoding);
-        #{yield `c`};
+      const encoding = resolved_encoding(self), string = self.valueOf();
+      if (encoding && !has_surrogates(string)) {
+        for (let i = 0, length = string.length; i < length; i++) {
+          #{yield `box_string(string[i], encoding)`};
+        }
+      } else if (encoding) {
+        for (const c of string) { #{yield `box_string(c, encoding)`}; }
+      } else {
+        for (const c of string) { #{yield `$str(c, self.encoding)`}; }
       }
     }
     self
@@ -1151,8 +1205,19 @@ class ::String < `String`
 
   def each_codepoint(&block)
     return enum_for(:each_codepoint) { length } unless block_given?
-    raise ArgumentError, 'string has invalid encoding' unless valid_encoding?
-    `for (const c of self) #{yield `c.codePointAt(0)`}`
+    %x{
+      const string = self.valueOf();
+      if (string.encoding?.name === 'UTF-8' && !has_lone_surrogate(string)) {
+        for (let i = 0, length = string.length; i < length; i++) {
+          let code = string.charCodeAt(i);
+          if (code >= 0xD800 && code <= 0xDBFF) { code = string.codePointAt(i); i++; }
+          #{yield `code`};
+        }
+      } else {
+        #{raise ArgumentError, 'string has invalid encoding' unless valid_encoding?}
+        for (const c of string) { #{yield `c.codePointAt(0)`}; }
+      }
+    }
     self
   end
 
