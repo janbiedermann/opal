@@ -15,6 +15,12 @@ module ::Kernel
     # end
 
     format_string = `$coerce_to_or_raise(#{format_string}, Opal.String, "to_str")`
+
+    # A format without a % is the format string itself, which is what String#%
+    # gets most of the time. Looking for the % with indexOf costs less than
+    # the loop below, which reads the format one character at a time.
+    return `Opal.str(format_string.valueOf(), format_string.encoding)` if `format_string.indexOf('%') === -1`
+
     # rb_must_asciicompat(format_string)
     enc = format_string.encoding
     # format_string = format_string.dup.freeze
@@ -484,10 +490,8 @@ module ::Kernel
 
     while (pi += 1) < pe
       n = sym = nil
-      t = pi
-      while t < pe && `format_string[t] != '%'`
-        t += 1
-      end
+      t = `format_string.indexOf('%', pi)`
+      t = pe if t == -1
 
       raise(::ArgumentError, 'incomplete format specifier; use %%%% (double %%) instead') if t + 1 == pe
 
