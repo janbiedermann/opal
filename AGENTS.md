@@ -80,7 +80,11 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   compared with master; results in tmp/codesize), `node
   tasks/compiler-performance.mjs` (compiler speed on the potch corpus,
   compared with master; results in tmp/compiler_performance), `node
-  tasks/release.mjs` (changelog, release preparation).
+  tasks/string-performance.mjs` (ns per call of every `String` method on
+  ASCII, Japanese and ASCII-with-a-Japanese-last-character strings of 1, 5, 25
+  and 125 characters; the benchmark is
+  `benchmark/string-performance.rb`, `--methods=`/`--lengths=` limit the run),
+  `node tasks/release.mjs` (changelog, release preparation).
 - Browser runners without a system browser: download one with
   `npx @puppeteer/browsers install chrome-headless-shell@stable` (or
   `firefox@stable`) and point `GOOGLE_CHROME_BINARY` /
