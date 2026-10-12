@@ -310,22 +310,22 @@ class ::String < `String`
 
     // The grapheme clusters of a string, as plain JavaScript strings.
     function grapheme_clusters_of(string) {
-      const result = [];
       if (!has_lone_surrogate(string) && !CLUSTER_JOINING.test(string)) {
         // One cluster per character, with the CR LF pair kept together.
-        let i = 0;
-        const length = string.length;
+        const length = string.length, result = new Array(length);
+        let i = 0, count = 0;
         while (i < length) {
           let end = i + 1;
           const code = string.charCodeAt(i);
           if (code >= 0xD800 && code <= 0xDBFF) end++;
           else if (code === 13 && string.charCodeAt(end) === 10) end++;
-          result.push(string.slice(i, end));
+          result[count++] = string.slice(i, end);
           i = end;
         }
-        return result;
+        return count === length ? result : result.slice(0, count);
       }
-      for (const cluster of grapheme_segmenter().segment(string)) result.push(cluster.segment);
+      const result = [];
+      for (const cluster of grapheme_segmenter().segment(string)) result[result.length] = cluster.segment;
       return result;
     }
 
@@ -1472,8 +1472,9 @@ class ::String < `String`
     return each_grapheme_cluster(&block) if block_given?
 
     %x{
-      const encoding = self.encoding, result = [];
-      for (const cluster of grapheme_clusters_of(self)) result.push($str(cluster, encoding));
+      const encoding = self.encoding, clusters = grapheme_clusters_of(self);
+      const result = new Array(clusters.length);
+      for (let i = 0, length = clusters.length; i < length; i++) result[i] = $str(clusters[i], encoding);
       return result;
     }
   end
