@@ -97,10 +97,15 @@ class ::String < `String`
 
     let UTF8_ENCODING; // the Encoding::UTF-8 object, taken on first use
 
+    // The Encoding::UTF-8 object, taken once.
+    function utf8_encoding() {
+      if (UTF8_ENCODING === undefined) UTF8_ENCODING = #{::Encoding::UTF_8};
+      return UTF8_ENCODING;
+    }
+
     // Whether a string is UTF-8 encoded, which is what its bytes follow.
     function is_utf8_encoded(string) {
-      if (UTF8_ENCODING === undefined) UTF8_ENCODING = #{::Encoding::UTF_8};
-      return string.binary_encoding === UTF8_ENCODING;
+      return string.binary_encoding === utf8_encoding();
     }
 
     // The whitespace of the default separator of String#split.
@@ -1006,17 +1011,27 @@ class ::String < `String`
     return each_char(&block) if block_given?
     %x{
       // Building the array here avoids the enumerator of each_char.to_a, and
-      // the encoding is resolved once for all of the pieces.
+      // the encoding is resolved once for all of the pieces. Array#push is a
+      // Ruby method, so the array is filled by index.
       const encoding = resolved_encoding(self);
       if (!encoding) return #{each_char.to_a};
-      const string = self.valueOf(), result = [];
+      const string = self.valueOf(), length = string.length, result = new Array(length);
+      let count = 0;
       if (!has_surrogates(string)) {
-        for (let i = 0, length = string.length; i < length; i++) {
-          result.push(box_string(string[i], encoding));
-        }
+        for (let i = 0; i < length; i++) result[count++] = box_string(string[i], encoding);
       } else {
-        for (const c of string) { result.push(box_string(c, encoding)); }
+        for (let i = 0; i < length; i++) {
+          let end = i + 1;
+          const code = string.charCodeAt(i);
+          if (code >= 0xD800 && code <= 0xDBFF) {
+            const next = string.charCodeAt(end);
+            if (next >= 0xDC00 && next <= 0xDFFF) end++;
+          }
+          result[count++] = box_string(string.slice(i, end), encoding);
+          i = end - 1;
+        }
       }
+      if (count !== length) result.length = count;
       return result;
     }
   end
@@ -1112,14 +1127,17 @@ class ::String < `String`
     # If a block is given, which is a deprecated form, works the same as each_codepoint.
     return each_codepoint(&block) if block_given?
     %x{
-      const string = self.valueOf();
-      if (string.encoding?.name === 'UTF-8' && !has_lone_surrogate(string)) {
-        const result = [];
-        for (let i = 0, length = string.length; i < length; i++) {
+      const string = self.valueOf(), length = string.length;
+      if (self.encoding === utf8_encoding() && !has_lone_surrogate(string)) {
+        // Array#push is a Ruby method, so the array is filled by index.
+        const result = new Array(length);
+        let count = 0;
+        for (let i = 0; i < length; i++) {
           let code = string.charCodeAt(i);
           if (code >= 0xD800 && code <= 0xDBFF) { code = string.codePointAt(i); i++; }
-          result.push(code);
+          result[count++] = code;
         }
+        if (count !== length) result.length = count;
         return result;
       }
       return #{each_codepoint.to_a};
@@ -1290,7 +1308,7 @@ class ::String < `String`
     return enum_for(:each_codepoint) { length } unless block_given?
     %x{
       const string = self.valueOf();
-      if (string.encoding?.name === 'UTF-8' && !has_lone_surrogate(string)) {
+      if (self.encoding === utf8_encoding() && !has_lone_surrogate(string)) {
         for (let i = 0, length = string.length; i < length; i++) {
           let code = string.charCodeAt(i);
           if (code >= 0xD800 && code <= 0xDBFF) { code = string.codePointAt(i); i++; }
