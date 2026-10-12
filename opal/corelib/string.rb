@@ -60,6 +60,16 @@ class ::String < `String`
 
     var string_id_map = new Map();
 
+    // The only case in which the number of UTF-16 units of a string differs
+    // from its number of characters is a surrogate pair, so testing for one
+    // is what makes the JavaScript length usable as the character length.
+    var surrogate_range = new RegExp('[' + String.fromCharCode(0xd800) + '-' +
+      String.fromCharCode(0xdfff) + ']');
+
+    function has_surrogates(str) {
+      return surrogate_range.test(str);
+    }
+
     function first_char(str) {
       return String.fromCodePoint(str.codePointAt(0));
     }
@@ -207,6 +217,13 @@ class ::String < `String`
     }
 
     function char_class_from_char_sets(sets) {
+      // Escape the characters of a generated character class. Only the few
+      // characters that are special inside a class need a backslash, and doing
+      // it here keeps Regexp.escape, a Ruby method, out of the hot path.
+      function escape_char_class(chars) {
+        return chars.replace(/[\\^\-\]]/g, '\\$&');
+      }
+
       function explode_sequences_in_character_set(set_s) {
         var result = [],
             i, len = set_s.length,
@@ -286,11 +303,11 @@ class ::String < `String`
       }
 
       if (pos_intersection.length > 0) {
-        return '[' + #{::Regexp.escape(`pos_intersection.join('')`)} + ']';
+        return '[' + escape_char_class(pos_intersection.join('')) + ']';
       }
 
       if (neg_intersection.length > 0) {
-        return '[^' + #{::Regexp.escape(`neg_intersection.join('')`)} + ']';
+        return '[^' + escape_char_class(neg_intersection.join('')) + ']';
       }
 
       return null;
@@ -988,8 +1005,19 @@ class ::String < `String`
       let char_class = char_class_from_char_sets(sets);
       if (char_class === null) return 0;
 
-      let pattern_flags = $transform_regexp(char_class, 'gu');
-      return self.$length() - self.replace(new RegExp(pattern_flags[0], pattern_flags[1]), '').$length();
+      // The character class is built above out of escaped characters, so it is
+      // already a valid JavaScript pattern. A character class always matches a
+      // whole character, so when the set has no astral character every match
+      // is one UTF-16 unit and the difference of the lengths is the number of
+      // matches; otherwise the matches are counted one by one.
+      const string = self.valueOf();
+      const regexp = new RegExp(char_class, 'gu');
+      if (!has_surrogates(char_class)) {
+        return string.length - string.replace(regexp, '').length;
+      }
+      let count = 0;
+      while (regexp.exec(string) !== null) { count++; }
+      return count;
     }
   end
 
@@ -1004,8 +1032,7 @@ class ::String < `String`
       let char_class = char_class_from_char_sets(sets);
       if (char_class === null) return self;
 
-      let pattern_flags = $transform_regexp(char_class, 'gu');
-      return $str(self.replace(new RegExp(pattern_flags[0], pattern_flags[1]), ''), self.encoding);
+      return $str(self.valueOf().replace(new RegExp(char_class, 'gu'), ''), self.encoding);
     }
   end
 
@@ -1472,8 +1499,10 @@ class ::String < `String`
 
   def length
     %x{
+      const string = self.valueOf();
+      if (!has_surrogates(string)) return string.length;
       let length = 0;
-      for (let _c of self) { length++; }
+      for (const _c of string) { length++; }
       return length;
     }
   end
@@ -1977,8 +2006,7 @@ class ::String < `String`
       if (char_class === null) {
         return self;
       }
-      let pattern_flags = $transform_regexp('(' + char_class + ')\\1+', 'gu');
-      return $str(self.valueOf().replace(new RegExp(pattern_flags[0], pattern_flags[1]), '$1'), self.encoding);
+      return $str(self.valueOf().replace(new RegExp('(' + char_class + ')\\1+', 'gu'), '$1'), self.encoding);
     }
   end
 
