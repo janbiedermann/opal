@@ -60,20 +60,19 @@ class ::String < `String`
 
     var string_id_map = new Map();
 
-    // The only case in which the number of UTF-16 units of a string differs
-    // from its number of characters is a surrogate pair, so testing for one
-    // is what makes the JavaScript length usable as the character length.
-    var surrogate_range = new RegExp('[' + String.fromCharCode(0xd800) + '-' +
-      String.fromCharCode(0xdfff) + ']');
+    // Only a surrogate pair makes the JavaScript length differ from the number
+    // of characters, so testing for one is what makes it usable as the
+    // character length.
+    var surrogate_pair = new RegExp('[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]');
 
     function has_surrogates(str) {
-      return surrogate_range.test(str);
+      return surrogate_pair.test(str);
     }
 
     // A JavaScript string is valid UTF-8 unless it holds a lone surrogate, so
     // the encoders do not have to be asked when every surrogate is paired.
     var lone_surrogate = new RegExp('[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|' +
-      '(^|[^\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]');
+      '[^\\uD800-\\uDBFF][\\uDC00-\\uDFFF]|^[\\uDC00-\\uDFFF]');
 
     function has_lone_surrogate(str) {
       return lone_surrogate.test(str);
@@ -198,12 +197,17 @@ class ::String < `String`
       return idx;
     }
 
+    // The number of UTF-8 bytes of a character.
+    function utf8_bytes_of(code) {
+      return code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+    }
+
     // The byte index of the character starting at a UTF-16 index.
     function utf8_byte_index(string, char_index) {
       let bytes = 0;
       for (let i = 0; i < char_index; i++) {
         const code = string.codePointAt(i);
-        bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+        bytes += utf8_bytes_of(code);
         if (code > 0xffff) i++;
       }
       return bytes;
@@ -215,7 +219,7 @@ class ::String < `String`
       let bytes = 0, i = 0, length = string.length, code;
       while (bytes < byte_offset && i < length) {
         code = string.codePointAt(i);
-        bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+        bytes += utf8_bytes_of(code);
         i += code > 0xffff ? 2 : 1;
       }
       if (bytes < byte_offset) return -2;
@@ -2258,8 +2262,10 @@ class ::String < `String`
         if (pattern === ' ') {
           // The default separator is ASCII, so its encoding is always valid.
           pattern = /[\f\n\r\t\v\u0020\u00a0]+/gmu;
-          if (string.length > 0 && is_whitespace(string.charCodeAt(0))) {
-            string = string.replace(/^[\f\n\r\t\v\u0020\u00a0]+/u, '');
+          let lead = 0;
+          while (lead < string.length && is_whitespace(string.charCodeAt(lead))) lead++;
+          if (lead > 0) {
+            string = string.slice(lead);
             if (string.length === 0) return [];
           }
           split_whitespace = true;
@@ -2800,62 +2806,41 @@ class ::String < `String`
 
       // The characters are read by index and looked up by code point, which
       // costs less than iterating them and indexing an object by their strings.
+      // tr_s keeps the last substitute, which tr leaves null so that it always
+      // takes the substitutions.
       const string = self.valueOf(),
             string_length = string.length;
+      var last_substitute = null;
 
-      if (is_tr_s) {
-        var last_substitute = null
-        for (i = 0; i < string_length; i++) {
-          c = string.charCodeAt(i);
-          size = 1;
-          if (c >= 0xD800 && c <= 0xDBFF && i + 1 < string_length &&
-              string.charCodeAt(i + 1) >= 0xDC00 && string.charCodeAt(i + 1) <= 0xDFFF) {
-            c = string.codePointAt(i);
-            size = 2;
-          }
-          sub = subs.get(c);
-          if (inverse) {
-            if (sub === undefined) {
-              if (last_substitute == null) {
-                new_str = new_str + global_sub;
-                last_substitute = true;
-              }
-            } else {
-              ch = size === 1 ? string[i] : string.slice(i, i + 2);
-              new_str = new_str + ch;
-              last_substitute = null;
+      for (i = 0; i < string_length; i++) {
+        c = string.charCodeAt(i);
+        size = 1;
+        if (c >= 0xD800 && c <= 0xDBFF && i + 1 < string_length &&
+            string.charCodeAt(i + 1) >= 0xDC00 && string.charCodeAt(i + 1) <= 0xDFFF) {
+          c = string.codePointAt(i);
+          size = 2;
+        }
+        sub = subs.get(c);
+        if (inverse) {
+          if (sub === undefined) {
+            if (last_substitute == null) {
+              new_str += global_sub;
+              last_substitute = is_tr_s ? true : null;
             }
           } else {
-            if (sub !== undefined) {
-              if (last_substitute == null || last_substitute !== sub) {
-                new_str = new_str + sub;
-                last_substitute = sub;
-              }
-            } else {
-              ch = size === 1 ? string[i] : string.slice(i, i + 2);
-              new_str = new_str + ch;
-              last_substitute = null;
-            }
+            new_str += (size === 1 ? string[i] : string.slice(i, i + 2));
+            last_substitute = null;
           }
-          i += size - 1;
+        } else if (sub !== undefined) {
+          if (last_substitute == null || last_substitute !== sub) {
+            new_str += sub;
+            last_substitute = is_tr_s ? sub : null;
+          }
+        } else {
+          new_str += (size === 1 ? string[i] : string.slice(i, i + 2));
+          last_substitute = null;
         }
-      } else {
-        for (i = 0; i < string_length; i++) {
-          c = string.charCodeAt(i);
-          size = 1;
-          if (c >= 0xD800 && c <= 0xDBFF && i + 1 < string_length &&
-              string.charCodeAt(i + 1) >= 0xDC00 && string.charCodeAt(i + 1) <= 0xDFFF) {
-            c = string.codePointAt(i);
-            size = 2;
-          }
-          sub = subs.get(c);
-          if (inverse) {
-            new_str = new_str + (sub === undefined ? global_sub : (size === 1 ? string[i] : string.slice(i, i + 2)));
-          } else {
-            new_str = new_str + (sub !== undefined ? sub : (size === 1 ? string[i] : string.slice(i, i + 2)));
-          }
-          i += size - 1;
-        }
+        i += size - 1;
       }
       return new_str;
     }
