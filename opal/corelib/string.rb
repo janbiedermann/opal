@@ -69,20 +69,11 @@ class ::String < `String`
       return surrogate_pair.test(str);
     }
 
-    // A JavaScript string is valid UTF-8 unless it holds a lone surrogate, so
-    // the encoders do not have to be asked when every surrogate is paired.
-    var lone_surrogate = new RegExp('[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|' +
-      '[^\\uD800-\\uDBFF][\\uDC00-\\uDFFF]|^[\\uDC00-\\uDFFF]');
-
-    function has_lone_surrogate(str) {
-      return lone_surrogate.test(str);
-    }
-
     // The encoding of a string, ready to be shared by the strings built out of
     // its pieces, or null when it is not an Encoding object yet.
     function resolved_encoding(string) {
       const encoding = string.encoding;
-      return (encoding && encoding.name && encoding.names) ? encoding : null;
+      return encoding?.name && encoding.names ? encoding : null;
     }
 
     // Box a piece of a string with an encoding that is already resolved.
@@ -98,8 +89,7 @@ class ::String < `String`
 
     // The Encoding::UTF-8 object, taken once.
     function utf8_encoding() {
-      if (UTF8_ENCODING === undefined) UTF8_ENCODING = #{::Encoding::UTF_8};
-      return UTF8_ENCODING;
+      return UTF8_ENCODING ??= #{::Encoding::UTF_8};
     }
 
     let BINARY_ENCODING; // the Encoding::ASCII-8BIT object, taken on first use
@@ -107,8 +97,7 @@ class ::String < `String`
     // The Encoding::ASCII-8BIT object, taken once. Its strings hold one
     // character per byte, so their byte indexes are their character indexes.
     function binary8_encoding() {
-      if (BINARY_ENCODING === undefined) BINARY_ENCODING = #{::Encoding::ASCII_8BIT};
-      return BINARY_ENCODING;
+      return BINARY_ENCODING ??= #{::Encoding::ASCII_8BIT};
     }
 
     // Whether a string is UTF-8 encoded, which is what its bytes follow.
@@ -353,7 +342,7 @@ class ::String < `String`
 
     // The grapheme clusters of a string, as plain JavaScript strings.
     function grapheme_clusters_of(string) {
-      if (!has_lone_surrogate(string) && !CLUSTER_JOINING.test(string)) {
+      if (string.isWellFormed() && !CLUSTER_JOINING.test(string)) {
         // One cluster per character, with the CR LF pair kept together.
         const length = string.length, result = new Array(length);
         let i = 0, count = 0;
@@ -1213,7 +1202,7 @@ class ::String < `String`
     return each_codepoint(&block) if block_given?
     %x{
       const string = self.valueOf(), length = string.length;
-      if (self.encoding === utf8_encoding() && !has_lone_surrogate(string)) {
+      if (self.encoding === utf8_encoding() && string.isWellFormed()) {
         // Array#push is a Ruby method, so the array is filled by index.
         const result = new Array(length);
         let count = 0;
@@ -1396,7 +1385,7 @@ class ::String < `String`
     return enum_for(:each_codepoint) { length } unless block_given?
     %x{
       const string = self.valueOf();
-      if (self.encoding === utf8_encoding() && !has_lone_surrogate(string)) {
+      if (self.encoding === utf8_encoding() && string.isWellFormed()) {
         for (let i = 0, length = string.length; i < length; i++) {
           let code = string.charCodeAt(i);
           if (code >= 0xD800 && code <= 0xDBFF) { code = string.codePointAt(i); i++; }
@@ -1415,7 +1404,7 @@ class ::String < `String`
 
     %x{
       const string = self.valueOf(), encoding = self.encoding;
-      if (!has_lone_surrogate(string) && !CLUSTER_JOINING.test(string)) {
+      if (string.isWellFormed() && !CLUSTER_JOINING.test(string)) {
         // One cluster per character, with the CR LF pair kept together.
         let i = 0;
         const length = string.length;
@@ -2771,7 +2760,7 @@ class ::String < `String`
       if (from_chars[0] == '^' && from_chars.length > 1) {
         inverse = true;
         from_chars.shift();
-        global_sub = to_chars[to_length - 1]
+        global_sub = to_chars.at(-1)
         from_length -= 1;
       }
 
@@ -2790,7 +2779,7 @@ class ::String < `String`
 
         var length_diff = from_length - to_length;
         if (length_diff > 0) {
-          var pad_char = (to_length > 0 ? to_chars[to_length - 1] : '');
+          var pad_char = (to_length > 0 ? to_chars.at(-1) : '');
           for (i = 0; i < length_diff; i++) {
             to_chars.push(pad_char);
           }
