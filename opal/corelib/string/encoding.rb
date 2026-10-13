@@ -240,16 +240,17 @@ end
 
   def bytesize(str, index)
     %x{
+      const string = str.valueOf(), length = string.length;
       let code_point, size = 0;
-      for (const c of str) {
-        code_point = c.codePointAt(0);
-        if (code_point < 0x80) size++; // char is one byte long in UTF-8
-        else if (code_point < 0x800) size += 2; // char is two bytes long
-        // else if (code_point < 0xD800) size += 3; // char is three bytes long
-        // else if (code_point < 0xE000) size += 3; // for lone surrogates the 0xBD 0xBF 0xEF, 3 bytes, get inserted
-        else if (code_point < 0x10000) size += 3; // char is three bytes long
-        else if (code_point <= 0x110000) size += 4; // char is four bytes long
-        if (index-- <= 0) break;
+      for (let i = 0; i < length && index >= 0; i++, index--) {
+        code_point = string.charCodeAt(i);
+        if (code_point < 0x80) size++;
+        else if (code_point < 0x800) size += 2;
+        else if (code_point >= 0xD800 && code_point <= 0xDBFF) {
+          code_point = string.codePointAt(i);
+          if (code_point > 0xFFFF) { i++; size += 4; }
+          else size += 3;
+        } else size += 3;
       }
       return size;
     }
@@ -309,8 +310,10 @@ end
         if (length < 0) max = Infinity; // to end of string
         else if (length === 0) max = index + 1;
         else max = index + length;
-        for (const c of str) {
-          code_point = c.codePointAt(0);
+        const string = str.valueOf(), slen = string.length;
+        for (let ci = 0; ci < slen; ci++) {
+          code_point = string.codePointAt(ci);
+          if (code_point > 0xFFFF) ci++;
           if (code_point < 0x80) {
             if (idx >= index && idx <= max) result += SFCP(code_point);
             idx++;
