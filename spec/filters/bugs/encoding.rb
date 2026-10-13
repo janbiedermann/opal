@@ -184,7 +184,6 @@ opal_filter "Encoding" do
   fails "String#rjust with length, padding with width, pattern raises an Encoding::CompatibilityError if the encodings are incompatible" # NameError: uninitialized constant Encoding::EUC_JP
   fails "String#size returns the length of the new self after encoding is changed" # Expected 4 == 12 to be truthy but was false
   fails "String#valid_encoding? returns false if a valid String had an invalid character appended to it" # NotImplementedError: String#<< not supported. Mutable String methods are not supported in Opal.
-  fails "String#valid_encoding? returns false if self contains a character invalid in the associated encoding" # Expected true to be false
   fails "String#valid_encoding? returns true for all encodings self is valid in" # Expected true to be false
   fails "String#valid_encoding? returns true if an invalid string is appended another invalid one but both make a valid string" # Expected true to be false
   fails "The predefined global constant ARGV contains Strings encoded in locale Encoding" # NotImplementedError: NotImplementedError

@@ -270,7 +270,6 @@ opal_filter "String" do
   fails "String#upcase full Unicode case mapping adapted for Turkic languages upcases ASCII characters according to Turkic semantics" # ArgumentError: [String#upcase] wrong number of arguments (given 1, expected 0)
   fails "String#upcase! raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#upcase! not supported. Mutable String methods are not supported in Opal.)
   fails "String#upto raises Encoding::CompatibilityError when incompatible characters are given" # ArgumentError: unknown encoding name - EUC-JP
-  fails "String#valid_encoding? returns false if self is valid in one encoding, but invalid in the one it's tagged with" # Expected true to be false
   fails "String#valid_encoding? returns true for IBM720 encoding self is valid in" # ArgumentError: unknown encoding name - IBM720
   fails "String.new is called on subclasses" # Expected "subclass" == "" to be truthy but was false
   fails "String.new returns a binary String"
