@@ -1797,8 +1797,30 @@ class ::String < `String`
   end
 
   def lines(separator = $/, chomp: false, &block)
-    e = each_line(separator, chomp: chomp, &block)
-    block ? self : e.to_a
+    return each_line(separator, chomp: chomp, &block) if block_given?
+
+    %x{
+      if (separator === nil) return [self];
+
+      separator = $coerce_to(separator, Opal.String, 'to_str');
+
+      const string = self.valueOf(), sep = separator.valueOf();
+
+      // The paragraph splitting and the surrogate edge cases stay with each_line.
+      if (sep.length === 0 || starts_with_low_surrogate(sep) || ends_with_high_surrogate(sep))
+        return #{each_line(`separator`, chomp: chomp).to_a};
+
+      const encoding = self.encoding, result = [];
+      let start = 0, index, value;
+      while ((index = string.indexOf(sep, start)) !== -1) {
+        value = string.slice(start, index + sep.length);
+        if (chomp) value = #{`value`.chomp(`separator`)};
+        result.push(box_string(value, encoding));
+        start = index + sep.length;
+      }
+      if (start < string.length) result.push(box_string(string.slice(start), encoding));
+      return result;
+    }
   end
 
   def ljust(width, padstr = ' ')
@@ -2233,19 +2255,24 @@ class ::String < `String`
       } else {
         pattern = $coerce_to(pattern, Opal.String, 'to_str');
 
-        // An ASCII-only pattern of an ASCII-compatible encoding is always
-        // valid, and valid_encoding? is a Ruby call.
-        var pattern_s = pattern.valueOf();
-        if ((pattern.encoding && pattern.encoding.ascii === false) || !/^[\x00-\x7F]*$/.test(pattern_s)) {
-          if (!pattern["$valid_encoding?"]()) #{raise ArgumentError, 'pattern has invalid encoding'};
-        }
         if (pattern === ' ') {
+          // The default separator is ASCII, so its encoding is always valid.
           pattern = /[\f\n\r\t\v\u0020\u00a0]+/gmu;
-          string = string.replace(/^[\f\n\r\t\v\u0020\u00a0]+/u, '');
-          if (string.length === 0) return [];
+          if (string.length > 0 && is_whitespace(string.charCodeAt(0))) {
+            string = string.replace(/^[\f\n\r\t\v\u0020\u00a0]+/u, '');
+            if (string.length === 0) return [];
+          }
           split_whitespace = true;
-        } else if (pattern.length > 0 && (starts_with_low_surrogate(pattern) || ends_with_high_surrogate(pattern))) {
-          result = [string];
+        } else {
+          // An ASCII-only pattern of an ASCII-compatible encoding is always
+          // valid, and valid_encoding? is a Ruby call.
+          var pattern_s = pattern.valueOf();
+          if ((pattern.encoding && pattern.encoding.ascii === false) || !/^[\x00-\x7F]*$/.test(pattern_s)) {
+            if (!pattern["$valid_encoding?"]()) #{raise ArgumentError, 'pattern has invalid encoding'};
+          }
+          if (pattern.length > 0 && (starts_with_low_surrogate(pattern) || ends_with_high_surrogate(pattern))) {
+            result = [string];
+          }
         }
       }
 
@@ -2306,18 +2333,20 @@ class ::String < `String`
           }
         }
       }
-      // Box the pieces with the encoding resolved once instead of looking it
-      // up for every piece.
+      // Box the pieces in place, with the encoding resolved once instead of
+      // looking it up for every piece.
       var encoding = self.encoding;
       if (encoding && encoding.name && encoding.names) {
-        result = result.map((substr) => {
-          const str = new String(substr);
+        for (let i = 0, length = result.length; i < length; i++) {
+          const str = new String(result[i]);
           str.encoding = encoding;
           str.binary_encoding = encoding;
-          return str;
-        });
+          result[i] = str;
+        }
       } else {
-        result = result.map((substr) => $str(substr, encoding));
+        for (let i = 0, length = result.length; i < length; i++) {
+          result[i] = $str(result[i], encoding);
+        }
       }
       if (block && block !== nil) {
         for (const substr of result) {#{yield `substr`}}
@@ -2503,12 +2532,40 @@ class ::String < `String`
           return $1 ? $0.toUpperCase() : $0.toLowerCase();
         });
       }
-      let str = "", cu;
-      for (const c of self) {
-          cu = c.toUpperCase();
-          str = str + ((cu == c) ? c.toLowerCase() : cu);
+      // The runs of ASCII letters are swapped at once. A run of other
+      // characters is kept when its case mapping is the identity, and only a
+      // run that changes is swapped character by character.
+      const string = self.valueOf();
+      let swapped = '', start = 0, i = 0, length = string.length, code;
+      while (i < length) {
+        code = string.charCodeAt(i);
+        if (code >= 0x61 && code <= 0x7a) {
+          do { i++; } while (i < length && (code = string.charCodeAt(i)) >= 0x61 && code <= 0x7a);
+          swapped += string.slice(start, i).toUpperCase();
+          start = i;
+        } else if (code >= 0x41 && code <= 0x5a) {
+          do { i++; } while (i < length && (code = string.charCodeAt(i)) >= 0x41 && code <= 0x5a);
+          swapped += string.slice(start, i).toLowerCase();
+          start = i;
+        } else if (code <= 0x7f) {
+          i++;
+        } else {
+          if (start < i) swapped += string.slice(start, i);
+          const run_start = i;
+          do { i++; } while (i < length && string.charCodeAt(i) > 0x7f);
+          const run = string.slice(run_start, i);
+          if (run.toUpperCase() === run && run.toLowerCase() === run) swapped += run;
+          else {
+            for (const c of run) {
+              const upper_cased = c.toUpperCase();
+              swapped += upper_cased === c ? c.toLowerCase() : upper_cased;
+            }
+          }
+          start = i;
+        }
       }
-      return $str(str, self.encoding);
+      if (start < length) swapped += string.slice(start);
+      return $str(swapped, self.encoding);
     }
   end
 

@@ -185,6 +185,19 @@ end
     return enc.scrubbing_decoder;
   }
 
+  // Whether a UTF-16 string holds a surrogate that is not part of a pair.
+  function has_lone_surrogates(string) {
+    for (let i = 0, length = string.length, code; i < length; i++) {
+      code = string.charCodeAt(i);
+      if (code >= 0xD800 && code <= 0xDBFF) {
+        const next = i + 1 < length ? string.charCodeAt(i + 1) : 0;
+        if (next >= 0xDC00 && next <= 0xDFFF) i++;
+        else return true;
+      } else if (code >= 0xDC00 && code <= 0xDFFF) return true;
+    }
+    return false;
+  }
+
   function validating_decoder(enc, label) {
     if (!enc.validating_decoder) enc.validating_decoder = new TextDecoder(label, { fatal: true });
     return enc.validating_decoder;
@@ -461,6 +474,15 @@ end
 
   def scrub(str, replacement, &block)
     %x{
+      // The bytes of a String are always valid UTF-8, except for the lone
+      // surrogates, so a String without them is returned as it is.
+      if (block === nil && (replacement === nil || replacement === undefined) && !has_lone_surrogates(str.valueOf())) {
+        const scrubbed = new String(str);
+        scrubbed.encoding = self;
+        scrubbed.binary_encoding = self;
+        return scrubbed;
+      }
+
       let result = scrubbing_decoder(self, 'utf-8').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
@@ -476,6 +498,10 @@ end
 
   def valid_encoding?(str)
     %x{
+      // The bytes of a String are always valid UTF-8, only the lone surrogates
+      // need the decoder.
+      if (!has_lone_surrogates(str.valueOf())) return true;
+
       try { validating_decoder(self, 'utf-8').decode(new Uint8Array(self.$bytes(str))); }
       catch { return false; }
       return true;
