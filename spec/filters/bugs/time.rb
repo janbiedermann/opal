@@ -30,7 +30,6 @@ opal_filter "Time" do
   fails "Time#getlocal with a timezone argument returns a Time in the timezone" # NoMethodError: undefined method `getlocal' for 2000-01-01 12:00:00 UTC
   fails "Time#getlocal with a timezone argument subject's class implements .find_timezone method calls .find_timezone to build a time object if passed zone name as a timezone argument" # NoMethodError: undefined method `getlocal' for 2000-01-01 12:00:00 UTC
   fails "Time#getlocal with a timezone argument subject's class implements .find_timezone method does not call .find_timezone if passed any not string/numeric/timezone timezone argument" # Expected TypeError (/can't convert \w+ into an exact number/) but got: NoMethodError (undefined method `getlocal' for 2000-01-01 12:00:00 UTC)
-  fails "Time#gmtime converts self to UTC, modifying the receiver" # Expected 2007-01-09 05:00:00 UTC == 2007-01-09 12:00:00 UTC to be truthy but was false
   fails "Time#inspect omits trailing zeros from microseconds" # Expected "2007-11-01 15:25:00 UTC" == "2007-11-01 15:25:00.1 UTC" to be truthy but was false
   fails "Time#inspect preserves microseconds" # Expected "2007-11-01 15:25:00 UTC" == "2007-11-01 15:25:00.123456 UTC" to be truthy but was false
   fails "Time#inspect preserves nanoseconds" # Expected "2007-11-01 15:25:00 UTC" == "2007-11-01 15:25:00.123456789 UTC" to be truthy but was false
@@ -70,7 +69,6 @@ opal_filter "Time" do
   fails "Time#to_i rounds fractional seconds toward zero" # Expected -315619200 == -315619199 to be truthy but was false
   fails "Time#tv_sec rounds fractional seconds toward zero" # Expected -315619200 == -315619199 to be truthy but was false
   fails "Time#usec returns a positive value for dates before the epoch" # Expected 0 == 404240 to be truthy but was false
-  fails "Time#utc converts self to UTC, modifying the receiver" # Expected 2007-01-09 05:00:00 UTC == 2007-01-09 12:00:00 UTC to be truthy but was false
   fails "Time#utc? does not treat time with +00:00 offset as UTC" # Expected true == false to be truthy but was false
   fails "Time#utc? does not treat time with 0 offset as UTC" # Expected true == false to be truthy but was false
   fails "Time#utc? does treat time with 'UTC' offset as UTC" # NoMethodError: undefined method `localtime' for 2023-09-20 22:52:11 +0200
@@ -89,7 +87,6 @@ opal_filter "Time" do
   fails "Time.at passed Numeric passed Rational returns Time with correct nanoseconds" # Expected 0 == 539759 to be truthy but was false
   fails "Time.at passed Numeric roundtrips a Rational produced by #to_r" # NoMethodError: undefined method `to_r' for 2022-12-07 05:21:14 +0100
   fails "Time.at passed [Time, Numeric, format] :microsecond format treats second argument as microseconds" # ArgumentError: [Time.at] wrong number of arguments (given 3, expected -2)
-  fails "Time.at passed [Time, Numeric, format] :millisecond format treats second argument as milliseconds" # ArgumentError: [Time.at] wrong number of arguments (given 3, expected -2)
   fails "Time.at passed [Time, Numeric, format] :nanosecond format treats second argument as nanoseconds" # ArgumentError: [Time.at] wrong number of arguments (given 3, expected -2)
   fails "Time.at passed [Time, Numeric, format] :nsec format treats second argument as nanoseconds" # ArgumentError: [Time.at] wrong number of arguments (given 3, expected -2)
   fails "Time.at passed [Time, Numeric, format] :usec format treats second argument as microseconds" # ArgumentError: [Time.at] wrong number of arguments (given 3, expected -2)
@@ -112,7 +109,6 @@ opal_filter "Time" do
   fails "Time.new raises an ArgumentError for out of range month" # Expected ArgumentError (/(mon|argument) out of range/) but got: ArgumentError (month out of range: 16)
   fails "Time.new raises an ArgumentError for out of range second" # Expected ArgumentError (argument out of range) but got: ArgumentError (sec out of range: -1)
   fails "Time.new uses the 'CET' timezone with TZ=Europe/Amsterdam in 1970" # Expected [0, 0, 0, 16, 5, 1970, 6, 136, false, "Central European Standard Time"] == [0, 0, 0, 16, 5, 1970, 6, 136, false, "CET"] to be truthy but was false
-  fails "Time.new uses the local timezone" # Expected 3600 == -28800 to be truthy but was false
   fails "Time.new with a timezone argument #name method cannot marshal Time if #name method isn't implemented" # ArgumentError: Opal doesn't support other types for a timezone argument than Integer and String
   fails "Time.new with a timezone argument #name method uses the optional #name method for marshaling" # ArgumentError: Opal doesn't support other types for a timezone argument than Integer and String
   fails "Time.new with a timezone argument :in keyword argument allows omitting minor arguments" # ArgumentError: Opal doesn't support other types for a timezone argument than Integer and String
@@ -165,7 +161,6 @@ opal_filter "Time" do
   fails "Time.now :in keyword argument could be a timezone object" # ArgumentError: [Time.now] wrong number of arguments (given 1, expected 0)
   fails "Time.now :in keyword argument returns a Time with UTC offset specified as a single letter military timezone" # ArgumentError: [Time.now] wrong number of arguments (given 1, expected 0)
   fails "Time.now has at least microsecond precision" # NoMethodError: undefined method `nsec' for 2022-12-07 05:21:38 +0100
-  fails "Time.now uses the local timezone" # Expected 3600 == -28800 to be truthy but was false
   fails "Time.rfc2822 parses RFC-2822 strings" # NoMethodError: undefined method `rfc2822' for Time
   fails "Time.rfc2822 parses RFC-822 strings" # NoMethodError: undefined method `rfc2822' for Time
   fails "Time.rfc822 parses RFC-2822 strings" # NoMethodError: undefined method `rfc2822' for Time

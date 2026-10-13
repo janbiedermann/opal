@@ -33,7 +33,6 @@ opal_filter "DateTime" do
   fails "DateTime.minute adds 60 to negative minutes" # ArgumentError: min out of range: -20
   fails "DateTime.minute raises an error for Float" # Expected ArgumentError but no exception was raised (#<DateTime:0x6922 @date=-4712-01-01 00:05:00 UTC, @start=2299161> was returned)
   fails "DateTime.minute raises an error for Rational" # Expected ArgumentError but no exception was raised (#<DateTime:0x6618 @date=-4712-01-01 02:00:00 UTC, @start=2299161> was returned)
-  fails "DateTime.now grabs the local timezone" # Expected "+01:00" == "-08:00" to be truthy but was false
   fails "DateTime.parse YYYY-MM-DDTHH:MM:SS format throws an argument error for invalid day values" # Expected ArgumentError but no exception was raised (#<DateTime:0x8d76 @date=NaN-NaN-NaN NaN:NaN:NaN -NaNNaN, @start=2299161> was returned)
   fails "DateTime.parse YYYY-MM-DDTHH:MM:SS format throws an argument error for invalid hour values" # Expected ArgumentError but no exception was raised (#<DateTime:0x88ea @date=NaN-NaN-NaN NaN:NaN:NaN -NaNNaN, @start=2299161> was returned)
   fails "DateTime.parse YYYY-MM-DDTHH:MM:SS format throws an argument error for invalid minute values" # Expected ArgumentError but no exception was raised (#<DateTime:0x9076 @date=NaN-NaN-NaN NaN:NaN:NaN -NaNNaN, @start=2299161> was returned)
