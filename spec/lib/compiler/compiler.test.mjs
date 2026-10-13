@@ -114,6 +114,16 @@ describe("method names", () => {
   test("when function name is not valid generates a name in a safe way", () => includes("def test_method?; yield; end", "function $test_method$ques$1()"));
 });
 
+describe("the $$direct block marker", () => {
+  const yields = "def m; yield [1, 2]; end\nm";
+  test("marks a block with a top level mlhs argument", () => includes(`${yields} { |(a, b)| a }`, "$$has_top_level_mlhs_arg: true", "$$direct: false"));
+  test("marks a block with a trailing comma", () => includes(`${yields} { |a,| a }`, "$$has_trailing_comma_in_args: true", "$$direct: false"));
+  test("marks a block that returns", () => includes(`${yields} { return 1 }`, "$$ret:", "$$direct: false"));
+  test("marks a lambda that returns", () => includes(`${yields}(&->(a) { return a })`, "$$ret:", "$$direct: false"));
+  test("leaves a plain block unmarked", () => excludes(`${yields} { |a| a }`, "$$direct"));
+  test("leaves a block with two parameters unmarked", () => excludes(`${yields} { |a, b| a }`, "$$direct"));
+});
+
 test("debugger special method generates debugger keyword in javascript", () => {
   includes("debugger", "debugger");
   excludes("debugger", "$debugger");

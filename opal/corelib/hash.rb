@@ -389,8 +389,11 @@ class ::Hash < `Map`
     return enum_for(:each) { size } unless block
 
     %x{
+      // A block with two parameters gets the key and the value directly, which
+      // is what Opal.yield1 would end up doing with the pair array anyway.
+      const pair = block.length === 2 && block.$$direct === true;
       return $hash_each(self, self, function(key, value) {
-        $yield1(block, [key, value]);
+        pair ? block(key, value) : $yield1(block, [key, value]);
         return [false, self];
       });
     }

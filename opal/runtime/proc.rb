@@ -15,6 +15,32 @@ module ::Opal
         throw e;
       }
     }
+
+    // The paths of Opal.yield1 for the blocks that expand the yielded value
+    // into their parameters, or that catch a return. Keeping them out of yield1
+    // keeps it small enough for its callers to inline the fast path.
+    function yield1_expanding(block, arg) {
+      var has_mlhs = block.$$has_top_level_mlhs_arg,
+          has_trailing_comma = block.$$has_trailing_comma_in_args,
+          is_returning_lambda = block.$$is_lambda && block.$$ret;
+
+      if (block.length > 1 || ((has_mlhs || has_trailing_comma) && block.length === 1)) {
+        arg = Opal.to_ary(arg);
+      }
+
+      if ((block.length > 1 || (has_trailing_comma && block.length === 1)) && arg.$$is_array) {
+        if (is_returning_lambda) {
+          return call_lambda(block.apply.bind(block, null), arg, block.$$ret);
+        }
+        return block.apply(null, arg);
+      }
+      else {
+        if (is_returning_lambda) {
+          return call_lambda(block, arg, block.$$ret);
+        }
+        return block(arg);
+      }
+    }
   }
 
   def self.lambda(block, blockopts)
@@ -49,26 +75,14 @@ module ::Opal
         $raise(Opal.LocalJumpError, "no block given");
       }
 
-      var has_mlhs = block.$$has_top_level_mlhs_arg,
-          has_trailing_comma = block.$$has_trailing_comma_in_args,
-          is_returning_lambda = block.$$is_lambda && block.$$ret;
-
-      if (block.length > 1 || ((has_mlhs || has_trailing_comma) && block.length === 1)) {
-        arg = Opal.to_ary(arg);
-      }
-
-      if ((block.length > 1 || (has_trailing_comma && block.length === 1)) && arg.$$is_array) {
-        if (is_returning_lambda) {
-          return call_lambda(block.apply.bind(block, null), arg, block.$$ret);
-        }
-        return block.apply(null, arg);
-      }
-      else {
-        if (is_returning_lambda) {
-          return call_lambda(block, arg, block.$$ret);
-        }
+      // A block that takes a single argument and needs no array expansion is
+      // called directly. Every function inherits $$direct = true, and the
+      // compiler marks the blocks that do not with $$direct = false.
+      if (block.length < 2 && block.$$direct === true) {
         return block(arg);
       }
+
+      return yield1_expanding(block, arg);
     }
   end
 
@@ -91,6 +105,7 @@ module ::Opal
       return block.apply(null, args);
     }
   end
+  `Opal.prop(Function.prototype, '$$direct', true)`
 end
 
 ::Opal
