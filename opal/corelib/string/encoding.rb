@@ -181,13 +181,11 @@ end
   const SFCC = String.fromCharCode;
 
   function scrubbing_decoder(enc, label) {
-    if (!enc.scrubbing_decoder) enc.scrubbing_decoder = new TextDecoder(label, { fatal: false });
-    return enc.scrubbing_decoder;
+    return enc.scrubbing_decoder ??= new TextDecoder(label, { fatal: false });
   }
 
   function validating_decoder(enc, label) {
-    if (!enc.validating_decoder) enc.validating_decoder = new TextDecoder(label, { fatal: true });
-    return enc.validating_decoder;
+    return enc.validating_decoder ??= new TextDecoder(label, { fatal: true });
   }
 }
 
@@ -465,8 +463,8 @@ end
       let result = scrubbing_decoder(self, 'utf-8').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/�/g, (byte)=>{ return #{yield `byte`}; });
-      } else if (replacement && replacement !== nil) {
+        result = result.replace(/�/g, (byte) => #{yield `byte`});
+      } else if (replacement !== nil && replacement !== undefined) {
         // this may replace valid � that have existed in the string before,
         // but there currently is no way to specify a other replacement character for TextDecoder
         result = result.replace(/�/g, replacement);
@@ -611,8 +609,8 @@ end
       let result = scrubbing_decoder(self, 'utf-16le').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/�/g, (byte)=>{ return #{yield `byte`}; });
-      } else if (replacement && replacement !== nil) {
+        result = result.replace(/�/g, (byte) => #{yield `byte`});
+      } else if (replacement !== nil && replacement !== undefined) {
         // this may replace valid � that have existed in the string before,
         // but there currently is no way to specify a other replacement character for TextDecoder
         result = result.replace(/�/g, replacement);
@@ -623,7 +621,7 @@ end
 
   def valid_encoding?(str)
     %x{
-      try { validating_decoder(self, 'utf-16be').decode(new Uint8Array(self.$bytes(str))); }
+      try { validating_decoder(self, 'utf-16le').decode(new Uint8Array(self.$bytes(str))); }
       catch { return false; }
       return true;
     }
@@ -659,8 +657,8 @@ end
 
   def each_byte(str)
     %x{
-      for (var i = 0, length = str.length; i < length; i++) {
-        var char_code = str.charCodeAt(i);
+      for (let i = 0, length = str.length; i < length; i++) {
+        const char_code = str.charCodeAt(i);
         #{yield `char_code >> 8`};
         #{yield `char_code & 0xff`};
       }
@@ -698,8 +696,8 @@ end
       let result = scrubbing_decoder(self, 'utf-16be').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/�/g, (byte)=>{ return #{yield `byte`}; });
-      } else if (replacement && replacement !== nil) {
+        result = result.replace(/�/g, (byte) => #{yield `byte`});
+      } else if (replacement !== nil && replacement !== undefined) {
         // this may replace valid � that have existed in the string before,
         // but there currently is no way to specify a other replacement character for TextDecoder
         result = result.replace(/�/g, replacement);
@@ -820,8 +818,8 @@ end
 
   def each_byte(str)
     %x{
-      for (var i = 0, length = str.length; i < length; i++) {
-        var char_code = str.charCodeAt(i);
+      for (let i = 0, length = str.length; i < length; i++) {
+        const char_code = str.charCodeAt(i);
 
         #{yield `char_code & 0xff`};
         #{yield `char_code >> 8`};
@@ -917,8 +915,8 @@ end
 
   def each_byte(str)
     %x{
-      for (var i = 0, length = str.length; i < length; i++) {
-        var char_code = str.charCodeAt(i);
+      for (let i = 0, length = str.length; i < length; i++) {
+        const char_code = str.charCodeAt(i);
         #{yield 0};
         #{yield 0};
         #{yield `char_code >> 8`};
@@ -1009,7 +1007,7 @@ end
       // so bytes 0x80..0xFF must be mapped to the same code points here.
       let bytes = new Uint8Array(io_buffer.data_view.buffer, io_buffer.data_view.byteOffset, io_buffer.data_view.byteLength), result = '';
       for (let i = 0, length = bytes.length; i < length; i += 8192)
-        result += SFCC.apply(null, bytes.subarray(i, Math.min(i + 8192, length)));
+        result += SFCC(...bytes.subarray(i, Math.min(i + 8192, length)));
       return $str(result, self);
     }
   end
@@ -1018,7 +1016,7 @@ end
     %x{
       let bytes = new Uint8Array(io_buffer.data_view.buffer, io_buffer.data_view.byteOffset, io_buffer.data_view.byteLength), result = '';
       for (let i = 0, length = bytes.length; i < length; i += 8192)
-        result += SFCC.apply(null, bytes.subarray(i, Math.min(i + 8192, length)));
+        result += SFCC(...bytes.subarray(i, Math.min(i + 8192, length)));
       return $str(result, self);
     }
   end
