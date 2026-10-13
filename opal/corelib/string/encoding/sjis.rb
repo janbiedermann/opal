@@ -186,4 +186,53 @@ require 'corelib/string/encoding/tables/sjis_inverted'
       return true;
     }
   end
+
+  def byte_at(str, index)
+    %x{
+      const bytes = self.$bytes(str);
+      if (index < 0) index += bytes.length;
+      if (index < 0 || index >= bytes.length) return nil;
+      return bytes[index];
+    }
+  end
+
+  def bytes_sum(str)
+    %x{
+      const bytes = self.$bytes(str);
+      let sum = 0;
+      for (let i = 0, length = bytes.length; i < length; i++) sum += bytes[i];
+      return sum;
+    }
+  end
+
+  def byte_index(str, char_index)
+    %x{
+      // The bytes of the characters before the UTF-16 index.
+      let bytes = 0, index = 0;
+      for (const c of str) {
+        if (index >= char_index) break;
+        index += c.length;
+        bytes += self.$bytes(c).length;
+      }
+      return bytes;
+    }
+  end
+
+  def char_index(str, byte_offset)
+    %x{
+      let bytes = 0, index = 0;
+      for (const c of str) {
+        if (bytes >= byte_offset) break;
+        bytes += self.$bytes(c).length;
+        index += c.length;
+      }
+      if (bytes < byte_offset) return -2;
+      return bytes === byte_offset ? index : -1;
+    }
+  end
+
+  def dump_byte_escape?(code_point)
+    # The characters String#dump escapes as \xNN, the others as \uXXXX.
+    code_point <= 0xff
+  end
 end

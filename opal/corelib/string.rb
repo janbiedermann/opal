@@ -87,22 +87,86 @@ class ::String < `String`
 
     let UTF8_ENCODING; // the Encoding::UTF-8 object, taken on first use
 
-    // The Encoding::UTF-8 object, taken once.
+    // The Encoding::UTF-8 object, taken once. A plain JavaScript string is one,
+    // so its encoding is only re-boxed when the string has another one.
     function utf8_encoding() {
       return UTF8_ENCODING ??= #{::Encoding::UTF_8};
     }
 
-    let BINARY_ENCODING; // the Encoding::ASCII-8BIT object, taken on first use
-
-    // The Encoding::ASCII-8BIT object, taken once. Its strings hold one
-    // character per byte, so their byte indexes are their character indexes.
-    function binary8_encoding() {
-      return BINARY_ENCODING ??= #{::Encoding::ASCII_8BIT};
+    // The NUL bytes and the ASCII whitespace that String#strip removes.
+    function is_strippable(code) {
+      return code === 0 || (code >= 9 && code <= 13) || code === 32;
     }
 
-    // Whether a string is UTF-8 encoded, which is what its bytes follow.
-    function is_utf8_encoded(string) {
-      return string.binary_encoding === utf8_encoding();
+    // The regular expressions that String#sub and String#gsub build from their
+    // string patterns. Escaping and compiling a pattern costs more than a Map
+    // lookup, so the last ones seen are kept.
+    const sub_pattern_regexps = new Map();
+    const gsub_pattern_regexps = new Map();
+
+    function regexp_for_pattern(pattern, global) {
+      const key = pattern.valueOf(), cache = global ? gsub_pattern_regexps : sub_pattern_regexps;
+      let regexp = cache.get(key);
+      if (regexp === undefined) {
+        if (cache.size > 128) cache.clear();
+        regexp = global
+          ? new RegExp(key.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'gmu')
+          : new RegExp(key.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'));
+        cache.set(key, regexp);
+      }
+      regexp.lastIndex = 0;
+      return regexp;
+    }
+
+    /* eslint-disable no-misleading-character-class */
+    // The characters String#dump escapes, its escape table, and the # of a
+    // Ruby interpolation, which dump escapes too.
+    const dump_escapable = new RegExp("[\\\\\"\x00-\x1F\x7F-\xFF\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f" +
+      String.fromCharCode(0xd800) + '-' + String.fromCharCode(0xdfff) + "\ufeff\ufff0-\uffff]", 'g');
+
+    const dump_meta = {
+      '\u0007': '\\a',
+      '\u001b': '\\e',
+      '\b': '\\b',
+      '\t': '\\t',
+      '\n': '\\n',
+      '\f': '\\f',
+      '\r': '\\r',
+      '\v': '\\v',
+      '"' : '\\"',
+      '\\': '\\\\'
+    };
+
+    const dump_interpolation = /\#[\$\@\{]/g;
+    /* eslint-enable no-misleading-character-class */
+
+    // The leading underscore, the sign and base prefix, and the separators of
+    // the numeric strings of String#to_i and String#oct.
+    const number_leading_underscore = /^\s*_/;
+    const number_prefix = /^(\s*[+-]?)(0[bodx]?)(.+)$/;
+    const number_prefix_i = /^(\s*[+-]?)(0[bodx]?)(.+)$/i;
+    const number_underscores = /_(?!_)/g;
+
+    // Whether the digits of an integer string of the given radix can start
+    // here: after the whitespace and the sign there must be a digit of that
+    // radix or an underscore.
+    function starts_with_a_number(string, radix) {
+      let at = 0, code;
+      while (at < string.length) {
+        code = string.charCodeAt(at);
+        if (code === 32 || (code >= 9 && code <= 13)) at++;
+        else break;
+      }
+      if (at < string.length) {
+        code = string.charCodeAt(at);
+        if (code === 0x2b || code === 0x2d) at++;
+      }
+      if (at === string.length) return false;
+      code = string.charCodeAt(at);
+      if (code === 0x5f) return true;
+      if (code >= 0x30 && code <= 0x39) return code - 0x30 < radix;
+      if (code >= 0x41 && code <= 0x5a) code += 0x20;
+      return radix > 10 && code >= 0x61 && code - 0x61 + 10 < radix;
     }
 
     // The whitespace of the default separator of String#split.
@@ -184,35 +248,6 @@ class ::String < `String`
         i++;
       }
       return idx;
-    }
-
-    // The number of UTF-8 bytes of a character.
-    function utf8_bytes_of(code) {
-      return code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
-    }
-
-    // The byte index of the character starting at a UTF-16 index.
-    function utf8_byte_index(string, char_index) {
-      let bytes = 0;
-      for (let i = 0; i < char_index; i++) {
-        const code = string.codePointAt(i);
-        bytes += utf8_bytes_of(code);
-        if (code > 0xffff) i++;
-      }
-      return bytes;
-    }
-
-    // The UTF-16 index of the character a byte offset lands on, -1 when the
-    // offset is not on a character boundary and -2 when it is past the string.
-    function utf8_char_index(string, byte_offset) {
-      let bytes = 0, i = 0, length = string.length, code;
-      while (bytes < byte_offset && i < length) {
-        code = string.codePointAt(i);
-        bytes += utf8_bytes_of(code);
-        i += code > 0xffff ? 2 : 1;
-      }
-      if (bytes < byte_offset) return -2;
-      return bytes === byte_offset ? i : -1;
     }
 
     // Whether a UTF-16 index starts a character instead of its second unit.
@@ -884,22 +919,16 @@ class ::String < `String`
       search = $coerce_to(search, Opal.String, 'to_str').valueOf();
 
       // A search string at a positive byte offset on a character boundary is
-      // found with indexOf, then the characters before it are measured.
+      // found with indexOf, then the characters before it are measured. The
+      // encoding converts the byte offset to a character index and back.
       if (search.length > 0 && offset >= 0) {
         const string = self.valueOf(), encoding = self.binary_encoding;
-        if (encoding === utf8_encoding()) {
-          const char_index = utf8_char_index(string, offset);
+        const char_index = encoding.$char_index(string, offset);
+        if (char_index !== -1) {
           if (char_index === -2) return nil;
-          if (char_index !== -1) {
-            let found = string.indexOf(search, char_index);
-            while (found !== -1 && !starts_a_character(string, found)) found = string.indexOf(search, found + 1);
-            if (found !== -1) return utf8_byte_index(string, found);
-            return nil;
-          }
-        } else if (encoding === binary8_encoding()) {
-          if (offset > string.length) return nil;
-          const found = string.indexOf(search, offset);
-          if (found !== -1) return found;
+          let found = string.indexOf(search, char_index);
+          while (found !== -1 && !starts_a_character(string, found)) found = string.indexOf(search, found + 1);
+          if (found !== -1) return encoding.$byte_index(string, found);
           return nil;
         }
       }
@@ -952,18 +981,12 @@ class ::String < `String`
       // The same lookup as byteindex, from the byte offset backwards.
       if (search.length > 0 && offset >= 0) {
         const string = self.valueOf(), encoding = self.binary_encoding;
-        if (encoding === utf8_encoding()) {
-          let char_limit = utf8_char_index(string, offset);
-          if (char_limit === -2) char_limit = string.length; // an offset past the end is its end
-          if (char_limit !== -1) {
-            let found = string.lastIndexOf(search, char_limit);
-            while (found !== -1 && !starts_a_character(string, found)) found = string.lastIndexOf(search, found - 1);
-            if (found !== -1) return utf8_byte_index(string, found);
-            return nil;
-          }
-        } else if (encoding === binary8_encoding()) {
-          const found = string.lastIndexOf(search, offset > string.length ? string.length : offset);
-          if (found !== -1) return found;
+        let char_limit = encoding.$char_index(string, offset);
+        if (char_limit === -2) char_limit = string.length; // an offset past the end is its end
+        if (char_limit !== -1) {
+          let found = string.lastIndexOf(search, char_limit);
+          while (found !== -1 && !starts_a_character(string, found)) found = string.lastIndexOf(search, found - 1);
+          if (found !== -1) return encoding.$byte_index(string, found);
           return nil;
         }
       }
@@ -1050,8 +1073,25 @@ class ::String < `String`
 
   def casecmp(other)
     return nil unless other.respond_to?(:to_str)
-    other = `$coerce_to(other, Opal.String, 'to_str').valueOf()`
-    downcase(:ascii) <=> other.downcase(:ascii)
+    other = `$coerce_to(other, Opal.String, "to_str")`
+    %x{
+      // The ASCII case folding of downcase(:ascii), compared character by
+      // character instead of building the two downcased strings.
+      const a = self.valueOf(), b = other.valueOf();
+      let i = 0, j = 0, ca, cb;
+      while (i < a.length && j < b.length) {
+        ca = a.codePointAt(i);
+        cb = b.codePointAt(j);
+        if (ca >= 0x41 && ca <= 0x5A) ca += 32;
+        if (cb >= 0x41 && cb <= 0x5A) cb += 32;
+        if (ca !== cb) return ca < cb ? -1 : 1;
+        i += ca > 0xFFFF ? 2 : 1;
+        j += cb > 0xFFFF ? 2 : 1;
+      }
+      if (i < a.length) return 1;
+      if (j < b.length) return -1;
+      return 0;
+    }
   end
 
   def casecmp?(other)
@@ -1315,28 +1355,26 @@ class ::String < `String`
 
   def dump
     %x{
-      /* eslint-disable no-misleading-character-class */
-      let e = "[\\\\\"\x00-\x1F\x7F-\xFF\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f" +
-              String.fromCharCode(0xd800) + '-' + String.fromCharCode(0xdfff) + "\ufeff\ufff0-\uffff]",
-          escapable = new RegExp(e, 'g'),
-          meta = {
-            '\u0007': '\\a',
-            '\u001b': '\\e',
-            '\b': '\\b',
-            '\t': '\\t',
-            '\n': '\\n',
-            '\f': '\\f',
-            '\r': '\\r',
-            '\v': '\\v',
-            '"' : '\\"',
-            '\\': '\\\\'
-          },
-          prev_chr = '',
-          is_utf8 = (self.encoding == Opal.Encoding.UTF_8),
-          escaped = self.valueOf().replace(escapable, function (chr) {
-            if (meta[chr]) return meta[chr];
+      const string = self.valueOf();
+      // The printable ASCII characters that need no escaping and are not the
+      // # of a Ruby interpolation, the common case.
+      let plain = true;
+      for (let i = 0, length = string.length; i < length; i++) {
+        const code = string.charCodeAt(i);
+        if (code < 0x20 || code > 0x7e || code === 0x22 || code === 0x5c ||
+            code === 0x23 || code === 0x24 || code === 0x40 || code === 0x7b) {
+          plain = false;
+          break;
+        }
+      }
+      if (plain) return box_string('"' + string + '"', self.encoding);
+
+      let prev_chr = '',
+          encoding = self.encoding,
+          escaped = string.replace(dump_escapable, function (chr) {
+            if (dump_meta[chr]) return dump_meta[chr];
             const char_code = chr.charCodeAt(0);
-            if ((!is_utf8 && char_code <= 0xff) || (is_utf8 && char_code < 0x80)) {
+            if (encoding['$dump_byte_escape?'](char_code)) {
               return '\\x' + ('00' + char_code.toString(16).toUpperCase()).slice(-2);
             } else if (char_code >= 0xD800 && char_code <= 0xDBFF) {
               prev_chr = chr;
@@ -1347,8 +1385,7 @@ class ::String < `String`
               return '\\u' + ('0000' + char_code.toString(16).toUpperCase()).slice(-4);
             }
           });
-      return $str('"' + escaped.replace(/\#[\$\@\{]/g, '\\$&') + '"', self.encoding);
-      /* eslint-enable no-misleading-character-class */
+      return box_string('"' + escaped.replace(dump_interpolation, '\\$&') + '"', self.encoding);
     }
   end
 
@@ -1437,6 +1474,28 @@ class ::String < `String`
       separator = $coerce_to(separator, Opal.String, 'to_str');
 
       var a, i, n, length, chomped, trailing, splitted, value;
+
+      if (separator.length === 1 && (separator.charCodeAt(0) < 0xD800 || separator.charCodeAt(0) > 0xDFFF)) {
+        // The common case: a one character separator, walked with indexOf
+        // instead of split, which first builds the array of the pieces.
+        const string = self.valueOf(), separator_string = separator.valueOf();
+        const separator_code = separator_string.charCodeAt(0);
+        let start = 0, at;
+        while ((at = string.indexOf(separator_string, start)) !== -1) {
+          // chomp takes "\r\n" as the line end when the separator is "\n"
+          let end = at;
+          if (!chomp) end = at + 1;
+          else if (separator_code === 10 && at > start && string.charCodeAt(at - 1) === 13) end = at - 1;
+          Opal.yield1(block, box_string(string.slice(start, end), self.encoding));
+          start = at + 1;
+        }
+        if (start < string.length) {
+          Opal.yield1(block, box_string(string.slice(start), self.encoding));
+        }
+        return self;
+      }
+
+      if (self.length === 0) return self;
 
       if (separator.length === 0) {
         for (a = self.split(/((?:\r?\n){2})(?:(?:\r?\n)*)/), i = 0, n = a.length; i < n; i += 2) {
@@ -1534,15 +1593,7 @@ class ::String < `String`
 
   def getbyte(idx)
     idx = `$coerce_to_or_raise(#{idx}, Opal.Integer, "to_int")`
-
-    return bytes[idx] if idx < 0
-
-    i = 0
-    each_byte do |b|
-      return b if i == idx
-      i += 1
-    end
-    nil
+    `self.binary_encoding.$byte_at(self, idx)`
   end
 
   def grapheme_clusters(&block)
@@ -1567,8 +1618,7 @@ class ::String < `String`
       if (pattern.$$is_regexp) {
         pattern = $global_regexp(pattern);
       } else {
-        pattern = $coerce_to(pattern, Opal.String, 'to_str');
-        pattern = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'gmu');
+        pattern = regexp_for_pattern($coerce_to(pattern, Opal.String, 'to_str'), true);
       }
 
       // The escapes of the replacement are resolved for every match, but a
@@ -1832,7 +1882,12 @@ class ::String < `String`
   end
 
   def lstrip
-    `self.valueOf().replace(/^[\x00\x09\x0a-\x0d\x20]*/, '')`
+    %x{
+      const string = self.valueOf();
+      let start = 0;
+      while (start < string.length && is_strippable(string.charCodeAt(start))) start++;
+      return box_string(string.slice(start), self.encoding);
+    }
   end
 
   # lstrip! - not supported, mutates string
@@ -1939,11 +1994,16 @@ class ::String < `String`
           string = self.valueOf(),
           radix = 8;
 
-      if (/^\s*_/.test(string)) {
+      if (!starts_with_a_number(string, 8)) {
+        // What starts with neither a digit nor an underscore is zero.
         return 0;
       }
 
-      string = string.replace(/^(\s*[+-]?)(0[bodx]?)(.+)$/i, function (original, head, flag, tail) {
+      if (number_leading_underscore.test(string)) {
+        return 0;
+      }
+
+      string = string.replace(number_prefix_i, function (original, head, flag, tail) {
         switch (tail.charAt(0)) {
         case '+':
         case '-':
@@ -1971,7 +2031,7 @@ class ::String < `String`
         return head + tail;
       });
 
-      result = parseInt(string.replace(/_(?!_)/g, ''), radix);
+      result = parseInt(string.replace(number_underscores, ''), radix);
       return isNaN(result) ? 0 : result;
     }
   end
@@ -2131,7 +2191,12 @@ class ::String < `String`
   end
 
   def rstrip
-    `$str(self.valueOf().replace(/[\x00\x09\x0a-\x0d\x20]*$/, ''), self.encoding)`
+    %x{
+      const string = self.valueOf();
+      let last = string.length;
+      while (last > 0 && is_strippable(string.charCodeAt(last - 1))) last--;
+      return box_string(string.slice(0, last), self.encoding);
+    }
   end
 
   # rstrip! - not supported, mutates string
@@ -2147,8 +2212,7 @@ class ::String < `String`
       if (pattern.$$is_regexp) {
         pattern = $global_regexp(pattern);
       } else {
-        pattern = $coerce_to(pattern, Opal.String, 'to_str');
-        pattern = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'gmu');
+        pattern = regexp_for_pattern($coerce_to(pattern, Opal.String, 'to_str'), true);
       }
 
       while ((match = pattern.exec(self)) != null) {
@@ -2392,7 +2456,13 @@ class ::String < `String`
   end
 
   def strip
-    `$str(self.valueOf().replace(/^[\x00\x09\x0a-\x0d\x20]*|[\x00\x09\x0a-\x0d\x20]*$/g, ''), self.encoding)`
+    %x{
+      const string = self.valueOf();
+      let start = 0, last = string.length;
+      while (start < last && is_strippable(string.charCodeAt(start))) start++;
+      while (last > start && is_strippable(string.charCodeAt(last - 1))) last--;
+      return box_string(string.slice(start, last), self.encoding);
+    }
   end
 
   # strip! - not supported, mutates string
@@ -2400,8 +2470,7 @@ class ::String < `String`
   def sub(pattern, replacement = undefined, &block)
     %x{
       if (!pattern.$$is_regexp) {
-        pattern = $coerce_to(pattern, Opal.String, 'to_str');
-        pattern = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'));
+        pattern = regexp_for_pattern($coerce_to(pattern, Opal.String, 'to_str'), false);
       }
 
       var s = self.valueOf(), result, match = pattern.exec(s);
@@ -2469,48 +2538,7 @@ class ::String < `String`
     %x{
       n = $coerce_to(n, Opal.Integer, 'to_int');
 
-      const string = self.valueOf(), length = string.length;
-      let result = 0, i = 0;
-
-      // The ASCII run, where the characters are the bytes of the string.
-      for (; i < length; i++) {
-        const code = string.charCodeAt(i);
-        if (code > 0x7f) break;
-        result += code;
-      }
-
-      if (i < length) {
-        if (is_utf8_encoded(self)) {
-          // The UTF-8 bytes, summed without building the array of them.
-          let code_point;
-          for (; i < length; i++) {
-            code_point = string.charCodeAt(i);
-            if (code_point >= 0xD800 && code_point <= 0xDBFF) {
-              code_point = string.codePointAt(i);
-              if (code_point > 0xFFFF) i++;
-            }
-            if (code_point < 0x80) {
-              result += code_point;
-            } else if (code_point < 0x800) {
-              result += (code_point >> 0x6 | 0xC0) + (code_point & 0x3F | 0x80);
-            } else if (code_point < 0xD800) {
-              result += (code_point >> 0xC | 0xE0) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
-            } else if (code_point < 0xE000) {
-              result += 0xEF + 0xBF + 0xBD;
-            } else if (code_point < 0x10000) {
-              result += (code_point >> 0xC | 0xE0) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
-            } else {
-              result += (code_point >> 0x12 | 0xF0) + (code_point >> 0xC & 0x3F | 0x80) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
-            }
-          }
-        } else {
-          result = 0;
-          const bytes = #{binary_encoding.bytes(self)};
-          for (let j = 0, bytes_length = bytes.length; j < bytes_length; j++) {
-            result += bytes[j];
-          }
-        }
-      }
+      const result = self.binary_encoding.$bytes_sum(self);
 
       if (n <= 0) {
         return result;
@@ -2589,18 +2617,26 @@ class ::String < `String`
   def to_i(base = 10)
     %x{
       let result,
-          string = self.valueOf().toLowerCase(),
+          string,
           radix = $coerce_to(base, Opal.Integer, 'to_int');
 
       if (radix === 1 || radix < 0 || radix > 36) {
         #{::Kernel.raise ::ArgumentError, "invalid radix #{`radix`}"}
       }
 
-      if (/^\s*_/.test(string)) {
+      if (radix !== 0 && !starts_with_a_number(self.valueOf(), radix)) {
+        // What starts with neither a digit nor an underscore is zero, which is
+        // most of the strings that are not numbers at all.
         return 0;
       }
 
-      string = string.replace(/^(\s*[+-]?)(0[bodx]?)(.+)$/, function (original, head, flag, tail) {
+      string = self.valueOf().toLowerCase();
+
+      if (number_leading_underscore.test(string)) {
+        return 0;
+      }
+
+      string = string.replace(number_prefix, function (original, head, flag, tail) {
         switch (tail.charAt(0)) {
         case '+':
         case '-':
@@ -2640,7 +2676,7 @@ class ::String < `String`
         return original
       });
 
-      result = parseInt(string.replace(/_(?!_)/g, ''), radix);
+      result = parseInt(string.replace(number_underscores, ''), radix);
       return isNaN(result) ? 0 : result;
     }
   end

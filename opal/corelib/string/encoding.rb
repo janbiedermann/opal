@@ -170,6 +170,33 @@ class ::Encoding
     __not_implemented__
   end
 
+  # The byte at the byte index of the binary representation of str, nil when
+  # the string has no such byte. This is what String#getbyte asks for.
+  def byte_at(str, index)
+    __not_implemented__
+  end
+
+  # The sum of the bytes of str, which is what String#sum adds up.
+  def bytes_sum(str)
+    __not_implemented__
+  end
+
+  # The byte offset of the character at the UTF-16 index char_index of str.
+  def byte_index(str, char_index)
+    __not_implemented__
+  end
+
+  # The UTF-16 index of the character a byte offset lands on, -1 when the
+  # offset is inside a character and -2 when it is past the string.
+  def char_index(str, byte_offset)
+    __not_implemented__
+  end
+
+  # Whether String#dump escapes a character with a \x byte escape.
+  def dump_byte_escape?(code_point)
+    __not_implemented__
+  end
+
   class ::EncodingError < ::StandardError; end
   class ::CompatibilityError < ::EncodingError; end
   class InvalidByteSequenceError < ::EncodingError; end
@@ -190,6 +217,37 @@ end
 }
 
 ::Encoding.register 'UTF-8', aliases: ['CP65001'], ascii: true do
+  %x{
+    // The number of UTF-8 bytes of a code point. A lone surrogate encodes to
+    // the 3 bytes of the replacement character.
+    function utf8_size(code_point) {
+      if (code_point < 0x80) return 1;
+      if (code_point < 0x800) return 2;
+      if (code_point < 0x10000) return 3;
+      return 4;
+    }
+
+    // The byte at the byte_index offset of the UTF-8 encoding of code_point.
+    function utf8_byte_at(code_point, byte_index) {
+      if (code_point < 0x80) return code_point;
+      if (code_point < 0x800) {
+        return byte_index === 0 ? code_point >> 0x6 | 0xC0 : code_point & 0x3F | 0x80;
+      }
+      if (code_point >= 0xD800 && code_point <= 0xDFFF) {
+        return byte_index === 0 ? 0xEF : byte_index === 1 ? 0xBF : 0xBD;
+      }
+      if (code_point < 0x10000) {
+        return byte_index === 0 ? code_point >> 0xC | 0xE0
+          : byte_index === 1 ? code_point >> 0x6 & 0x3F | 0x80
+          : code_point & 0x3F | 0x80;
+      }
+      return byte_index === 0 ? code_point >> 0x12 | 0xF0
+        : byte_index === 1 ? code_point >> 0xC & 0x3F | 0x80
+        : byte_index === 2 ? code_point >> 0x6 & 0x3F | 0x80
+        : code_point & 0x3F | 0x80;
+    }
+  }
+
   def bytes(str)
     %x{
       const string = str.valueOf(), length = string.length;
@@ -236,22 +294,115 @@ end
     }
   end
 
-  def bytesize(str, index)
+  def bytesize(str, index = undefined)
     %x{
       const string = str.valueOf(), length = string.length;
-      let code_point, size = 0;
+      if (index === undefined) index = length - 1;
+      let size = 0;
       for (let i = 0; i < length && index >= 0; i++, index--) {
-        code_point = string.charCodeAt(i);
-        if (code_point < 0x80) size++;
-        else if (code_point < 0x800) size += 2;
-        else if (code_point >= 0xD800 && code_point <= 0xDBFF) {
-          code_point = string.codePointAt(i);
-          if (code_point > 0xFFFF) { i++; size += 4; }
-          else size += 3;
-        } else size += 3;
+        const code_point = string.codePointAt(i);
+        size += utf8_size(code_point);
+        if (code_point > 0xFFFF) i++;
       }
       return size;
     }
+  end
+
+  # The byte at the byte index of the string, walking its code points.
+  def byte_at(str, index)
+    %x{
+      const string = str.valueOf();
+      let code_point, size, bytes_at = 0;
+      if (index >= 0) {
+        for (let i = 0, length = string.length; i < length; i++) {
+          code_point = string.codePointAt(i);
+          size = utf8_size(code_point);
+          if (code_point > 0xFFFF) i++;
+          if (bytes_at + size > index) return utf8_byte_at(code_point, index - bytes_at);
+          bytes_at += size;
+        }
+      } else {
+        for (let i = string.length - 1; i >= 0; i--) {
+          code_point = string.codePointAt(i);
+          if (code_point >= 0xDC00 && code_point <= 0xDFFF && i > 0 &&
+              string.charCodeAt(i - 1) >= 0xD800 && string.charCodeAt(i - 1) <= 0xDBFF) {
+            // the low surrogate of a pair, taken with its high surrogate
+            i--;
+            code_point = string.codePointAt(i);
+          }
+          size = utf8_size(code_point);
+          if (index >= -(bytes_at + size)) return utf8_byte_at(code_point, index + bytes_at + size);
+          bytes_at += size;
+        }
+      }
+      return nil;
+    }
+  end
+
+  def bytes_sum(str)
+    %x{
+      const string = str.valueOf(), length = string.length;
+      let sum = 0, i = 0, code_point;
+      // The ASCII run, where every character is one byte.
+      for (; i < length; i++) {
+        code_point = string.charCodeAt(i);
+        if (code_point > 0x7f) break;
+        sum += code_point;
+      }
+      for (; i < length; i++) {
+        code_point = string.charCodeAt(i);
+        if (code_point >= 0xD800 && code_point <= 0xDBFF) {
+          code_point = string.codePointAt(i);
+          if (code_point > 0xFFFF) i++;
+        }
+        if (code_point < 0x80) {
+          sum += code_point;
+        } else if (code_point < 0x800) {
+          sum += (code_point >> 0x6 | 0xC0) + (code_point & 0x3F | 0x80);
+        } else if (code_point < 0xD800) {
+          sum += (code_point >> 0xC | 0xE0) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
+        } else if (code_point < 0xE000) {
+          sum += 0xEF + 0xBF + 0xBD;
+        } else if (code_point < 0x10000) {
+          sum += (code_point >> 0xC | 0xE0) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
+        } else {
+          sum += (code_point >> 0x12 | 0xF0) + (code_point >> 0xC & 0x3F | 0x80) + (code_point >> 0x6 & 0x3F | 0x80) + (code_point & 0x3F | 0x80);
+        }
+      }
+      return sum;
+    }
+  end
+
+  def byte_index(str, char_index)
+    %x{
+      const string = str.valueOf();
+      let bytes = 0;
+      for (let i = 0; i < char_index; i++) {
+        const code_point = string.codePointAt(i);
+        bytes += utf8_size(code_point);
+        if (code_point > 0xFFFF) i++;
+      }
+      return bytes;
+    }
+  end
+
+  def char_index(str, byte_offset)
+    %x{
+      const string = str.valueOf(), length = string.length;
+      let bytes = 0, i = 0, code_point;
+      while (bytes < byte_offset && i < length) {
+        code_point = string.codePointAt(i);
+        bytes += utf8_size(code_point);
+        i += code_point > 0xFFFF ? 2 : 1;
+      }
+      if (bytes < byte_offset) return -2;
+      return bytes === byte_offset ? i : -1;
+    }
+  end
+
+  def dump_byte_escape?(code_point)
+    # Only the characters below 0x80 are a single byte of UTF-8.
+    code_point < 0x80
   end
 
   def byteslice(str, index, length)
@@ -278,11 +429,7 @@ end
             continue;
           }
           // a lone surrogate encodes to the 3 bytes of the replacement char
-          let size;
-          if (code_point < 0x80) size = 1;
-          else if (code_point < 0x800) size = 2;
-          else if (code_point < 0x10000) size = 3;
-          else size = 4;
+          const size = utf8_size(code_point);
           if (length >= 0 || length === -1 || (length < 0 && idx <= length)) {
             if (idx >= index && idx <= max) result = SFCP(code_point) + result;
             idx -= size;
@@ -499,11 +646,48 @@ end
     res
   end
 
-  def bytesize(str, index)
+  def bytesize(str, index = undefined)
     %x{
       if (index < str.length) return (index + 1) * 2;
       return str.length * 2;
     }
+  end
+
+  def byte_at(str, index)
+    %x{
+      const length = str.length * 2;
+      if (index < 0) index += length;
+      if (index < 0 || index >= length) return nil;
+      const code = str.charCodeAt(index >> 1);
+      return (index & 1) ? code >> 8 : code & 0xff;
+    }
+  end
+
+  def bytes_sum(str)
+    %x{
+      let sum = 0;
+      for (let i = 0, length = str.length; i < length; i++) {
+        const code = str.charCodeAt(i);
+        sum += (code & 0xff) + (code >> 8);
+      }
+      return sum;
+    }
+  end
+
+  def byte_index(str, char_index)
+    `char_index * 2`
+  end
+
+  def char_index(str, byte_offset)
+    %x{
+      if (byte_offset > str.length * 2) return -2;
+      return (byte_offset & 1) ? -1 : byte_offset >> 1;
+    }
+  end
+
+  def dump_byte_escape?(code_point)
+    # The characters String#dump escapes as \xNN, the others as \uXXXX.
+    code_point <= 0xff
   end
 
   def byteslice(str, index, length)
@@ -641,6 +825,16 @@ end
     res
   end
 
+  def byte_at(str, index)
+    %x{
+      const length = str.length * 2;
+      if (index < 0) index += length;
+      if (index < 0 || index >= length) return nil;
+      const code = str.charCodeAt(index >> 1);
+      return (index & 1) ? code & 0xff : code >> 8;
+    }
+  end
+
   def decode(io_buffer)
     %x{
       let result = scrubbing_decoder(self, 'utf-16be').decode(io_buffer.data_view);
@@ -730,11 +924,50 @@ end
     res
   end
 
-  def bytesize(str, index)
+  def bytesize(str, index = undefined)
     %x{
       if (index < str.length) return (index + 1) * 4;
       return str.length * 4;
     }
+  end
+
+  def byte_at(str, index)
+    %x{
+      const length = str.length * 4;
+      if (index < 0) index += length;
+      if (index < 0 || index >= length) return nil;
+      const code = str.charCodeAt(index >> 2), at = index & 3;
+      if (at === 0) return code & 0xff;
+      if (at === 1) return code >> 8;
+      return 0;
+    }
+  end
+
+  def bytes_sum(str)
+    %x{
+      let sum = 0;
+      for (let i = 0, length = str.length; i < length; i++) {
+        const code = str.charCodeAt(i);
+        sum += (code & 0xff) + (code >> 8);
+      }
+      return sum;
+    }
+  end
+
+  def byte_index(str, char_index)
+    `char_index * 4`
+  end
+
+  def char_index(str, byte_offset)
+    %x{
+      if (byte_offset > str.length * 4) return -2;
+      return (byte_offset & 3) === 0 ? byte_offset >> 2 : -1;
+    }
+  end
+
+  def dump_byte_escape?(code_point)
+    # The characters String#dump escapes as \xNN, the others as \uXXXX.
+    code_point <= 0xff
   end
 
   def byteslice(str, index, length)
@@ -881,6 +1114,18 @@ end
     res
   end
 
+  def byte_at(str, index)
+    %x{
+      const length = str.length * 4;
+      if (index < 0) index += length;
+      if (index < 0 || index >= length) return nil;
+      const code = str.charCodeAt(index >> 2), at = index & 3;
+      if (at === 2) return code >> 8;
+      if (at === 3) return code & 0xff;
+      return 0;
+    }
+  end
+
   def decode(io_buffer)
     %x{
       let i = 0, o = 0,
@@ -976,25 +1221,116 @@ end
     }
   end
 
-  def bytesize(str, index)
+  def bytesize(str, index = undefined)
     %x{
-      if (index < str.size) return index + 1;
-      return str.length;
+      const string = str.valueOf(), length = string.length;
+      if (index === undefined) index = length;
+      if (index >= length) return self.$bytes_sum(str);
+      if (!/[\u0100-\uFFFF]/.test(string)) return index + 1;
+      // A character above 0xff is written as two bytes.
+      let bytes = 0;
+      for (let i = 0; i <= index; i++) {
+        if (string.charCodeAt(i) > 0xff) bytes++;
+        bytes++;
+      }
+      return bytes;
     }
+  end
+
+  def byte_at(str, index)
+    %x{
+      const string = str.valueOf(), length = string.length;
+      if (!/[\u0100-\uFFFF]/.test(string)) {
+        // Every character of the string is one byte.
+        if (index < 0) index += length;
+        if (index < 0 || index >= length) return nil;
+        return string.charCodeAt(index);
+      }
+      // A character above 0xff is written as two bytes, so the bytes are
+      // built and walked.
+      const bytes = self.$bytes(str);
+      if (index < 0) index += bytes.length;
+      if (index < 0 || index >= bytes.length) return nil;
+      return bytes[index];
+    }
+  end
+
+  def bytes_sum(str)
+    %x{
+      const string = str.valueOf();
+      let sum = 0, code;
+      for (let i = 0, length = string.length; i < length; i++) {
+        code = string.charCodeAt(i);
+        if (code > 0xff) sum += code >> 8;
+        sum += code & 0xff;
+      }
+      return sum;
+    }
+  end
+
+  def byte_index(str, char_index)
+    %x{
+      const string = str.valueOf();
+      if (!/[\u0100-\uFFFF]/.test(string)) return char_index;
+      // A character above 0xff is written as two bytes.
+      let bytes = 0;
+      for (let i = 0; i < char_index; i++) {
+        if (string.charCodeAt(i) > 0xff) bytes++;
+        bytes++;
+      }
+      return bytes;
+    }
+  end
+
+  def char_index(str, byte_offset)
+    %x{
+      const string = str.valueOf(), length = string.length;
+      if (!/[\u0100-\uFFFF]/.test(string)) {
+        if (byte_offset > length) return -2;
+        return byte_offset;
+      }
+      let bytes = 0, index = 0;
+      for (let i = 0; i < length; i++) {
+        if (bytes >= byte_offset) break;
+        if (string.charCodeAt(i) > 0xff) bytes++;
+        bytes++; index++;
+      }
+      if (bytes < byte_offset) return -2;
+      return bytes === byte_offset ? index : -1;
+    }
+  end
+
+  def dump_byte_escape?(code_point)
+    # Every character up to 0xff is a whole byte of the encoding, and String#dump
+    # escapes it as \xNN.
+    code_point <= 0xff
   end
 
   def byteslice(str, index, length)
     # Must handle negative index and length, with length being negative indicating a negative range end.
     %x{
-      let result = "", char_code, i;
-      if (index < 0) index = str.length + index;
+      const string = str.valueOf();
+      let i;
+      if (/[\u0100-\uFFFF]/.test(string)) {
+        // A character above 0xff is written as two bytes, so the bytes are
+        // built and sliced.
+        const bytes = self.$bytes(str);
+        if (index < 0) index += bytes.length;
+        if (index < 0) return nil;
+        if (length < 0) length = (bytes.length + length) - index;
+        if (length < 0) return nil;
+        let sliced = '';
+        for (i = 0; i < length && index + i < bytes.length; i++) sliced += SFCC(bytes[index + i]);
+        return sliced.length === 0 ? nil : sliced;
+      }
+      if (index < 0) index = string.length + index;
       if (index < 0) return nil;
-      if (length < 0) length = (str.length + length) - index;
+      if (length < 0) length = (string.length + length) - index;
       if (length < 0) return nil;
       // must produce the same result as each_byte, so we cannot simply use slice()
-      for (i = 0; i < length && (index + i) <= str.length; i++) {
-        char_code = str.charCodeAt(index + i);
-        result = SFCC(char_code & 0xff) + result;
+      let result = '';
+      for (i = 0; i < length && (index + i) <= string.length; i++) {
+        result += SFCC(string.charCodeAt(index + i) & 0xff);
       }
       if (result.length === 0) return nil;
       return result;
