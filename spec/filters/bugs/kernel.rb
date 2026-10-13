@@ -162,6 +162,7 @@ opal_filter "Kernel" do
   fails "Kernel#test is a private method" # Expected Kernel to have private instance method 'test' but it does not
   fails "Kernel#trap is a private method" # Expected Kernel to have private instance method 'trap' but it does not
   fails "Kernel#warn :uplevel keyword argument converts first arg using to_s" # Expected:   $stderr: /core\/kernel\/fixtures\/classes.rb:453: warning: false/       got:   $stderr:  "ruby/core/kernel/fixtures/classes.rb:453:7: warning: false "
+  fails "Kernel#warn :uplevel keyword argument converts value to Integer" # TypeError: no implicit conversion of Number into Integer
   fails "Kernel#warn :uplevel keyword argument prepends a message with specified line from the backtrace" # Expected:   $stderr: /core\/kernel\/fixtures\/classes.rb:453: warning: foo/       got:   $stderr:  "ruby/core/kernel/fixtures/classes.rb:453:7: warning: foo "
   fails "Kernel#warn :uplevel keyword argument prepends even if a message is empty or nil" # Expected:   $stderr: /core\/kernel\/fixtures\/classes.rb:453: warning: \n$/       got:   $stderr:  "ruby/core/kernel/fixtures/classes.rb:453:7: warning:  "
   fails "Kernel#warn :uplevel keyword argument raises if :category keyword is not nil and not convertible to symbol" # Expected TypeError but no exception was raised (nil was returned)
