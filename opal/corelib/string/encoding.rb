@@ -264,46 +264,35 @@ end
       let result = "", code_point, idx, max;
       if (index < 0) {
         // negative index, walk from the end of the string,
-        let i = str.length - 1,
-            bad_cp = -1; // -1 = no, string ok, 0 or larger = the code point
+        const string = str.valueOf();
+        let i = string.length - 1;
         idx = -1;
         if (length < 0) max = length; // a negative index
         else if (length === 0) max = index;
         else if ((index + length) >= 0) max = -1; // from end of string
         else max = index + length - 1;
+        let broken = false;
         for (; i >= 0; i--) {
-          code_point = str.codePointAt(i);
-          if (code_point >= 0xD800 && code_point <= 0xDFFF) {
-            // low surrogate, get the full code_point next
+          code_point = string.codePointAt(i);
+          if (code_point >= 0xDC00 && code_point <= 0xDFFF && i > 0 &&
+              string.charCodeAt(i - 1) >= 0xD800 && string.charCodeAt(i - 1) <= 0xDBFF) {
+            // the low surrogate of a pair, walked by its high surrogate
             continue;
           }
+          // a lone surrogate encodes to the 3 bytes of the replacement char
+          let size;
+          if (code_point < 0x80) size = 1;
+          else if (code_point < 0x800) size = 2;
+          else if (code_point < 0x10000) size = 3;
+          else size = 4;
           if (length >= 0 || length === -1 || (length < 0 && idx <= length)) {
-            if (code_point < 0x80) {
-              if (idx >= index && idx <= max) result = SFCP(code_point) + result;
-              idx--;
-              // always landing on character boundary, no need to check
-            } else if (code_point < 0x800) {
-              // 2 byte surrogates
-              if (idx >= index && idx <= max) result = SFCP(code_point) + result;
-              idx -= 2;
-              // check for broken character boundary, raise if so
-            // } else if (code_point < 0xD800) {
-            //  // 3 byte surrogates
-            //  if (idx >= index && idx <= max) result = SFCP(code_point) + result;
-            //  idx -= 3;
-            } else if (code_point < 0x10000) {
-              // 3 byte surrogates
-              if (idx >= index && idx <= max) result = SFCP(code_point) + result;
-              idx -= 3;
-            } else if (code_point < 0x110000) {
-              // 4 byte surrogates
-              if (idx >= index && idx <= max) result = SFCP(code_point) + result;
-              idx -= 3;
-            }
+            if (idx >= index && idx <= max) result = SFCP(code_point) + result;
+            idx -= size;
           }
-          if (idx < index) break;
+          if (idx < index) { broken = true; break; }
         }
-        if (idx > index || result.length === 0) return nil;
+        if (idx > index || (result.length === 0 &&
+            (length !== 0 || (!broken && index < idx + 1)))) return nil;
       } else {
         // 0 or positive index, walk from beginning
         idx = 0;
@@ -530,7 +519,7 @@ end
         else if (length === 0) max = index;
         else if ((index + length) >= 0) max = -1; // from end of string
         else max = index + length - 1;
-        for (i = str.length; i > 0; i--) {
+        for (i = str.length - 1; i >= 0; i--) {
           char_code = str.charCodeAt(i);
           if (length >= 0 || length === -1 || (length < 0 && idx <= length)) {
             if (idx >= index && idx <= max) result = SFCC(char_code) + result;
@@ -538,7 +527,7 @@ end
           idx -= 2;
           if (idx < index) break;
         }
-        if (idx > index || result.length === 0) return nil;
+        if (idx > index || (result.length === 0 && (length !== 0 || index < -str.length * 2))) return nil;
       } else {
         // 0 or positive index, walk from beginning
         idx = 0;
@@ -634,7 +623,7 @@ end
 
   def valid_encoding?(str)
     %x{
-      try { validating_decoder(self, 'utf-16').decode(new Uint8Array(self.$bytes(str))); }
+      try { validating_decoder(self, 'utf-16be').decode(new Uint8Array(self.$bytes(str))); }
       catch { return false; }
       return true;
     }
@@ -761,7 +750,7 @@ end
         else if (length === 0) max = index;
         else if ((index + length) >= 0) max = -1; // from end of string
         else max = index + length - 1;
-        for (i = str.length; i > 0; i--) {
+        for (i = str.length - 1; i >= 0; i--) {
           char_code = str.charCodeAt(i);
           if (length > 0 || length === -1 || (length < 0 && idx <= length)) {
             if (idx >= index && idx <= max) result = SFCC(char_code) + result;
@@ -769,7 +758,7 @@ end
           idx -= 4;
           if (idx < index) break;
         }
-        if (idx > index || result.length === 0) return nil;
+        if (idx > index || (result.length === 0 && (length !== 0 || index < -str.length * 4))) return nil;
       } else {
         // 0 or positive index, walk from beginning
         idx = 0;
@@ -824,7 +813,7 @@ end
         if (i < io_dv_bl) data_view.setUint8(o++, io_dv.getUint8(i++));
         i += 2;
       }
-      let result = validating_decoder(self, 'utf-16').decode(io_buffer.data_view);
+      let result = validating_decoder(self, 'utf-16').decode(data_view);
       return $str(result, self);
     }
   end
@@ -905,7 +894,7 @@ end
         if (i < io_dv_bl) data_view.setUint8(o++, io_dv.getUint8(i++));
         if (i < io_dv_bl) data_view.setUint8(o++, io_dv.getUint8(i++));
       }
-      let result = scrubbing_decoder(self, 'utf-16').decode(data_view);
+      let result = scrubbing_decoder(self, 'utf-16be').decode(data_view);
       return $str(result, self);
     }
   end
@@ -921,7 +910,7 @@ end
         if (i < io_dv_bl) data_view.setUint8(o++, io_dv.getUint8(i++));
         if (i < io_dv_bl) data_view.setUint8(o++, io_dv.getUint8(i++));
       }
-      let result = validating_decoder(self, 'utf-16').decode(io_buffer.data_view);
+      let result = validating_decoder(self, 'utf-16be').decode(data_view);
       return $str(result, self);
     }
   end
@@ -1071,33 +1060,48 @@ end
   end
 
   def scrub(str, replacement, &block)
+    # Every byte of a binary string is valid, there is nothing to replace.
+    str
+  end
+
+  def valid_encoding?(str)
+    # Every byte of a binary string is valid.
+    true
+  end
+end
+
+::Encoding.register 'ISO-8859-1', aliases: ['ISO8859-1'], ascii: true, inherits: ::Encoding::ASCII_8BIT
+
+::Encoding.register 'US-ASCII', aliases: ['ASCII'], ascii: true, inherits: ::Encoding::ASCII_8BIT do
+  def scrub(str, replacement, &block)
     %x{
-      let result = scrubbing_decoder(self, 'ascii').decode(new Uint8Array(self.$bytes(str)));
-      if (block !== nil) {
-        // dont know all the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/[�\x80-\xff]/g, (byte)=>{ return #{yield `byte`}; });
-      } else if (replacement && replacement !== nil) {
-        // this may replace valid � that have existed in the string before,
-        // but there currently is no way to specify a other replacement character for TextDecoder
-        result = result.replace(/[�\x80-\xff]/g, replacement);
-      } else {
-        result = result.replace(/[�\x80-\xff]/g, '?');
+      const string = str.valueOf();
+      let result = null, char_code;
+      for (let i = 0, length = string.length; i < length; i++) {
+        char_code = string.charCodeAt(i);
+        if (char_code > 0x7f) {
+          if (result === null) result = string.slice(0, i);
+          if (block !== nil) result += String(#{yield `char_code`});
+          else if (replacement !== nil && replacement !== undefined) result += String(replacement);
+          else result += '?';
+        } else if (result !== null) {
+          result += string[i];
+        }
       }
+      if (result === null) return $str(string, self);
       return $str(result, self);
     }
   end
 
   def valid_encoding?(str)
     %x{
-      try { validating_decoder(self, 'ascii').decode(new Uint8Array(self.$bytes(str))); }
-      catch { return false; }
+      const string = str.valueOf();
+      for (let i = 0, length = string.length; i < length; i++)
+        if (string.charCodeAt(i) > 0x7f) return false;
       return true;
     }
   end
 end
-
-::Encoding.register 'ISO-8859-1', aliases: ['ISO8859-1'], ascii: true, inherits: ::Encoding::ASCII_8BIT
-::Encoding.register 'US-ASCII', aliases: ['ASCII'], ascii: true, inherits: ::Encoding::ASCII_8BIT
 
 ::Encoding.default_external = __ENCODING__
 
