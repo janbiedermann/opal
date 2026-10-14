@@ -1,4 +1,4 @@
-# helpers: truthy, falsy, yield1, hash_get, hash_put, hash_delete, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, deny_frozen_access, freeze, opal32_init, opal32_add
+# helpers: truthy, falsy, yield1, hash_get, hash_put, hash_delete, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, deny_frozen_access, freeze, opal32_init, opal32_add, has_own, eqeq
 # backtick_javascript: true
 
 require 'corelib/enumerable'
@@ -24,14 +24,23 @@ class ::Array < `Array`
     // As of V8 8.4, depending on the size of the array, this is up to ~25x times faster than Array#shift()
     // Implementation is heavily inspired by: https://github.com/nodejs/node/blob/ba684805b6c0eded76e5cd89ee00328ac7a59365/lib/internal/util.js#L341-L347
     function shiftNoArg(list) {
-      var r = list[0];
-      var index = 1;
-      var length = list.length;
+      const r = list[0];
+      let index = 1;
+      const length = list.length;
       for (; index < length; index++) {
         list[index - 1] = list[index];
       }
       list.pop();
       return r;
+    }
+
+    // Reverses list[i..j] in place (used by Array#rotate!).
+    function reverseRange(list, i, j) {
+      while (i < j) {
+        const t = list[i];
+        list[i++] = list[j];
+        list[j--] = t;
+      }
     }
 
     function toArraySubclass(obj, klass) {
@@ -45,10 +54,12 @@ class ::Array < `Array`
     // A helper for keep_if and delete_if, filter is either Opal.truthy
     // or Opal.falsy.
     function filterIf(self, filter, block) {
-      var value, raised = null, updated = new Array(self.length);
+      let value, raised = null, i2 = 0;
 
-      for (var i = 0, i2 = 0; i < self.length; i++) {
-        if (!raised) {
+      // self.length is re-read each step: the block may append to self and
+      // those elements must be visited (ruby/spec iterable_and_tolerating_size_increasing).
+      for (let i = 0; i < self.length; i++) {
+        if (raised === null) {
           try {
             value = $yield1(block, self[i])
           } catch(error) {
@@ -56,18 +67,14 @@ class ::Array < `Array`
           }
         }
 
-        if (raised || filter(value)) {
-          updated[i2] = self[i]
-          i2 += 1;
+        if (raised !== null || filter(value)) {
+          self[i2++] = self[i];
         }
       }
 
-      if (i2 !== i) {
-        self.splice(0, updated.length, ...updated);
-        self.splice(i2, updated.length);
-      }
+      if (i2 !== self.length) self.length = i2;
 
-      if (raised) throw raised;
+      if (raised !== null) throw raised;
     }
 
     function convertToArray(array) {
@@ -80,14 +87,66 @@ class ::Array < `Array`
     function fast_push(arr, objects) {
       // push(...objects) for arrays longer than 32767 may cause various argument errors in browsers
       // but may be faster than a for loop, which pushes each element separately
-      var length = objects.length;
+      const length = objects.length;
       if (length < 32767) {
         arr.push(...objects);
       } else {
-        for (var i = 0; i < length; i++) {
+        for (let i = 0; i < length; i++) {
           arr.push(objects[i]);
         }
       }
+    }
+
+    // Shared deep comparison for Array#== and Array#eql?. The `eql` flag
+    // selects the leaf comparison (eql? vs ==) and the matching coercion and
+    // identity-shortcut rules of each operator.
+    function arrayEqual(array, other, recursed, eql) {
+      let i, length, a, b;
+
+      if (!eql && array === other) {
+        return true;
+      }
+
+      if (!other.$$is_array) {
+        if (!eql && $respond_to(other, '$to_ary')) {
+          return $eqeq(other, array);
+        }
+        return false;
+      }
+
+      if (!eql && array.$$constructor !== Array) {
+        array = array.$to_a();
+      }
+      if (eql || other.$$constructor !== Array) {
+        other = other.$to_a();
+      }
+
+      if (array.length !== other.length) {
+        return false;
+      }
+
+      recursed[array.$object_id()] = true;
+
+      for (i = 0, length = array.length; i < length; i++) {
+        a = array[i];
+        b = other[i];
+        if (a.$$is_array) {
+          if (b.$$is_array && b.length !== a.length) {
+            return false;
+          }
+          if (!$has_own(recursed, a.$object_id())) {
+            if (!arrayEqual(a, b, recursed, eql)) {
+              return false;
+            }
+          }
+        } else {
+          if (eql ? !$truthy(a['$eql?'](b)) : !$eqeq(a, b)) {
+            return false;
+          }
+        }
+      }
+
+      return true;
     }
   }
 
@@ -133,7 +192,7 @@ class ::Array < `Array`
       }
 
       self.splice(0, self.length);
-      var i, value;
+      let i, value;
 
       if (block === nil) {
         for (i = 0; i < size; i++) {
@@ -163,7 +222,7 @@ class ::Array < `Array`
         return [];
       }
 
-      var result = [], hash = #{{}}, i, length, item;
+      let result = [], hash = #{{}}, i, length, item;
 
       for (i = 0, length = other.length; i < length; i++) {
         $hash_put(hash, other[i], true);
@@ -184,7 +243,7 @@ class ::Array < `Array`
     other = `convertToArray(other)`
 
     %x{
-      var hash = #{{}}, i, length, item;
+      let hash = #{{}}, i, length, item;
 
       for (i = 0, length = self.length; i < length; i++) {
         $hash_put(hash, self[i], true);
@@ -208,10 +267,10 @@ class ::Array < `Array`
     end
 
     %x{
-      var result = [],
+      let result = [],
           converted = #{to_a};
 
-      for (var i = 0; i < other; i++) {
+      for (let i = 0; i < other; i++) {
         result = result.concat(converted);
       }
 
@@ -232,7 +291,7 @@ class ::Array < `Array`
     return `self.slice(0)` if `other.length === 0`
 
     %x{
-      var result = [], hash = #{{}}, i, length, item;
+      let result = [], hash = #{{}}, i, length, item;
 
       for (i = 0, length = other.length; i < length; i++) {
         $hash_put(hash, other[i], true);
@@ -270,10 +329,10 @@ class ::Array < `Array`
         return 0;
       }
 
-      var count = Math.min(self.length, other.length);
+      const count = Math.min(self.length, other.length);
 
-      for (var i = 0; i < count; i++) {
-        var tmp = #{`self[i]` <=> `other[i]`};
+      for (let i = 0; i < count; i++) {
+        const tmp = #{`self[i]` <=> `other[i]`};
 
         if (tmp !== 0) {
           return tmp;
@@ -285,63 +344,12 @@ class ::Array < `Array`
   end
 
   def ==(other)
-    %x{
-      var recursed = {};
-
-      function _eqeq(array, other) {
-        var i, length, a, b;
-
-        if (array === other)
-          return true;
-
-        if (!other.$$is_array) {
-          if ($respond_to(other, '$to_ary')) {
-            return #{`other` == `array`};
-          } else {
-            return false;
-          }
-        }
-
-        if (array.$$constructor !== Array)
-          array = #{`array`.to_a};
-        if (other.$$constructor !== Array)
-          other = #{`other`.to_a};
-
-        if (array.length !== other.length) {
-          return false;
-        }
-
-        recursed[#{`array`.object_id}] = true;
-
-        for (i = 0, length = array.length; i < length; i++) {
-          a = array[i];
-          b = other[i];
-          if (a.$$is_array) {
-            if (b.$$is_array && b.length !== a.length) {
-              return false;
-            }
-            if (!recursed.hasOwnProperty(#{`a`.object_id})) {
-              if (!_eqeq(a, b)) {
-                return false;
-              }
-            }
-          } else {
-            if (!#{`a` == `b`}) {
-              return false;
-            }
-          }
-        }
-
-        return true;
-      }
-
-      return _eqeq(self, other);
-    }
+    `arrayEqual(self, other, {}, false)`
   end
 
   %x{
     function $array_slice_range(self, index) {
-      var size = self.length,
+      let size = self.length,
           exclude, from, to, result;
 
       exclude = index.excl;
@@ -381,7 +389,7 @@ class ::Array < `Array`
     }
 
     function $array_slice_arithmetic_seq(self, index) {
-      var array, out = [], i = 0, pseudorange;
+      let array, out = [], i = 0, pseudorange;
 
       if (index.step < 0) {
         pseudorange = {
@@ -405,7 +413,7 @@ class ::Array < `Array`
     }
 
     function $array_slice_index_length(self, index, length) {
-      var size = self.length,
+      let size = self.length,
           exclude, from, to, result;
 
       index = $coerce_to(index, Opal.Integer, 'to_int');
@@ -457,7 +465,7 @@ class ::Array < `Array`
 
     data = nil
     %x{
-      var i, size = self.length;
+      let i, size = self.length;
 
       if (index.$$is_range) {
         if (value.$$is_array)
@@ -467,7 +475,7 @@ class ::Array < `Array`
         else
           data = [value];
 
-        var exclude = index.excl,
+        let exclude = index.excl,
             from    = index.begin === nil ? 0 : $coerce_to(index.begin, Opal.Integer, 'to_int'),
             to      = index.end === nil ? -1 : $coerce_to(index.end, Opal.Integer, 'to_int');
 
@@ -516,7 +524,7 @@ class ::Array < `Array`
             data = [value];
         }
 
-        var old;
+        let old;
 
         index  = $coerce_to(index, Opal.Integer, 'to_int');
         length = $coerce_to(length, Opal.Integer, 'to_int');
@@ -562,7 +570,7 @@ class ::Array < `Array`
       // closure exceptions, this shortpath may provide some
       // optimization gains.
       if (pattern == null && !#{block_given?}) {
-        for (var i = 0; i < self.length; i++) {
+        for (let i = 0; i < self.length; i++) {
           if ($truthy(self[i])) return true;
         }
         return false;
@@ -575,7 +583,7 @@ class ::Array < `Array`
 
   def assoc(object)
     %x{
-      for (var i = 0, length = self.length, item; i < length; i++) {
+      for (let i = 0, length = self.length, item; i < length; i++) {
         if (item = self[i], item.length && #{`item[0]` == object}) {
           return item;
         }
@@ -605,7 +613,7 @@ class ::Array < `Array`
     return enum_for :bsearch_index unless block_given?
 
     %x{
-      var min = 0,
+      let min = 0,
           max = self.length,
           mid,
           val,
@@ -669,7 +677,7 @@ class ::Array < `Array`
     return if empty? || n == 0
 
     %x{
-      var i, length, value;
+      let i, length, value;
 
       if (n === nil) {
         while (true) {
@@ -721,10 +729,10 @@ class ::Array < `Array`
     return enum_for(:collect) { size } unless block_given?
 
     %x{
-      var result = [];
+      const result = [];
 
-      for (var i = 0; i < self.length; i++) {
-        var value = $yield1(block, self[i]);
+      for (let i = 0; i < self.length; i++) {
+        const value = $yield1(block, self[i]);
         result[i] = value;
       }
 
@@ -738,8 +746,8 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      for (var i = 0; i < self.length; i++) {
-        var value = $yield1(block, self[i]);
+      for (let i = 0; i < self.length; i++) {
+        const value = $yield1(block, self[i]);
         self[i] = value;
       }
     }
@@ -766,7 +774,7 @@ class ::Array < `Array`
     return enum_for(:combination, num) { `binomial_coefficient(#{self}.length, num)` } unless block_given?
 
     %x{
-      var i, length, stack, chosen, lev, done, next;
+      let i, length, stack, chosen, lev, done, next;
 
       if (num === 0) {
         #{yield []}
@@ -819,11 +827,11 @@ class ::Array < `Array`
     %x{
       function iterate(max, from, buffer, self) {
         if (buffer.length == max) {
-          var copy = buffer.slice(0);
+          const copy = buffer.slice(0);
           #{yield `copy`}
           return;
         }
-        for (var i = from; i < self.length; i++) {
+        for (let i = from; i < self.length; i++) {
           buffer.push(self[i]);
           iterate(max, i, buffer, self);
           buffer.pop();
@@ -839,9 +847,9 @@ class ::Array < `Array`
 
   def compact
     %x{
-      var result = [];
+      const result = [];
 
-      for (var i = 0, length = self.length, item; i < length; i++) {
+      for (let i = 0, length = self.length, item; i < length; i++) {
         item = self[i];
         if (item !== nil && item != null) {
           result.push(item);
@@ -856,19 +864,16 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      var original = self.length;
+      let original = self.length, i2 = 0, item;
 
-      for (var i = 0, length = self.length, item; i < length; i++) {
+      for (let i = 0; i < original; i++) {
         item = self[i];
-        if (item === nil || item == null) {
-          self.splice(i, 1);
-
-          length--;
-          i--;
-        }
+        if (item !== nil && item != null) self[i2++] = item;
       }
 
-      return self.length === original ? nil : self;
+      if (i2 === original) return nil;
+      self.length = i2;
+      return self;
     }
   end
 
@@ -887,7 +892,7 @@ class ::Array < `Array`
 
     others.each do |other|
       %x{
-        for (var i = 0, length = other.length; i < length; i++) {
+        for (let i = 0, length = other.length; i < length; i++) {
           self.push(other[i]);
         }
       }
@@ -898,9 +903,9 @@ class ::Array < `Array`
 
   def delete(object)
     %x{
-      var original = self.length;
+      const original = self.length;
 
-      for (var i = 0, length = original; i < length; i++) {
+      for (let i = 0, length = original; i < length; i++) {
         if (#{`self[i]` == object}) {
           $deny_frozen_access(self);
 
@@ -935,7 +940,7 @@ class ::Array < `Array`
         return nil;
       }
 
-      var result = self[index];
+      const result = self[index];
 
       self.splice(index, 1);
 
@@ -1002,7 +1007,7 @@ class ::Array < `Array`
     return enum_for(:each) { size } unless block_given?
 
     %x{
-      for (var i = 0; i < self.length; i++) {
+      for (let i = 0; i < self.length; i++) {
         $yield1(block, self[i]);
       }
     }
@@ -1014,7 +1019,7 @@ class ::Array < `Array`
     return enum_for(:each_index) { size } unless block_given?
 
     %x{
-      for (var i = 0; i < self.length; i++) {
+      for (let i = 0; i < self.length; i++) {
         $yield1(block, i);
       }
     }
@@ -1027,53 +1032,12 @@ class ::Array < `Array`
   end
 
   def eql?(other)
-    %x{
-      var recursed = {};
-
-      function _eql(array, other) {
-        var i, length, a, b;
-
-        if (!other.$$is_array) {
-          return false;
-        }
-
-        other = #{other.to_a};
-
-        if (array.length !== other.length) {
-          return false;
-        }
-
-        recursed[#{`array`.object_id}] = true;
-
-        for (i = 0, length = array.length; i < length; i++) {
-          a = array[i];
-          b = other[i];
-          if (a.$$is_array) {
-            if (b.$$is_array && b.length !== a.length) {
-              return false;
-            }
-            if (!recursed.hasOwnProperty(#{`a`.object_id})) {
-              if (!_eql(a, b)) {
-                return false;
-              }
-            }
-          } else {
-            if (!#{`a`.eql?(`b`)}) {
-              return false;
-            }
-          }
-        }
-
-        return true;
-      }
-
-      return _eql(self, other);
-    }
+    `arrayEqual(self, other, {}, true)`
   end
 
   def fetch(index, defaults = undefined, &block)
     %x{
-      var original = index;
+      const original = index;
 
       index = $coerce_to(index, Opal.Integer, 'to_int');
 
@@ -1110,7 +1074,7 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      var i, length, value;
+      let i, length, value;
     }
 
     if block
@@ -1209,7 +1173,7 @@ class ::Array < `Array`
   def flatten(level = undefined)
     %x{
       function _flatten(array, level) {
-        var result = [],
+        let result = [],
             i, length,
             item, ary;
 
@@ -1240,7 +1204,7 @@ class ::Array < `Array`
 
           switch (level) {
           case undefined:
-            result = result.concat(_flatten(ary));
+            fast_push(result, _flatten(ary));
             break;
           case 0:
             result.push(ary);
@@ -1264,10 +1228,11 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      var flattened = #{flatten level};
+      const flattened = #{flatten level};
 
       if (self.length == flattened.length) {
-        for (var i = 0, length = self.length; i < length; i++) {
+        let i, length;
+        for (i = 0, length = self.length; i < length; i++) {
           if (self[i] !== flattened[i]) {
             break;
           }
@@ -1294,7 +1259,7 @@ class ::Array < `Array`
 
   def hash
     %x{
-      var top = ($hash_ids === undefined),
+      let top = ($hash_ids === undefined),
           result = $opal32_init(),
           hash_id = self.$object_id(),
           item, i, key, values;
@@ -1338,7 +1303,7 @@ class ::Array < `Array`
 
   def include?(member)
     %x{
-      for (var i = 0, length = self.length; i < length; i++) {
+      for (let i = 0, length = self.length; i < length; i++) {
         if ($eqeq(self[i], member)) {
           return true;
         }
@@ -1350,7 +1315,7 @@ class ::Array < `Array`
 
   def index(object = undefined, &block)
     %x{
-      var i, length, value;
+      let i, length, value;
 
       if (object != null && block !== nil) {
         #{warn('warning: given block not used')}
@@ -1395,7 +1360,7 @@ class ::Array < `Array`
           }
         }
         if (index > self.length) {
-          for (var i = self.length; i < index; i++) {
+          for (let i = self.length; i < index; i++) {
             self.push(nil);
           }
         }
@@ -1411,21 +1376,21 @@ class ::Array < `Array`
 
   def inspect
     %x{
-      var result = [],
+      let result = [],
       id = #{__id__},
       pushed = true;
     }
 
     begin
       %x{
-        if (inspect_stack.indexOf(id) !== -1) {
+        if (inspect_stack.includes(id)) {
           pushed = false;
           return '[...]';
         }
         inspect_stack.push(id)
 
-        for (var i = 0, length = self.length; i < length; i++) {
-          var item = #{self[`i`]};
+        for (let i = 0, length = self.length; i < length; i++) {
+          const item = #{self[`i`]};
 
           result.push(#{Opal.inspect(`item`)});
         }
@@ -1467,7 +1432,7 @@ class ::Array < `Array`
 
   def intersect?(other)
     %x{
-      var small, large, hash = #{{}}, i, length;
+      let small, large, hash = #{{}}, i, length;
       if (self.length < other.length) {
         small = self;
         large = other;
@@ -1497,11 +1462,19 @@ class ::Array < `Array`
     end
 
     %x{
-      var result = [];
-      var i, length, item, tmp;
+      const result = [];
+      let i, length, item, tmp;
 
       for (i = 0, length = self.length; i < length; i++) {
         item = self[i];
+
+        // Fast path: native strings and numbers need no coercion protocol;
+        // Array#join stringifies them the same way to_str/to_s would.
+        if (item.$$is_string || item.$$is_number) {
+          result.push(item);
+
+          continue;
+        }
 
         if ($respond_to(item, '$to_str')) {
           tmp = #{`item`.to_str};
@@ -1562,7 +1535,7 @@ class ::Array < `Array`
   def last(count = undefined)
     %x{
       if (count == null) {
-        return self.length === 0 ? nil : self[self.length - 1];
+        return self.length === 0 ? nil : self.at(-1);
       }
 
       count = $coerce_to(count, Opal.Integer, 'to_int');
@@ -1594,7 +1567,7 @@ class ::Array < `Array`
   %x{
     // Returns the product of from, from-1, ..., from - how_many + 1.
     function descending_factorial(from, how_many) {
-      var count = how_many >= 0 ? 1 : 0;
+      let count = how_many >= 0 ? 1 : 0;
       while (how_many) {
         count *= from;
         from--;
@@ -1612,7 +1585,7 @@ class ::Array < `Array`
     end
 
     %x{
-      var permute, offensive, output;
+      let permute, offensive, output;
 
       if (num === undefined) {
         num = self.length;
@@ -1630,7 +1603,7 @@ class ::Array < `Array`
       }
       else if (num === 1) {
         // this is a special, easy case
-        for (var i = 0; i < self.length; i++) {
+        for (let i = 0; i < self.length; i++) {
           #{ yield `[self[i]]` }
         }
       }
@@ -1641,7 +1614,7 @@ class ::Array < `Array`
 
         permute = function(num, perm, index, used, blk) {
           self = this;
-          for(var i = 0; i < self.length; i++){
+          for (let i = 0; i < self.length; i++) {
             if(#{ !used[`i`] }) {
               perm[index] = i;
               if(index < num - 1) {
@@ -1651,7 +1624,7 @@ class ::Array < `Array`
               }
               else {
                 output = [];
-                for (var j = 0; j < perm.length; j++) {
+                for (let j = 0; j < perm.length; j++) {
                   output.push(self[perm[j]]);
                 }
                 $yield1(blk, output);
@@ -1681,11 +1654,11 @@ class ::Array < `Array`
     %x{
       function iterate(max, buffer, self) {
         if (buffer.length == max) {
-          var copy = buffer.slice(0);
+          const copy = buffer.slice(0);
           #{yield `copy`}
           return;
         }
-        for (var i = 0; i < self.length; i++) {
+        for (let i = 0; i < self.length; i++) {
           buffer.push(self[i]);
           iterate(max, buffer, self);
           buffer.pop();
@@ -1725,7 +1698,7 @@ class ::Array < `Array`
 
   def product(*args, &block)
     %x{
-      var result = #{block_given?} ? null : [],
+      let result = #{block_given?} ? null : [],
           n = args.length + 1,
           counters = new Array(n),
           lengths  = new Array(n),
@@ -1785,7 +1758,7 @@ class ::Array < `Array`
 
   def rassoc(object)
     %x{
-      for (var i = 0, length = self.length, item; i < length; i++) {
+      for (let i = 0, length = self.length, item; i < length; i++) {
         item = self[i];
 
         if (item.length && item[1] !== undefined) {
@@ -1803,9 +1776,9 @@ class ::Array < `Array`
     return enum_for(:reject) { size } unless block_given?
 
     %x{
-      var result = [];
+      const result = [];
 
-      for (var i = 0, value; i < self.length; i++) {
+      for (let i = 0, value; i < self.length; i++) {
         value = block(self[i]);
 
         if (value === false || value === nil) {
@@ -1856,7 +1829,7 @@ class ::Array < `Array`
     return enum_for(:reverse_each) { size } unless block_given?
 
     %x{
-      for (var i = self.length - 1; i >= 0; i--) {
+      for (let i = self.length - 1; i >= 0; i--) {
         $yield1(block, self[i]);
       }
     }
@@ -1865,7 +1838,7 @@ class ::Array < `Array`
 
   def rindex(object = undefined, &block)
     %x{
-      var i, value;
+      let i, value;
 
       if (object != null && block !== nil) {
         #{warn('warning: given block not used')}
@@ -1904,23 +1877,19 @@ class ::Array < `Array`
 
   def rotate(n = 1)
     %x{
-      var ary, idx, firstPart, lastPart;
+      const length = self.length;
 
-      n = $coerce_to(n, Opal.Integer, 'to_int')
-
-      if (self.length === 1) {
+      if (length <= 1) {
         return self.slice(0);
       }
-      if (self.length === 0) {
-        return [];
-      }
 
-      ary = self.slice(0);
-      idx = n % ary.length;
+      n = $coerce_to(n, Opal.Integer, 'to_int');
 
-      firstPart = ary.slice(idx);
-      lastPart = ary.slice(0, idx);
-      return firstPart.concat(lastPart);
+      let idx = n % length;
+      if (idx < 0) idx += length;
+      if (idx === 0) return self.slice(0);
+
+      return self.slice(idx).concat(self.slice(0, idx));
     }
   end
 
@@ -1928,13 +1897,22 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      if (self.length === 0 || self.length === 1) {
-        return self;
-      }
+      const length = self.length;
+      if (length <= 1) return self;
+
       cnt = $coerce_to(cnt, Opal.Integer, 'to_int');
+
+      let n = cnt % length;
+      if (n < 0) n += length;
+      if (n === 0) return self;
+
+      // Left-rotate by n in place with three reversals (no allocation).
+      reverseRange(self, 0, n - 1);
+      reverseRange(self, n, length - 1);
+      reverseRange(self, 0, length - 1);
+
+      return self;
     }
-    ary = rotate(cnt)
-    replace ary
   end
 
   class self::SampleRandom
@@ -1982,7 +1960,7 @@ class ::Array < `Array`
 
     %x{
 
-      var abandon, spin, result, i, j, k, targetIndex, oldValue;
+      let abandon, spin, result, i, j, k, targetIndex, oldValue;
 
       if (count > self.length) {
         count = self.length;
@@ -2050,7 +2028,7 @@ class ::Array < `Array`
 
           result = self.slice(0);
 
-          for (var c = 0; c < count; c++) {
+          for (let c = 0; c < count; c++) {
             targetIndex = #{rng.rand(`self.length - c`)} + c;
             oldValue = result[c];
             result[c] = result[targetIndex];
@@ -2066,9 +2044,9 @@ class ::Array < `Array`
     return enum_for(:select) { size } unless block_given?
 
     %x{
-      var result = [];
+      const result = [];
 
-      for (var i = 0, item, value; i < self.length; i++) {
+      for (let i = 0, item, value; i < self.length; i++) {
         item = self[i];
 
         value = $yield1(block, item);
@@ -2088,7 +2066,7 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self)
 
-      var original = self.length;
+      const original = self.length;
       #{ keep_if(&block) };
       return self.length === original ? nil : self;
     }
@@ -2121,7 +2099,7 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      var randgen, i = self.length, j, tmp;
+      let randgen, i = self.length, j, tmp;
 
       if (rng !== undefined) {
         rng = $coerce_to_or_nil(rng, Opal.Hash, "to_hash");
@@ -2187,7 +2165,7 @@ class ::Array < `Array`
             }
           }
 
-          var range_length = range_end - range_start;
+          let range_length = range_end - range_start;
           if (range.excl && range.end !== nil) {
             range_end -= 1;
           } else {
@@ -2227,7 +2205,7 @@ class ::Array < `Array`
           return nil;
         }
 
-        var end = start + length;
+        const end = start + length;
 
         result = #{self[start, length]};
 
@@ -2252,13 +2230,11 @@ class ::Array < `Array`
 
     %x{
       if (block === nil) {
-        block = function(a, b) {
-          return #{`a` <=> `b`};
-        };
+        block = (a, b) => #{`a` <=> `b`};
       }
 
-      return self.slice(0).sort(function(x, y) {
-        var ret = block(x, y);
+      return self.slice(0).sort((x, y) => {
+        let ret = block(x, y);
 
         if (ret === nil) {
           #{::Kernel.raise ::ArgumentError, "comparison of #{`x`.inspect} with #{`y`.inspect} failed"};
@@ -2273,7 +2249,7 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self)
 
-      var result;
+      let result;
 
       if (#{block_given?}) {
         result = #{`self.slice(0)`.sort(&block)};
@@ -2283,9 +2259,7 @@ class ::Array < `Array`
       }
 
       self.length = 0;
-      for(var i = 0, length = result.length; i < length; i++) {
-        self.push(result[i]);
-      }
+      fast_push(self, result);
 
       return self;
     }
@@ -2311,9 +2285,9 @@ class ::Array < `Array`
 
   def take_while(&block)
     %x{
-      var result = [];
+      const result = [];
 
-      for (var i = 0, item, value; i < self.length; i++) {
+      for (let i = 0, item, value; i < self.length; i++) {
         item = self[i];
 
         value = block(item);
@@ -2349,7 +2323,7 @@ class ::Array < `Array`
     array = array.map(&block) if block_given?
 
     %x{
-      var i, len = array.length, ary, key, val, hash = #{{}};
+      let i, len = array.length, ary, key, val, hash = #{{}};
 
       for (i = 0; i < len; i++) {
         ary = $coerce_to_or_nil(array[i], Opal.Array, "to_ary");
@@ -2369,27 +2343,27 @@ class ::Array < `Array`
   end
 
   def transpose
-    return [] if empty?
+    %x{
+      if (self.length === 0) return [];
 
-    result = []
-    max    = nil
+      let result = [], max = nil, row, i, j;
 
-    each do |row|
-      `row = convertToArray(row)`
+      for (i = 0; i < self.length; i++) {
+        row = convertToArray(self[i]);
 
-      max ||= `row.length`
+        if (max === nil) {
+          max = row.length;
+        } else if (row.length !== max) {
+          #{::Kernel.raise ::IndexError, "element size differs (#{`row.length`} should be #{`max`})"}
+        }
 
-      if `row.length` != max
-        ::Kernel.raise ::IndexError, "element size differs (#{`row.length`} should be #{max})"
-      end
+        for (j = 0; j < max; j++) {
+          (result[j] || (result[j] = [])).push(row[j]);
+        }
+      }
 
-      `row.length`.times do |i|
-        entry = (result[i] ||= [])
-        entry << row.at(i)
-      end
-    end
-
-    result
+      return result;
+    }
   end
 
   def union(*arrays)
@@ -2398,7 +2372,7 @@ class ::Array < `Array`
 
   def uniq(&block)
     %x{
-      var hash = #{{}}, i, length, item, key;
+      let hash = #{{}}, i, length, item, key;
 
       if (block === nil) {
         for (i = 0, length = self.length; i < length; i++) {
@@ -2426,7 +2400,7 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      var hash = #{{}}, i, item, key, delete_indexes = [];
+      let hash = #{{}}, i, item, key, delete_indexes = [];
 
       for (i = 0; i < self.length; i++) {
         item = self[i];
@@ -2451,19 +2425,19 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self);
 
-      var selfLength = self.length
-      var objectsLength = objects.length
+      const selfLength = self.length
+      const objectsLength = objects.length
       if (objectsLength == 0) return self;
-      var index = selfLength - objectsLength
-      for (var i = 0; i < objectsLength; i++) {
+      const index = selfLength - objectsLength
+      for (let i = 0; i < objectsLength; i++) {
         self.push(self[index + i])
       }
-      var len = selfLength - 1
+      let len = selfLength - 1
       while (len - objectsLength >= 0) {
         self[len] = self[len - objectsLength]
         len--
       }
-      for (var j = 0; j < objectsLength; j++) {
+      for (let j = 0; j < objectsLength; j++) {
         self[j] = objects[j]
       }
       return self;
@@ -2471,45 +2445,40 @@ class ::Array < `Array`
   end
 
   def values_at(*args)
-    out = []
+    %x{
+      let out = [], j, elem, i, start, finish, len = self.length;
 
-    args.each do |elem|
-      if elem.is_a? ::Range
-        finish = `#{elem.end} === nil ? -1 : $coerce_to(#{elem.end}, Opal.Integer, 'to_int')`
-        start = `#{elem.begin} === nil ? 0 : $coerce_to(#{elem.begin}, Opal.Integer, 'to_int')`
+      for (j = 0; j < args.length; j++) {
+        elem = args[j];
 
-        %x{
-          if (start < 0) {
-            start = start + self.length;
-            #{next};
+        if (elem.$$is_range) {
+          finish = elem.end   === nil ? -1 : $coerce_to(elem.end,   Opal.Integer, 'to_int');
+          start  = elem.begin === nil ?  0 : $coerce_to(elem.begin, Opal.Integer, 'to_int');
+
+          // A negative begin yields no values (matches the previous behaviour).
+          if (start < 0) continue;
+
+          if (finish < 0) finish += len;
+          if (elem.excl && elem.end !== nil) finish--;
+          if (finish < start) continue;
+
+          for (i = start; i <= finish; i++) {
+            out.push(i < len ? self[i] : nil);
           }
+        } else {
+          i = $coerce_to(elem, Opal.Integer, 'to_int');
+          if (i < 0) i += len;
+          out.push(i < 0 || i >= len ? nil : self[i]);
         }
+      }
 
-        %x{
-          if (finish < 0) {
-            finish = finish + self.length;
-          }
-          if (#{elem.exclude_end?} && #{elem.end} !== nil) {
-            finish--;
-          }
-          if (finish < start) {
-            #{next};
-          }
-        }
-
-        start.upto(finish) { |i| out << at(i) }
-      else
-        i = `$coerce_to(elem, Opal.Integer, 'to_int')`
-        out << at(i)
-      end
-    end
-
-    out
+      return out;
+    }
   end
 
   def zip(*others, &block)
     %x{
-      var result = [], size = self.length, part, o, i, j, jj;
+      let result = [], size = self.length, part, o, i, j, jj;
 
       for (j = 0, jj = others.length; j < jj; j++) {
         o = others[j];
@@ -2530,11 +2499,7 @@ class ::Array < `Array`
         part = [self[i]];
 
         for (j = 0, jj = others.length; j < jj; j++) {
-          o = others[j][i];
-
-          if (o == null) {
-            o = nil;
-          }
+          o = others[j][i] ?? nil;
 
           part[j + 1] = o;
         }
