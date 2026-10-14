@@ -40,21 +40,9 @@ opal_filter "Integer" do
   fails "Integer#^ fixnum returns self bitwise EXCLUSIVE OR other" # Expected 5 == 18446744078004520000 to be truthy but was false
   fails "Integer#^ fixnum returns self bitwise XOR other when one operand is negative" # Expected -3 == -8589934593 to be truthy but was false
   fails "Integer#ceildiv returns a quotient of division which is rounded up to the nearest integer" # NoMethodError: undefined method `ceildiv' for 0
-  fails "Integer#chr with an encoding argument raises RangeError if self is invalid as a codepoint in the specified encoding" # Expected RangeError but no exception was raised ("\x80" was returned)
-  fails "Integer#chr with an encoding argument raises a RangeError if self is too large" # Expected RangeError but no exception was raised ("膀" was returned)
-  fails "Integer#chr with an encoding argument raises a RangeError is self is less than 0" # Expected RangeError but no exception was raised ("\uFFFF" was returned)
   fails "Integer#chr with an encoding argument returns a String encoding self interpreted as a codepoint in the CESU-8 encoding" # NameError: uninitialized constant Encoding::CESU_8
-  fails "Integer#chr with an encoding argument returns a String encoding self interpreted as a codepoint in the specified encoding" # NameError: uninitialized constant Encoding::SHIFT_JIS
   fails "Integer#chr with an encoding argument returns a new String for each call" # Expected " " not to be identical to " "
-  fails "Integer#chr without argument raises a RangeError if self is too large" # Expected RangeError but no exception was raised ("膀" was returned)
-  fails "Integer#chr without argument raises a RangeError is self is less than 0" # Expected RangeError but no exception was raised ("\uFFFF" was returned)
   fails "Integer#chr without argument returns a new String for each call" # Expected "R" not to be identical to "R"
-  fails "Integer#chr without argument when Encoding.default_internal is nil and self is between 0 and 127 (inclusive) returns a US-ASCII String" # Expected #<Encoding:ASCII-8BIT> == #<Encoding:US-ASCII> to be truthy but was false
-  fails "Integer#chr without argument when Encoding.default_internal is nil raises a RangeError is self is greater than 255" # Expected RangeError but no exception was raised ("Ā" was returned)
-  fails "Integer#chr without argument when Encoding.default_internal is not nil and self is between 0 and 127 (inclusive) returns a US-ASCII String" # NoMethodError: undefined method `default_internal' for Encoding
-  fails "Integer#chr without argument when Encoding.default_internal is not nil and self is greater than 255 raises RangeError if self is invalid as a codepoint in the default internal encoding" # NoMethodError: undefined method `default_internal' for Encoding
-  fails "Integer#chr without argument when Encoding.default_internal is not nil and self is greater than 255 returns a String encoding self interpreted as a codepoint in the default internal encoding" # NoMethodError: undefined method `default_internal' for Encoding
-  fails "Integer#chr without argument when Encoding.default_internal is not nil and self is greater than 255 returns a String with the default internal encoding" # NoMethodError: undefined method `default_internal' for Encoding
   fails "Integer#coerce bigdecimal produces Floats" # Expected Number == Float to be truthy but was false
   fails "Integer#coerce fixnum raises a TypeError when given an Object that does not respond to #to_f" # Expected TypeError but got: ArgumentError (invalid value for Float(): "test")
   fails "Integer#coerce fixnum when given a Fixnum returns an array containing two Fixnums" # Expected [Number, Number] == [Integer, Integer] to be truthy but was false

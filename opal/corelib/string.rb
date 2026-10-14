@@ -1365,6 +1365,19 @@ class ::String < `String`
 
   def dump
     %x{
+      const encoding = self.encoding;
+      if (!encoding['$ascii_compatible?']()) {
+        // A String that is not ASCII-compatible is dumped as its bytes, and a
+        // suffix says which encoding they are bytes of.
+        let escaped = '';
+        for (const byte of encoding['$bytes'](self)) {
+          const chr = String.fromCharCode(byte);
+          if (dump_meta[chr]) escaped += dump_meta[chr];
+          else if (byte < 0x20 || byte > 0x7e) escaped += '\\x' + ('00' + byte.toString(16).toUpperCase()).slice(-2);
+          else escaped += chr;
+        }
+        return box_string('"' + escaped.replace(dump_interpolation, '\\$&') + '".dup.force_encoding("' + encoding.name + '")', #{::Encoding::ASCII_8BIT});
+      }
       const string = self.valueOf();
       // The printable ASCII characters that need no escaping and are not the
       // # of a Ruby interpolation, the common case.
@@ -1380,7 +1393,6 @@ class ::String < `String`
       if (plain) return box_string('"' + string + '"', self.encoding);
 
       let prev_chr = '',
-          encoding = self.encoding,
           escaped = string.replace(dump_escapable, function (chr) {
             if (dump_meta[chr]) return dump_meta[chr];
             const char_code = chr.charCodeAt(0);
@@ -1801,12 +1813,15 @@ class ::String < `String`
             '\\': '\\\\'
           },
           char_code,
-          is_binary = self.encoding == Opal.Encoding?.ASCII_8BIT || self.binary_encoding == Opal.Encoding?.ASCII_8BIT,
+          encoding = self.encoding,
+          name = encoding.name,
+          is_binary = encoding == Opal.Encoding?.ASCII_8BIT || self.binary_encoding == Opal.Encoding?.ASCII_8BIT,
+          byte_escape = is_binary || (encoding["$ascii_compatible?"]() && name !== "UTF-8"),
           external_is_utf8 = Opal.Encoding.default_external == Opal.Encoding.UTF_8,
           escaped = self.replace(escapable, function (chr) {
             if (meta[chr]) return meta[chr];
             char_code = chr.charCodeAt(0);
-            if (is_binary && char_code <= 0xff) {
+            if (byte_escape && char_code <= 0xff) {
               return '\\x' + ('00' + char_code.toString(16).toUpperCase()).slice(-2);
             } else if (external_is_utf8 && char_code >= 0xA0 && char_code <= 0xff) {
               return chr;
@@ -1817,7 +1832,6 @@ class ::String < `String`
       // A string in an encoding other than UTF-8 (the result's encoding)
       // shows its other non-ASCII characters escaped, as in CRuby: \\u00E9
       // (\\u{1F600}) in UTF-16/UTF-32, else \\x{93FA} (its bytes).
-      let encoding = self.encoding, name = encoding.name;
       if (!is_binary && name !== "UTF-8" && !encoding["$dummy?"]()) {
         let unicode = name.startsWith("UTF-16") || name.startsWith("UTF-32");
         escaped = escaped.replace(/[^\x00-\x7F]/gu, function (chr) {
@@ -2905,9 +2919,124 @@ class ::String < `String`
 
   # tr_s! - not supported, mutates string
 
-  # def undump
-  #  # TODO
-  # end
+  def undump
+    invalid = "invalid dumped string; not wrapped with '\"' nor '\"...\".force_encoding(\"...\")' form"
+    %x{
+      const string = self.valueOf(), length = string.length;
+      if (length === 1 || string.charCodeAt(0) !== 0x22) #{raise RuntimeError, invalid};
+      if (string.indexOf('\0') !== -1) #{raise RuntimeError, 'string contains null byte'};
+      if (!self.encoding['$ascii_compatible?']()) #{raise CompatibilityError, 'ASCII incompatible encoding: ' + self.encoding.name};
+
+      function hex_digit(code) {
+        if (code >= 0x30 && code <= 0x39) return code - 0x30;
+        if (code >= 0x61 && code <= 0x66) return code - 0x57;
+        if (code >= 0x41 && code <= 0x46) return code - 0x37;
+        return -1;
+      }
+
+      function codepoint(value) {
+        if (value > 0x10FFFF) #{raise RuntimeError, 'invalid Unicode codepoint (too large)'};
+        if (value >= 0xD800 && value <= 0xDFFF) #{raise RuntimeError, 'invalid Unicode codepoint'};
+        return String.fromCodePoint(value);
+      }
+
+      // The dump of a String that is not ASCII-compatible ends with a
+      // .force_encoding("...") suffix, which a .dup may precede.
+      let encoding = self.encoding, end = length - 1;
+      if (string.charCodeAt(end) !== 0x22) {
+        const quote = string.indexOf('"', 1);
+        if (quote < 0) #{raise RuntimeError, 'unterminated dumped string'};
+        end = quote;
+        let suffix = string.slice(quote + 1);
+        if (suffix.slice(0, 4) === '.dup') suffix = suffix.slice(4);
+        const name = /^\.force_encoding\("([^"]*)"\)$/.exec(suffix);
+        if (!name) #{raise RuntimeError, invalid};
+        encoding = Opal.encodings[name[1]] || Opal.encodings[name[1].toUpperCase()];
+        if (!encoding) #{raise RuntimeError, 'dumped string has unknown encoding name'};
+      }
+
+      let result = '', i = 1;
+      while (i < end) {
+        const code = string.charCodeAt(i);
+        if (code === 0x22) #{raise RuntimeError, invalid};
+        if (code > 0x7f) #{raise RuntimeError, 'non-ASCII character detected'};
+        if (code !== 0x5c) { result += string[i++]; continue; }
+        if (i + 1 >= end) #{raise RuntimeError, 'unterminated dumped string'};
+        const next = string.charCodeAt(i + 1);
+        if (next === 0x61) result += '\x07';
+        else if (next === 0x62) result += '\x08';
+        else if (next === 0x74) result += '\x09';
+        else if (next === 0x6e) result += '\x0a';
+        else if (next === 0x76) result += '\x0b';
+        else if (next === 0x66) result += '\x0c';
+        else if (next === 0x72) result += '\x0d';
+        else if (next === 0x65) result += '\x1b';
+        else if (next === 0x5c) result += '\\';
+        else if (next === 0x22) result += '"';
+        else if (next === 0x23) {
+          // The dump escapes the # of an interpolation, undump drops the slash.
+          result += '#';
+        } else if (next === 0x78) {
+          const high = hex_digit(string.charCodeAt(i + 2)), low = hex_digit(string.charCodeAt(i + 3));
+          if (i + 3 >= end || high < 0 || low < 0) #{raise RuntimeError, 'invalid hex escape'};
+          result += String.fromCharCode(high * 16 + low);
+          i += 2;
+        } else if (next === 0x75) {
+          if (string.charCodeAt(i + 2) === 0x7b) {
+            // The brace form holds code points separated by spaces.
+            let j = i + 3, value = 0, digits = 0;
+            while (j < end) {
+              const digit = hex_digit(string.charCodeAt(j));
+              if (digit >= 0) { value = value * 16 + digit; digits++; j++; continue; }
+              if (string.charCodeAt(j) !== 0x20) break;
+              if (digits) { result += codepoint(value); value = 0; digits = 0; }
+              j++;
+            }
+            if (j >= end || string.charCodeAt(j) !== 0x7d) #{raise RuntimeError, 'invalid Unicode escape'};
+            if (digits) result += codepoint(value);
+            i = j - 1;
+          } else {
+            let value = 0;
+            for (let k = 0; k < 4; k++) {
+              const digit = hex_digit(string.charCodeAt(i + 2 + k));
+              if (i + 2 + k >= end || digit < 0) #{raise RuntimeError, 'invalid Unicode escape'};
+              value = value * 16 + digit;
+            }
+            result += codepoint(value);
+            i += 4;
+          }
+        } else {
+          // An escape that a dump never writes is left as it is.
+          result += '\\' + string[i + 1];
+        }
+        i += 2;
+      }
+      if (!encoding['$ascii_compatible?']()) {
+        const bytes = new Uint8Array(result.length);
+        for (let i = 0; i < result.length; i++) bytes[i] = result.charCodeAt(i);
+        const name = encoding.name;
+        if (name === 'UTF-32BE' || name === 'UTF-32LE') {
+          let decoded = '';
+          for (let i = 0; i + 3 < bytes.length; i += 4) {
+            const value = name === 'UTF-32LE'
+              ? bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24)
+              : (bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3];
+            decoded += String.fromCodePoint(value);
+          }
+          result = decoded;
+        } else {
+          let label = name.toLowerCase();
+          if (label === 'utf-16') label = 'utf-16le';
+          try {
+            result = new TextDecoder(label).decode(bytes);
+          } catch {
+            // Leave the bytes as they are when the engine has no decoder for it.
+          }
+        }
+      }
+      return box_string(result, encoding);
+    }
+  end
 
   def unicode_normalize(form = :nfc)
     ::Kernel.raise ::ArgumentError, "Invalid normalization form #{form}" unless %i[nfc nfd nfkc nfkd].include?(form)

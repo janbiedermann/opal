@@ -390,7 +390,16 @@ class ::Number < ::Numeric
   end
 
   def chr(encoding = undefined)
-    `Opal.str(String.fromCodePoint(self), encoding || "BINARY")`
+    %x{
+      var value = self.valueOf();
+      if (typeof value === 'bigint' || !Number.isInteger(value) || value < 0)
+        #{::Kernel.raise ::RangeError, `String(value) + ' out of char range'`};
+
+      if (encoding !== undefined && encoding !== nil) {
+        return #{::Encoding.find(`encoding`).chr(`value`)};
+      }
+      return #{::Encoding.chr(`value`)};
+    }
   end
 
   def denominator

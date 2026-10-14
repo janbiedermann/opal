@@ -28,6 +28,27 @@ require 'corelib/string/encoding/tables/sjis_inverted'
     if (!enc.validating_decoder) enc.validating_decoder = new TextDecoder(label, { fatal: true });
     return enc.validating_decoder;
   }
+
+  function encoding_chr_invalid(enc, value) {
+    Opal.raise(Opal.RangeError, 'invalid codepoint 0x' + value.toString(16) + ' in ' + enc.name);
+  };
+
+  function chr_bytes(enc, value) {
+    const bytes = [];
+    for (let rest = value; ; rest = Math.floor(rest / 256)) {
+      bytes.unshift(rest % 256);
+      if (rest < 256) break;
+    }
+    let result;
+    try {
+      result = validating_decoder(enc, enc.name.toLowerCase()).decode(new Uint8Array(bytes));
+    }
+    catch {
+      encoding_chr_invalid(enc, value);
+    }
+    if (Array.from(result).length !== 1) encoding_chr_invalid(enc, value);
+    return $str(result, enc);
+  }
 }
 
 ::Encoding.register 'Shift_JIS', aliases: %w[SHIFT_JIS SJIS], ascii: true do
@@ -234,5 +255,13 @@ require 'corelib/string/encoding/tables/sjis_inverted'
   def dump_byte_escape?(code_point)
     # The characters String#dump escapes as \xNN, the others as \uXXXX.
     code_point <= 0xff
+  end
+
+  def chr(value)
+    %x{
+      // The ASCII bytes are not remapped by the WHATWG decoder.
+      if (value <= 0x7f) return $str(String.fromCharCode(value), self);
+      return chr_bytes(self, value);
+    }
   end
 end

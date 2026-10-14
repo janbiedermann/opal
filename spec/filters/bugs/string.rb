@@ -85,8 +85,6 @@ opal_filter "String" do
   fails "String#delete_prefix! raises a FrozenError when self is frozen" # Expected FrozenError but got: NoMethodError (undefined method `delete_prefix!' for "hello")
   fails "String#delete_suffix! raises a FrozenError when self is frozen" # Expected FrozenError but got: NoMethodError (undefined method `delete_suffix!' for "hello")
   fails "String#downcase! raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#downcase! not supported. Mutable String methods are not supported in Opal.)
-  fails "String#dump includes .force_encoding(name) if the encoding isn't ASCII compatible" # NoMethodError: undefined method `dump' for "ࡶ"
-  fails "String#dump returns a String in the same encoding as self" # NoMethodError: undefined method `dump' for "foo"
   fails "String#dup calls #initialize_copy on the new instance" # Expected nil == "string" to be truthy but was false
   fails "String#dup does not modify the original setbyte-mutated string when changing dupped string" # NoMethodError: undefined method `setbyte' for "a"
   fails "String#each_byte keeps iterating from the old position (to new string end) when self changes" # NotImplementedError: String#<< not supported. Mutable String methods are not supported in Opal.
@@ -216,30 +214,6 @@ opal_filter "String" do
   fails "String#to_sym returns a binary Symbol for a binary String containing non US-ASCII characters" # Expected #<Encoding:UTF-8> == #<Encoding:ASCII-8BIT> to be truthy but was false
   fails "String#tr! raises a FrozenError if self is frozen" # Expected FrozenError but got: NotImplementedError (String#tr! not supported. Mutable String methods are not supported in Opal.)
   fails "String#tr_s! raises a FrozenError if self is frozen" # Expected FrozenError but got: NotImplementedError (String#tr_s! not supported. Mutable String methods are not supported in Opal.)
-  fails "String#undump Limitations cannot undump non ASCII-compatible string" # Expected CompatibilityError but got: NoMethodError (undefined method `undump' for "\"foo\"")
-  fails "String#undump always returns String instance" # NoMethodError: undefined method `undump' for "\"foo\""
-  fails "String#undump does not take into account if a string is frozen" # NoMethodError: undefined method `undump' for "\"foo\""
-  fails "String#undump invalid dump raises RuntimeError exception if wrapping \" are missing" # Expected RuntimeError (/invalid dumped string/) but got: NoMethodError (undefined method `undump' for "foo")
-  fails "String#undump invalid dump raises RuntimeError if string contains \u0000 character" # Expected RuntimeError (/string contains null byte/) but got: NoMethodError (undefined method `undump' for "\"foo\u0000\"")
-  fails "String#undump invalid dump raises RuntimeError if string contains non ASCII character" # Expected RuntimeError (/non-ASCII character detected/) but got: NoMethodError (undefined method `undump' for "\"あ\"")
-  fails "String#undump invalid dump raises RuntimeError if there are some excessive \"" # Expected RuntimeError (/invalid dumped string/) but got: NoMethodError (undefined method `undump' for "\" \"\" \"")
-  fails "String#undump invalid dump raises RuntimeError if there is incorrect \\x sequence" # Expected RuntimeError (/invalid hex escape/) but got: NoMethodError (undefined method `undump' for "\"\\x\"")
-  fails "String#undump invalid dump raises RuntimeError if there is malformed dump of non ASCII-compatible string" # Expected RuntimeError (/invalid dumped string/) but got: NoMethodError (undefined method `undump' for "\"\".force_encoding(\"BINARY\"")
-  fails "String#undump invalid dump raises RuntimeError in there is incorrect \\u sequence" # Expected RuntimeError (/invalid Unicode escape/) but got: NoMethodError (undefined method `undump' for "\"\\u\"")
-  fails "String#undump returns a String in the same encoding as self" # NoMethodError: undefined method `undump' for "\"foo\""
-  fails "String#undump returns a string with # not escaped when followed by any other character" # NoMethodError: undefined method `undump' for "\"#\""
-  fails "String#undump returns a string with \\uXXXX notation replaced with multi-byte UTF-8 characters" # NoMethodError: undefined method `undump' for "\"\\u0080\""
-  fails "String#undump returns a string with \\u{} notation replaced with multi-byte UTF-8 characters" # NoMethodError: undefined method `undump' for "\"\\u80\""
-  fails "String#undump returns a string with \\x notation replaced with non-printing ASCII character" # NoMethodError: undefined method `undump' for "\"\\x00\""
-  fails "String#undump returns a string with lower-case alpha characters unescaped" # NoMethodError: undefined method `undump' for "\"a\""
-  fails "String#undump returns a string with numeric characters unescaped" # NoMethodError: undefined method `undump' for "\"0\""
-  fails "String#undump returns a string with printable non-alphanumeric characters" # NoMethodError: undefined method `undump' for "\" \""
-  fails "String#undump returns a string with special characters in \\<char> notation replaced with the characters" # NoMethodError: undefined method `undump' for "\"\\a\""
-  fails "String#undump returns a string with unescaped sequences \" and \\" # NoMethodError: undefined method `undump' for "\"\\\"\""
-  fails "String#undump returns a string with unescaped sequences \\#<char> when # is followed by $, @, {" # NoMethodError: undefined method `undump' for "\"\\\#$PATH\""
-  fails "String#undump returns a string with upper-case alpha characters unescaped" # NoMethodError: undefined method `undump' for "\"A\""
-  fails "String#undump strips outer \"" # NoMethodError: undefined method `undump' for "\"foo\""
-  fails "String#undump undumps correctly string produced from non ASCII-compatible one" # NoMethodError: undefined method `dump' for "ࡶ"
   fails "String#unicode_normalize raises an Encoding::CompatibilityError if string is not in an unicode encoding" # Expected CompatibilityError but no exception was raised ("à" was returned)
   fails "String#unicode_normalized? raises an Encoding::CompatibilityError if the string is not in an unicode encoding" # Expected CompatibilityError but no exception was raised (true was returned)
   fails "String#unicode_normalized? returns true if str is in Unicode normalization form (nfc)" # NotImplementedError: String#unicode_normalize! not supported. Mutable String methods are not supported in Opal.

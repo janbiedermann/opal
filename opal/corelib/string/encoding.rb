@@ -91,6 +91,18 @@ class ::Encoding
       `Opal.find_encoding(name)`
     end
 
+    def chr(value)
+      if value <= 127
+        ::Encoding::US_ASCII.chr(value)
+      elsif value <= 255
+        ::Encoding::ASCII_8BIT.chr(value)
+      elsif default_internal
+        default_internal.chr(value)
+      else
+        raise RangeError, "#{value} out of char range"
+      end
+    end
+
     def list
       constants.map! { |e| const_get(e) }.uniq!.select! { |e| e.is_a?(::Encoding) }
     end
@@ -130,6 +142,10 @@ class ::Encoding
   end
 
   # methods to implement per encoding
+  def chr(value)
+    __not_implemented__
+  end
+
   def bytes(str)
     __not_implemented__
   end
@@ -214,6 +230,16 @@ end
   function validating_decoder(enc, label) {
     return enc.validating_decoder ??= new TextDecoder(label, { fatal: true });
   }
+
+  function encoding_chr_invalid(enc, value) {
+    Opal.raise(Opal.RangeError, 'invalid codepoint 0x' + value.toString(16) + ' in ' + enc.name);
+  };
+
+  function encoding_chr_codepoint(enc, value) {
+    if (value > 0x10ffff) Opal.raise(Opal.RangeError, value + ' out of char range');
+    if (value >= 0xd800 && value <= 0xdfff) encoding_chr_invalid(enc, value);
+    return $str(String.fromCodePoint(value), enc);
+  };
 }
 
 ::Encoding.register 'UTF-8', aliases: ['CP65001'], ascii: true do
@@ -631,6 +657,10 @@ end
       return true;
     }
   end
+
+  def chr(value)
+    `encoding_chr_codepoint(self, value)`
+  end
 end
 
 ::Encoding.register 'UTF-16LE', aliases: ['UTF-16'] do
@@ -809,6 +839,10 @@ end
       catch { return false; }
       return true;
     }
+  end
+
+  def chr(value)
+    `encoding_chr_codepoint(self, value)`
   end
 end
 
@@ -1096,6 +1130,10 @@ end
 
   def valid_encoding?(str)
     true
+  end
+
+  def chr(value)
+    `encoding_chr_codepoint(self, value)`
   end
 end
 
@@ -1402,6 +1440,13 @@ end
     # Every byte of a binary string is valid.
     true
   end
+
+  def chr(value)
+    %x{
+      if (value > 0xff) Opal.raise(Opal.RangeError, value + ' out of char range');
+      return $str(String.fromCharCode(value), self);
+    }
+  end
 end
 
 ::Encoding.register 'ISO-8859-1', aliases: ['ISO8859-1'], ascii: true, inherits: ::Encoding::ASCII_8BIT
@@ -1433,6 +1478,14 @@ end
       for (let i = 0, length = string.length; i < length; i++)
         if (string.charCodeAt(i) > 0x7f) return false;
       return true;
+    }
+  end
+
+  def chr(value)
+    %x{
+      if (value > 0xff) Opal.raise(Opal.RangeError, value + ' out of char range');
+      if (value > 0x7f) encoding_chr_invalid(self, value);
+      return $str(String.fromCharCode(value), self);
     }
   end
 end
