@@ -649,20 +649,24 @@ class ::String < `String`
       if (obj === true || obj === false) #{raise TypeError, "no implicit conversion of #{`obj`} into String"};
     }
 
-    function case_options_have_ascii(options, allow_fold) {
-      let ascii = false, fold = false;
-      if (options.length > 0) {
-        for(const option of options) {
-          if (option == "ascii") ascii = true;
-          else if (options == "fold") fold = true;
-          else #{raise ArgumentError, "unknown option :#{`option`}"}
-        }
-        if (!allow_fold) {
-          if (fold && ascii) #{raise ArgumentError, 'too many options'};
-          if (fold) #{raise ArgumentError, ':fold not allowed'};
-        }
+    // The options of the case methods as a mask: 1 for :ascii, 2 for :fold, 4
+    // for :turkic and 8 for :lithuanian. Only downcase takes :fold, and the
+    // only pair of options Ruby accepts is :turkic with :lithuanian.
+    function case_options(options, allow_fold) {
+      let found = 0, count = 0;
+      for (const option of options) {
+        const bit = option === 'ascii' ? 1 : option === 'fold' ? 2
+          : option === 'turkic' ? 4 : option === 'lithuanian' ? 8 : 0;
+        if (!bit) #{raise ArgumentError, 'invalid option'};
+        if (count === 1) {
+          if (found & 3) #{raise ArgumentError, 'too many options'};
+          if (found + bit !== 12) #{raise ArgumentError, 'invalid second option'};
+        } else if (count > 1) #{raise ArgumentError, 'too many options'}
+        found |= bit;
+        count++;
       }
-      return ascii;
+      if (found === 2 && !allow_fold) #{raise ArgumentError, 'option :fold only allowed for downcasing'};
+      return found;
     }
   }
 
@@ -1058,14 +1062,19 @@ class ::String < `String`
   def capitalize(*options)
     %x{
       if (self.length === 0) return '';
+      const opts = case_options(options, false);
+      const locale = opts & 4 ? 'tr' : opts & 8 ? 'lt' : null;
       let first = first_char(self);
-      if (case_options_have_ascii(options) && first.codePointAt(0) > 127) return self;
-      let first_upper = first.toUpperCase();
+      if ((opts & 1) && first.codePointAt(0) > 127) return self;
+      let first_upper = locale ? first.toLocaleUpperCase(locale) : first.toUpperCase();
       if (first_upper.length > first.length && first_upper.codePointAt(0) < 128) {
-        first_upper = first_upper[0] + first_upper[1].toLowerCase();
+        first_upper = first_upper[0] + (locale ? first_upper[1].toLocaleLowerCase(locale) : first_upper[1].toLowerCase());
       }
-      let capz = first_upper + self.substring(first.length).toLowerCase();
-      return $str(capz, self.encoding);
+      const rest = self.substring(first.length);
+      // :ascii leaves the non-ASCII characters of the rest alone.
+      const downcased = opts & 1 ? rest.replace(/[A-Z]+/g, (match) => match.toLowerCase())
+        : locale ? rest.toLocaleLowerCase(locale) : rest.toLowerCase();
+      return $str(first_upper + downcased, self.encoding);
     }
   end
 
@@ -1336,14 +1345,15 @@ class ::String < `String`
   def downcase(*options)
     %x{
       let str = self.valueOf();
+      const opts = case_options(options, true);
 
-      if (options.length > 0){
-        if (case_options_have_ascii(options, true)) {
-          str = str.replace(/[A-Z]+/g, (match)=>{ return match.toLowerCase(); });
-        } else if (options.includes('fold')) {
-          str = str.toUpperCase(); // ß -> SS
-          str = str.toLowerCase(); // SS -> ss
-        }
+      if (opts & 1) {
+        str = str.replace(/[A-Z]+/g, (match)=>{ return match.toLowerCase(); });
+      } else if (opts & 2) {
+        str = str.toUpperCase(); // ß -> SS
+        str = str.toLowerCase(); // SS -> ss
+      } else if (opts & 12) {
+        str = str.toLocaleLowerCase(opts & 4 ? 'tr' : 'lt');
       } else {
         str = str.toLowerCase();
       }
@@ -2550,10 +2560,22 @@ class ::String < `String`
 
   def swapcase(*options)
     %x{
-      if (case_options_have_ascii(options)) {
+      const opts = case_options(options, false);
+      if (opts & 1) {
         return self.valueOf().replace(/([a-z]+)|([A-Z]+)/g, function($0,$1,$2) {
           return $1 ? $0.toUpperCase() : $0.toLowerCase();
         });
+      }
+      if (opts & 12) {
+        // :turkic and :lithuanian swap one character at a time so that the tr
+        // and lt mappings apply to each of them.
+        const locale = opts & 4 ? 'tr' : 'lt';
+        let swapped = '';
+        for (const c of self.valueOf()) {
+          const upper_cased = c.toLocaleUpperCase(locale);
+          swapped += upper_cased === c ? c.toLocaleLowerCase(locale) : upper_cased;
+        }
+        return $str(swapped, self.encoding);
       }
       // The runs of ASCII letters are swapped at once. A run of other
       // characters is kept when its case mapping is the identity, and only a
@@ -2909,8 +2931,11 @@ class ::String < `String`
   def upcase(*options)
     %x{
       let result, s = self.valueOf();
-      if (case_options_have_ascii(options)) {
+      const opts = case_options(options, false);
+      if (opts & 1) {
         result = s.replace(/[a-z]+/g, (match)=>{ return match.toUpperCase(); });
+      } else if (opts & 12) {
+        result = s.toLocaleUpperCase(opts & 4 ? 'tr' : 'lt');
       } else {
         result = s.toUpperCase();
       }

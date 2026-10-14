@@ -57,10 +57,6 @@ opal_filter "String" do
   fails "String#bytesplice with multibyte characters replaces with integer indices" # NoMethodError: undefined method `bytesplice' for "こんにちは"
   fails "String#bytesplice with multibyte characters replaces with range" # NoMethodError: undefined method `bytesplice' for "こんにちは"
   fails "String#bytesplice with multibyte characters treats negative length for range as 0" # NoMethodError: undefined method `bytesplice' for "こんにちは"
-  fails "String#capitalize full Unicode case mapping adapted for Lithuanian allows Turkic as an extra option (and applies Turkic semantics)" # ArgumentError: [String#capitalize] wrong number of arguments (given 2, expected 0)
-  fails "String#capitalize full Unicode case mapping adapted for Lithuanian currently works the same as full Unicode case mapping" # ArgumentError: [String#capitalize] wrong number of arguments (given 1, expected 0)
-  fails "String#capitalize full Unicode case mapping adapted for Turkic languages allows Lithuanian as an extra option" # ArgumentError: [String#capitalize] wrong number of arguments (given 2, expected 0)
-  fails "String#capitalize full Unicode case mapping adapted for Turkic languages capitalizes ASCII characters according to Turkic semantics" # ArgumentError: [String#capitalize] wrong number of arguments (given 1, expected 0)
   fails "String#capitalize! raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#capitalize! not supported. Mutable String methods are not supported in Opal.)
   fails "String#casecmp independent of case returns nil if incompatible encodings" # NameError: uninitialized constant Encoding::EUC_JP
   fails "String#casecmp? independent of case returns nil if incompatible encodings" # NameError: uninitialized constant Encoding::EUC_JP
@@ -88,10 +84,6 @@ opal_filter "String" do
   fails "String#delete! raises a FrozenError when self is frozen" # Expected FrozenError but got: NoMethodError (undefined method `delete!' for "hello")
   fails "String#delete_prefix! raises a FrozenError when self is frozen" # Expected FrozenError but got: NoMethodError (undefined method `delete_prefix!' for "hello")
   fails "String#delete_suffix! raises a FrozenError when self is frozen" # Expected FrozenError but got: NoMethodError (undefined method `delete_suffix!' for "hello")
-  fails "String#downcase full Unicode case mapping adapted for Lithuanian allows Turkic as an extra option (and applies Turkic semantics)" # ArgumentError: [String#downcase] wrong number of arguments (given 2, expected 0)
-  fails "String#downcase full Unicode case mapping adapted for Lithuanian currently works the same as full Unicode case mapping" # ArgumentError: [String#downcase] wrong number of arguments (given 1, expected 0)
-  fails "String#downcase full Unicode case mapping adapted for Turkic languages allows Lithuanian as an extra option" # ArgumentError: [String#downcase] wrong number of arguments (given 2, expected 0)
-  fails "String#downcase full Unicode case mapping adapted for Turkic languages downcases characters according to Turkic semantics" # ArgumentError: [String#downcase] wrong number of arguments (given 1, expected 0)
   fails "String#downcase! raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#downcase! not supported. Mutable String methods are not supported in Opal.)
   fails "String#dump includes .force_encoding(name) if the encoding isn't ASCII compatible" # NoMethodError: undefined method `dump' for "ࡶ"
   fails "String#dump returns a String in the same encoding as self" # NoMethodError: undefined method `dump' for "foo"
@@ -205,10 +197,6 @@ opal_filter "String" do
   fails "String#sub with pattern, replacement supports \\G which matches at the beginning of the string" # Expected "hello world!" == "hi world!" to be truthy but was false
   fails "String#sub! with pattern and block raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#sub! not supported. Mutable String methods are not supported in Opal.)
   fails "String#sub! with pattern, replacement raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#sub! not supported. Mutable String methods are not supported in Opal.)
-  fails "String#swapcase full Unicode case mapping adapted for Lithuanian allows Turkic as an extra option (and applies Turkic semantics)" # ArgumentError: [String#swapcase] wrong number of arguments (given 2, expected 0)
-  fails "String#swapcase full Unicode case mapping adapted for Lithuanian currently works the same as full Unicode case mapping" # ArgumentError: [String#swapcase] wrong number of arguments (given 1, expected 0)
-  fails "String#swapcase full Unicode case mapping adapted for Turkic languages allows Lithuanian as an extra option" # ArgumentError: [String#swapcase] wrong number of arguments (given 2, expected 0)
-  fails "String#swapcase full Unicode case mapping adapted for Turkic languages swaps case of ASCII characters according to Turkic semantics" # ArgumentError: [String#swapcase] wrong number of arguments (given 1, expected 0)
   fails "String#swapcase! raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#swapcase! not supported. Mutable String methods are not supported in Opal.)
   fails "String#to_c allows null-byte" # Expected (1-2i) == (1+0i) to be truthy but was false
   fails "String#to_c ignores leading whitespaces" # Expected (79+79i) == (79+4i) to be truthy but was false
@@ -264,10 +252,6 @@ opal_filter "String" do
   fails "String#unpack with format 'm' when given count 0 raises an ArgumentError for an invalid base64 character" # Expected ArgumentError but no exception was raised (["test"] was returned)
   fails "String#unpack1 returns the first value of #unpack" # RuntimeError: Unsupported unpack directive "x" (no chunk reader defined)
   fails "String#unpack1 starts unpacking from the given offset" # RuntimeError: Unsupported unpack directive "x" (no chunk reader defined)
-  fails "String#upcase full Unicode case mapping adapted for Lithuanian allows Turkic as an extra option (and applies Turkic semantics)" # ArgumentError: [String#upcase] wrong number of arguments (given 2, expected 0)
-  fails "String#upcase full Unicode case mapping adapted for Lithuanian currently works the same as full Unicode case mapping" # ArgumentError: [String#upcase] wrong number of arguments (given 1, expected 0)
-  fails "String#upcase full Unicode case mapping adapted for Turkic languages allows Lithuanian as an extra option" # ArgumentError: [String#upcase] wrong number of arguments (given 2, expected 0)
-  fails "String#upcase full Unicode case mapping adapted for Turkic languages upcases ASCII characters according to Turkic semantics" # ArgumentError: [String#upcase] wrong number of arguments (given 1, expected 0)
   fails "String#upcase! raises a FrozenError when self is frozen" # Expected FrozenError but got: NotImplementedError (String#upcase! not supported. Mutable String methods are not supported in Opal.)
   fails "String#upto raises Encoding::CompatibilityError when incompatible characters are given" # ArgumentError: unknown encoding name - EUC-JP
   fails "String#valid_encoding? returns true for IBM720 encoding self is valid in" # ArgumentError: unknown encoding name - IBM720
