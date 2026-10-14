@@ -1587,8 +1587,8 @@ class ::Array < `Array`
     each.max(n, &block)
   end
 
-  def min(&block)
-    each.min(&block)
+  def min(n = nil, &block)
+    each.min(n, &block)
   end
 
   %x{

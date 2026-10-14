@@ -1,4 +1,4 @@
-# helpers: truthy, coerce_to, yield1, yieldX, deny_frozen_access
+# helpers: truthy, coerce_to, eqeq, yield1, yieldX, deny_frozen_access
 # backtick_javascript: true
 # use_strict: true
 
@@ -70,7 +70,7 @@ module ::Enumerable
 
     ::Enumerator.new do |yielder|
       %x{
-        var previous = nil, accumulate = [];
+        let previous = nil, accumulate = [];
 
         function releaseAccumulate() {
           if (accumulate.length > 0) {
@@ -79,7 +79,7 @@ module ::Enumerable
         }
 
         self.$each.$$p = function(value) {
-          var key = $yield1(block, value);
+          let key = $yield1(block, value);
 
           if (key === nil) {
             releaseAccumulate();
@@ -114,10 +114,10 @@ module ::Enumerable
     return enum_for(:collect) { enumerator_size } unless block_given?
 
     %x{
-      var result = [];
+      let result = [];
 
       self.$each.$$p = function() {
-        var value = $yieldX(block, arguments);
+        let value = $yieldX(block, arguments);
 
         result.push(value);
       };
@@ -130,7 +130,27 @@ module ::Enumerable
 
   def collect_concat(&block)
     return enum_for(:collect_concat) { enumerator_size } unless block_given?
-    map(&block).flatten(1)
+
+    %x{
+      let result = [];
+
+      self.$each.$$p = function () {
+        let value = $yield1(block, #{::Opal.destructure(`arguments`)}),
+            ary = Opal.coerce_to_or_nil(value, Opal.Array, "to_ary");
+
+        if (ary !== nil) {
+          for (let i = 0, length = ary.length; i < length; i++) {
+            result.push(ary[i]);
+          }
+        } else {
+          result.push(value);
+        }
+      };
+
+      self.$each();
+
+      return result;
+    }
   end
 
   def compact
@@ -138,27 +158,35 @@ module ::Enumerable
   end
 
   def count(object = undefined, &block)
-    result = 0
-
     %x{
       if (object != null && block !== nil) {
         #{warn('warning: given block not used')}
       }
+
+      let result = 0;
+
+      if (object != null) {
+        self.$each.$$p = function () {
+          if ($eqeq(#{::Opal.destructure(`arguments`)}, object)) {
+            result++;
+          }
+        };
+      } else if (block !== nil) {
+        self.$each.$$p = function () {
+          if ($truthy($yieldX(block, arguments))) {
+            result++;
+          }
+        };
+      } else {
+        self.$each.$$p = function () {
+          result++;
+        };
+      }
+
+      self.$each();
+
+      return result;
     }
-
-    if `object != null`
-      block = ::Kernel.proc do |*args|
-        ::Opal.destructure(args) == object
-      end
-    elsif block.nil?
-      block = ::Kernel.proc { true }
-    end
-
-    each do |*args|
-      `result++` if `$yieldX(block, args)`
-    end
-
-    result
   end
 
   def cycle(n = nil, &block)
@@ -180,10 +208,10 @@ module ::Enumerable
     end
 
     %x{
-      var all = [], i, length, value;
+      let all = [], i, length, value;
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
+        let param = #{::Opal.destructure(`arguments`)},
             value = $yield1(block, param);
 
         all.push(param);
@@ -245,7 +273,7 @@ module ::Enumerable
     end
 
     %x{
-      var result  = [],
+      let result  = [],
           current = 0;
 
       self.$each.$$p = function() {
@@ -266,14 +294,14 @@ module ::Enumerable
     return enum_for :drop_while unless block_given?
 
     %x{
-      var result   = [],
+      let result   = [],
           dropping = true;
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)};
+        let param = #{::Opal.destructure(`arguments`)};
 
         if (dropping) {
-          var value = $yield1(block, param);
+          let value = $yield1(block, param);
 
           if (!$truthy(value)) {
             dropping = false;
@@ -316,10 +344,10 @@ module ::Enumerable
     end
 
     %x{
-      var buffer = [];
+      let buffer = [];
 
       self.$each.$$p = function() {
-        var element = #{::Opal.destructure(`arguments`)};
+        let element = #{::Opal.destructure(`arguments`)};
         buffer.push(element);
         if (buffer.length > n) {
           buffer.shift();
@@ -342,7 +370,7 @@ module ::Enumerable
 
     %x{
       self.$each.$$p = function() {
-        var item = #{::Opal.destructure(`arguments`)};
+        let item = #{::Opal.destructure(`arguments`)};
 
         $yield1(block, item);
       }
@@ -363,10 +391,10 @@ module ::Enumerable
     return enum_for(:each_slice, n) { respond_to?(:size) ? (size / n).ceil : nil } unless block_given?
 
     %x{
-      var slice = []
+      let slice = []
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)};
+        let param = #{::Opal.destructure(`arguments`)};
 
         slice.push(param);
 
@@ -391,10 +419,10 @@ module ::Enumerable
     return enum_for(:each_with_index, *args) { enumerator_size } unless block_given?
 
     %x{
-      var index = 0;
+      let index = 0;
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)};
+        let param = #{::Opal.destructure(`arguments`)};
 
         block(param, index);
 
@@ -412,7 +440,7 @@ module ::Enumerable
 
     %x{
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)};
+        let param = #{::Opal.destructure(`arguments`)};
 
         block(param, object);
       };
@@ -425,7 +453,7 @@ module ::Enumerable
 
   def entries(*args)
     %x{
-      var result = [];
+      let result = [];
 
       self.$each.$$p = function() {
         result.push(#{::Opal.destructure(`arguments`)});
@@ -440,17 +468,31 @@ module ::Enumerable
   def filter_map(&block)
     return enum_for(:filter_map) { enumerator_size } unless block_given?
 
-    map(&block).select(&:itself)
+    %x{
+      let result = [];
+
+      self.$each.$$p = function () {
+        let value = $yield1(block, #{::Opal.destructure(`arguments`)});
+
+        if ($truthy(value)) {
+          result.push(value);
+        }
+      };
+
+      self.$each();
+
+      return result;
+    }
   end
 
   def find_all(&block)
     return enum_for(:find_all) { enumerator_size } unless block_given?
 
     %x{
-      var result = [];
+      let result = [];
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
+        let param = #{::Opal.destructure(`arguments`)},
             value = $yield1(block, param);
 
         if ($truthy(value)) {
@@ -569,26 +611,26 @@ module ::Enumerable
   def group_by(&block)
     return enum_for(:group_by) { enumerator_size } unless block_given?
 
-    hash = {}
-
     %x{
-      var result;
+      let hash = Opal.hash_new();
 
-      self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
-            value = $yield1(block, param);
+      self.$each.$$p = function () {
+        let param = #{::Opal.destructure(`arguments`)},
+            value = $yield1(block, param),
+            ary = Opal.hash_get(hash, value);
 
-        #{(hash[`value`] ||= []) << `param`};
-      }
+        if (ary === undefined) {
+          ary = [];
+          Opal.hash_put(hash, value, ary);
+        }
+
+        ary.push(param);
+      };
 
       self.$each();
 
-      if (result !== undefined) {
-        return result;
-      }
+      return hash;
     }
-
-    hash
   end
 
   def include?(obj)
@@ -603,11 +645,11 @@ module ::Enumerable
 
   def inject(object = undefined, sym = undefined, &block)
     %x{
-      var result = object;
+      let result = object;
 
       if (block !== nil && sym === undefined) {
         self.$each.$$p = function() {
-          var value = #{::Opal.destructure(`arguments`)};
+          let value = #{::Opal.destructure(`arguments`)};
 
           if (result === undefined) {
             result = value;
@@ -630,7 +672,7 @@ module ::Enumerable
         }
 
         self.$each.$$p = function() {
-          var value = #{::Opal.destructure(`arguments`)};
+          let value = #{::Opal.destructure(`arguments`)};
 
           if (result === undefined) {
             result = value;
@@ -643,7 +685,7 @@ module ::Enumerable
 
       self.$each();
 
-      return result == undefined ? nil : result;
+      return result ?? nil;
     }
   end
 
@@ -660,10 +702,10 @@ module ::Enumerable
   def max(n = undefined, &block)
     %x{
       if (n === undefined || n === nil) {
-        var result, value;
+        let result, value;
 
         self.$each.$$p = function() {
-          var item = #{::Opal.destructure(`arguments`)};
+          let item = #{::Opal.destructure(`arguments`)};
 
           if (result === undefined) {
             result = item;
@@ -687,14 +729,57 @@ module ::Enumerable
 
         self.$each();
 
-        if (result === undefined) {
-          return nil;
-        } else {
-          return result;
-        }
+        return result ?? nil;
       }
 
       n = $coerce_to(n, Opal.Integer, 'to_int');
+
+      if (Number.isFinite(n) && n >= 0 && n <= 64) {
+        if (n === 0) {
+          return [];
+        }
+
+        let best = [];
+
+        function compareMax(a, b) {
+          let cmp = (block !== nil) ? $yieldX(block, [a, b]) : #{`a` <=> `b`};
+
+          if (cmp === nil) {
+            #{::Kernel.raise ::ArgumentError, 'comparison failed'};
+          }
+
+          return cmp;
+        }
+
+        self.$each.$$p = function () {
+          let item = #{::Opal.destructure(`arguments`)};
+
+          if (best.length < n) {
+            best.push(item);
+
+            let i = best.length - 1;
+            while (i > 0 && compareMax(item, best[i - 1]) > 0) {
+              best[i] = best[i - 1];
+              i--;
+            }
+            best[i] = item;
+          } else if (compareMax(item, best[n - 1]) > 0) {
+            best.push(item);
+
+            let i = n;
+            while (i > 0 && compareMax(item, best[i - 1]) > 0) {
+              best[i] = best[i - 1];
+              i--;
+            }
+            best[i] = item;
+            best.pop();
+          }
+        };
+
+        self.$each();
+
+        return best;
+      }
     }
 
     sort(&block).reverse.first(n)
@@ -708,11 +793,11 @@ module ::Enumerable
     end
 
     %x{
-      var result,
+      let result,
           by;
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
+        let param = #{::Opal.destructure(`arguments`)},
             value = $yield1(block, param);
 
         if (result === undefined) {
@@ -729,61 +814,110 @@ module ::Enumerable
 
       self.$each();
 
-      return result === undefined ? nil : result;
+      return result ?? nil;
     }
   end
 
   def min(n = nil, &block)
-    unless n.nil?
-      if block_given?
-        return sort { |a, b| yield a, b }.take n
-      else
-        return sort.take n
-      end
-    end
-
     %x{
-      var result;
+      if (n === undefined || n === nil) {
+        let result;
 
-      if (block !== nil) {
-        self.$each.$$p = function() {
-          var param = #{::Opal.destructure(`arguments`)};
+        if (block !== nil) {
+          self.$each.$$p = function() {
+            let param = #{::Opal.destructure(`arguments`)};
 
-          if (result === undefined) {
-            result = param;
-            return;
-          }
+            if (result === undefined) {
+              result = param;
+              return;
+            }
 
-          var value = block(param, result);
+            let value = block(param, result);
 
-          if (value === nil) {
+            if (value === nil) {
+              #{::Kernel.raise ::ArgumentError, 'comparison failed'};
+            }
+
+            if (value < 0) {
+              result = param;
+            }
+          };
+        }
+        else {
+          self.$each.$$p = function() {
+            let param = #{::Opal.destructure(`arguments`)};
+
+            if (result === undefined) {
+              result = param;
+              return;
+            }
+
+            if (#{::Opal.compare(`param`, `result`)} < 0) {
+              result = param;
+            }
+          };
+        }
+
+        self.$each();
+
+        return result ?? nil;
+      }
+
+      n = $coerce_to(n, Opal.Integer, 'to_int');
+
+      if (Number.isFinite(n) && n >= 0 && n <= 64) {
+        if (n === 0) {
+          return [];
+        }
+
+        let best = [];
+
+        function compareMin(a, b) {
+          let cmp = (block !== nil) ? $yieldX(block, [a, b]) : #{::Opal.compare(`a`, `b`)};
+
+          if (cmp === nil) {
             #{::Kernel.raise ::ArgumentError, 'comparison failed'};
           }
 
-          if (value < 0) {
-            result = param;
+          return cmp;
+        }
+
+        self.$each.$$p = function () {
+          let item = #{::Opal.destructure(`arguments`)};
+
+          if (best.length < n) {
+            best.push(item);
+
+            let i = best.length - 1;
+            while (i > 0 && compareMin(item, best[i - 1]) < 0) {
+              best[i] = best[i - 1];
+              i--;
+            }
+            best[i] = item;
+          } else if (compareMin(item, best[n - 1]) < 0) {
+            best.push(item);
+
+            let i = n;
+            while (i > 0 && compareMin(item, best[i - 1]) < 0) {
+              best[i] = best[i - 1];
+              i--;
+            }
+            best[i] = item;
+            best.pop();
           }
         };
+
+        self.$each();
+
+        return best;
       }
-      else {
-        self.$each.$$p = function() {
-          var param = #{::Opal.destructure(`arguments`)};
-
-          if (result === undefined) {
-            result = param;
-            return;
-          }
-
-          if (#{::Opal.compare(`param`, `result`)} < 0) {
-            result = param;
-          }
-        };
-      }
-
-      self.$each();
-
-      return result === undefined ? nil : result;
     }
+
+    if block_given?
+      return sort { |a, b| yield a, b }.take n
+    else
+      return sort.take n
+    end
   end
 
   def min_by(n = nil, &block)
@@ -794,11 +928,11 @@ module ::Enumerable
     end
 
     %x{
-      var result,
+      let result,
           by;
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
+        let param = #{::Opal.destructure(`arguments`)},
             value = $yield1(block, param);
 
         if (result === undefined) {
@@ -815,23 +949,22 @@ module ::Enumerable
 
       self.$each();
 
-      return result === undefined ? nil : result;
+      return result ?? nil;
     }
   end
 
   def minmax(&block)
-    block ||= ::Kernel.proc { |a, b| a <=> b }
-
     %x{
-      var min = nil, max = nil, first_time = true;
+      let min = nil, max = nil, first_time = true;
 
-      self.$each.$$p = function() {
-        var element = #{::Opal.destructure(`arguments`)};
+      self.$each.$$p = function () {
+        let element = #{::Opal.destructure(`arguments`)};
+
         if (first_time) {
           min = max = element;
           first_time = false;
         } else {
-          var min_cmp = #{block.call(`min`, `element`)};
+          let min_cmp = (block !== nil) ? $yieldX(block, [min, element]) : #{`min` <=> `element`};
 
           if (min_cmp === nil) {
             #{::Kernel.raise ::ArgumentError, 'comparison failed'}
@@ -839,7 +972,7 @@ module ::Enumerable
             min = element;
           }
 
-          var max_cmp = #{block.call(`max`, `element`)};
+          let max_cmp = (block !== nil) ? $yieldX(block, [max, element]) : #{`max` <=> `element`};
 
           if (max_cmp === nil) {
             #{::Kernel.raise ::ArgumentError, 'comparison failed'}
@@ -847,7 +980,7 @@ module ::Enumerable
             max = element;
           }
         }
-      }
+      };
 
       self.$each();
 
@@ -859,13 +992,13 @@ module ::Enumerable
     return enum_for(:minmax_by) { enumerator_size } unless block
 
     %x{
-      var min_result = nil,
+      let min_result = nil,
           max_result = nil,
           min_by,
           max_by;
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
+        let param = #{::Opal.destructure(`arguments`)},
             value = $yield1(block, param);
 
         if ((min_by === undefined) || #{`value` <=> `min_by`} < 0) {
@@ -944,10 +1077,10 @@ module ::Enumerable
     return enum_for(:partition) { enumerator_size } unless block_given?
 
     %x{
-      var truthy = [], falsy = [], result;
+      let truthy = [], falsy = [], result;
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
+        let param = #{::Opal.destructure(`arguments`)},
             value = $yield1(block, param);
 
         if ($truthy(value)) {
@@ -968,10 +1101,10 @@ module ::Enumerable
     return enum_for(:reject) { enumerator_size } unless block_given?
 
     %x{
-      var result = [];
+      let result = [];
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)},
+        let param = #{::Opal.destructure(`arguments`)},
             value = $yield1(block, param);
 
         if (!$truthy(value)) {
@@ -989,7 +1122,7 @@ module ::Enumerable
     return enum_for(:reverse_each) { enumerator_size } unless block_given?
 
     %x{
-      var result = [];
+      let result = [];
 
       self.$each.$$p = function() {
         result.push(arguments);
@@ -997,7 +1130,7 @@ module ::Enumerable
 
       self.$each();
 
-      for (var i = result.length - 1; i >= 0; i--) {
+      for (let i = result.length - 1; i >= 0; i--) {
         $yieldX(block, result[i]);
       }
 
@@ -1016,12 +1149,12 @@ module ::Enumerable
 
     ::Enumerator.new do |e|
       %x{
-        var slice = [];
+        let slice = [];
 
         if (block !== nil) {
           if (pattern === undefined) {
             self.$each.$$p = function() {
-              var param = #{::Opal.destructure(`arguments`)},
+              let param = #{::Opal.destructure(`arguments`)},
                   value = $yield1(block, param);
 
               if ($truthy(value) && slice.length > 0) {
@@ -1034,7 +1167,7 @@ module ::Enumerable
           }
           else {
             self.$each.$$p = function() {
-              var param = #{::Opal.destructure(`arguments`)},
+              let param = #{::Opal.destructure(`arguments`)},
                   value = block(param, #{pattern.dup});
 
               if ($truthy(value) && slice.length > 0) {
@@ -1048,7 +1181,7 @@ module ::Enumerable
         }
         else {
           self.$each.$$p = function() {
-            var param = #{::Opal.destructure(`arguments`)},
+            let param = #{::Opal.destructure(`arguments`)},
                 value = #{pattern === `param`};
 
             if ($truthy(value) && slice.length > 0) {
@@ -1084,10 +1217,10 @@ module ::Enumerable
 
     ::Enumerator.new do |yielder|
       %x{
-        var accumulate;
+        let accumulate;
 
         self.$each.$$p = function() {
-          var element = #{::Opal.destructure(`arguments`)},
+          let element = #{::Opal.destructure(`arguments`)},
               end_chunk = $yield1(block, element);
 
           if (accumulate == null) {
@@ -1117,10 +1250,10 @@ module ::Enumerable
 
     ::Enumerator.new do |yielder|
       %x{
-        var slice = nil, last_after = nil;
+        let slice = nil, last_after = nil;
 
         self.$each_cons.$$p = function() {
-          var params = #{::Opal.destructure(`arguments`)},
+          let params = #{::Opal.destructure(`arguments`)},
               before = params[0],
               after = params[1],
               match = $yieldX(block, [before, after]);
@@ -1168,28 +1301,37 @@ module ::Enumerable
   end
 
   # This method implements the Kahan summation algorithm if it is possible to apply one.
-  def sum(initial = 0)
-    result = initial
-    compensation = 0
+  def sum(initial = 0, &block)
+    %x{
+      let result = initial,
+          compensation = 0;
 
-    each do |*args|
-      item = if block_given?
-               yield(*args)
-             else
-               ::Opal.destructure(args)
-             end
+      self.$each.$$p = function () {
+        let item = (block !== nil) ? $yieldX(block, arguments) : #{::Opal.destructure(`arguments`)};
 
-      if ![::Float::INFINITY, -::Float::INFINITY].include?(item) && item.respond_to?(:-)
-        y = item - compensation
-        t = result + y
-        compensation = (t - result) - y
-        result = t
-      else
-        result += item
-      end
-    end
+        if (typeof item === "number") {
+          if (Number.isFinite(item) && typeof result === "number" && typeof compensation === "number") {
+            let y = item - compensation,
+                t = result + y;
+            compensation = (t - result) - y;
+            result = t;
+          } else {
+            result = #{`result` + `item`};
+          }
+        } else if (#{`item`.respond_to?(:-)} && !#{[::Float::INFINITY, -::Float::INFINITY].include?(`item`)}) {
+          let y = #{`item` - `compensation`},
+              t = #{`result` + `y`};
+          compensation = #{(`t` - `result`) - `y`};
+          result = t;
+        } else {
+          result = #{`result` + `item`};
+        }
+      };
 
-    result
+      self.$each();
+
+      return result;
+    }
   end
 
   def take(num)
@@ -1213,46 +1355,61 @@ module ::Enumerable
   end
 
   def uniq(&block)
-    hash = {}
+    %x{
+      let hash = Opal.hash_new(),
+          result = [];
 
-    each do |*args|
-      value = ::Opal.destructure(args)
+      self.$each.$$p = function () {
+        let value = #{::Opal.destructure(`arguments`)},
+            produced = (block !== nil) ? $yield1(block, value) : value;
 
-      produced = if block_given?
-                   yield(value)
-                 else
-                   value
-                 end
+        if (Opal.hash_get(hash, produced) === undefined) {
+          Opal.hash_put(hash, produced, value);
+          result.push(value);
+        }
+      };
 
-      unless hash.key?(produced)
-        hash[produced] = value
-      end
-    end
+      self.$each();
 
-    hash.values
+      return result;
+    }
   end
 
   def tally(hash = undefined)
-    `if (hash && hash !== nil) { $deny_frozen_access(hash); }`
-
-    out = group_by(&:itself).transform_values(&:count)
-    if hash
-      out.each { |k, v| hash[k] = hash.fetch(k, 0) + v }
-      hash
-    else
-      out
+    if `hash !== undefined`
+      hash = ::Opal.coerce_to!(hash, ::Hash, :to_hash)
+      `$deny_frozen_access(hash)`
     end
+
+    %x{
+      let out = (hash !== undefined) ? hash : Opal.hash_new();
+
+      self.$each.$$p = function () {
+        let item = #{::Opal.destructure(`arguments`)},
+            count = Opal.hash_get(out, item);
+
+        if (count === undefined) {
+          count = 0;
+        }
+
+        Opal.hash_put(out, item, #{`count` + 1});
+      };
+
+      self.$each();
+
+      return out;
+    }
   end
 
   def to_h(*args, &block)
     return map(&block).to_h(*args) if block_given?
 
     %x{
-      var hash = #{{}};
+      let hash = #{{}};
 
       self.$each.$$p = function() {
-        var param = #{::Opal.destructure(`arguments`)};
-        var ary = Opal.coerce_to_or_nil(param, Opal.Array, "to_ary"), key, val;
+        let param = #{::Opal.destructure(`arguments`)};
+        let ary = Opal.coerce_to_or_nil(param, Opal.Array, "to_ary"), key, val;
         if (!ary.$$is_array) {
           #{::Kernel.raise ::TypeError, "wrong element type #{`param`.class} (expected array)"}
         }
