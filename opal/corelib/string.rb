@@ -119,12 +119,13 @@ class ::String < `String`
     }
 
     /* eslint-disable no-misleading-character-class */
-    // The characters String#dump escapes, its escape table, and the # of a
-    // Ruby interpolation, which dump escapes too.
+    // The characters String#dump escapes, the escape table shared by
+    // String#dump and String#inspect, and the # of a Ruby interpolation, which
+    // both escape too.
     const dump_escapable = new RegExp("[\\\\\"\x00-\x1F\x7F-\xFF\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f" +
       String.fromCharCode(0xd800) + '-' + String.fromCharCode(0xdfff) + "\ufeff\ufff0-\uffff]", 'g');
 
-    const dump_meta = {
+    const escape_meta = {
       '\u0007': '\\a',
       '\u001b': '\\e',
       '\b': '\\b',
@@ -137,8 +138,16 @@ class ::String < `String`
       '\\': '\\\\'
     };
 
-    const dump_interpolation = /\#[\$\@\{]/g;
+    const escape_interpolation = /\#[\$\@\{]/g;
     /* eslint-enable no-misleading-character-class */
+
+    function hex_byte(code) {
+      return ('00' + code.toString(16).toUpperCase()).slice(-2);
+    }
+
+    function hex_escape(code) {
+      return '\\x' + hex_byte(code);
+    }
 
     // The leading underscore, the sign and base prefix, and the separators of
     // the numeric strings of String#to_i and String#oct.
@@ -1372,11 +1381,11 @@ class ::String < `String`
         let escaped = '';
         for (const byte of encoding['$bytes'](self)) {
           const chr = String.fromCharCode(byte);
-          if (dump_meta[chr]) escaped += dump_meta[chr];
-          else if (byte < 0x20 || byte > 0x7e) escaped += '\\x' + ('00' + byte.toString(16).toUpperCase()).slice(-2);
+          if (escape_meta[chr]) escaped += escape_meta[chr];
+          else if (byte < 0x20 || byte > 0x7e) escaped += hex_escape(byte);
           else escaped += chr;
         }
-        return box_string('"' + escaped.replace(dump_interpolation, '\\$&') + '".dup.force_encoding("' + encoding.name + '")', #{::Encoding::ASCII_8BIT});
+        return box_string('"' + escaped.replace(escape_interpolation, '\\$&') + '".dup.force_encoding("' + encoding.name + '")', #{::Encoding::ASCII_8BIT});
       }
       const string = self.valueOf();
       // The printable ASCII characters that need no escaping and are not the
@@ -1394,10 +1403,10 @@ class ::String < `String`
 
       let prev_chr = '',
           escaped = string.replace(dump_escapable, function (chr) {
-            if (dump_meta[chr]) return dump_meta[chr];
+            if (escape_meta[chr]) return escape_meta[chr];
             const char_code = chr.charCodeAt(0);
             if (encoding['$dump_byte_escape?'](char_code)) {
-              return '\\x' + ('00' + char_code.toString(16).toUpperCase()).slice(-2);
+              return hex_escape(char_code);
             } else if (char_code >= 0xD800 && char_code <= 0xDBFF) {
               prev_chr = chr;
               return '';
@@ -1407,7 +1416,7 @@ class ::String < `String`
               return '\\u' + ('0000' + char_code.toString(16).toUpperCase()).slice(-4);
             }
           });
-      return box_string('"' + escaped.replace(dump_interpolation, '\\$&') + '"', self.encoding);
+      return box_string('"' + escaped.replace(escape_interpolation, '\\$&') + '"', self.encoding);
     }
   end
 
@@ -1800,18 +1809,6 @@ class ::String < `String`
     %x{
       /* eslint-disable no-misleading-character-class */
       let escapable = /[\\\"\x00-\x1f\x7F-\xFF\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
-          meta = {
-            '\u0007': '\\a',
-            '\u001b': '\\e',
-            '\b': '\\b',
-            '\t': '\\t',
-            '\n': '\\n',
-            '\f': '\\f',
-            '\r': '\\r',
-            '\v': '\\v',
-            '"' : '\\"',
-            '\\': '\\\\'
-          },
           char_code,
           encoding = self.encoding,
           name = encoding.name,
@@ -1819,10 +1816,10 @@ class ::String < `String`
           byte_escape = is_binary || (encoding["$ascii_compatible?"]() && name !== "UTF-8"),
           external_is_utf8 = Opal.Encoding.default_external == Opal.Encoding.UTF_8,
           escaped = self.replace(escapable, function (chr) {
-            if (meta[chr]) return meta[chr];
+            if (escape_meta[chr]) return escape_meta[chr];
             char_code = chr.charCodeAt(0);
             if (byte_escape && char_code <= 0xff) {
-              return '\\x' + ('00' + char_code.toString(16).toUpperCase()).slice(-2);
+              return hex_escape(char_code);
             } else if (external_is_utf8 && char_code >= 0xA0 && char_code <= 0xff) {
               return chr;
             } else {
@@ -1837,10 +1834,10 @@ class ::String < `String`
         escaped = escaped.replace(/[^\x00-\x7F]/gu, function (chr) {
           let cp = chr.codePointAt(0);
           if (unicode) return cp > 0xffff ? '\\u{' + cp.toString(16).toUpperCase() + '}' : '\\u' + ('0000' + cp.toString(16).toUpperCase()).slice(-4);
-          return '\\x{' + $str(chr, encoding).$bytes().map(function (b) { return ('00' + b.toString(16).toUpperCase()).slice(-2); }).join('') + '}';
+          return '\\x{' + $str(chr, encoding).$bytes().map(hex_byte).join('') + '}';
         });
       }
-      return '"' + escaped.replace(/\#[\$\@\{]/g, '\\$&') + '"';
+      return '"' + escaped.replace(escape_interpolation, '\\$&') + '"';
       /* eslint-enable no-misleading-character-class */
     }
   end
