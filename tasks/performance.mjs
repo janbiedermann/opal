@@ -18,13 +18,18 @@ import { ROOT } from "./testing/common.mjs";
 
 const PERF = join(ROOT, "tmp", "performance");
 const ASCIIDOCTOR_REPO_BASE = process.env.ASCIIDOCTOR_REPO_BASE || "https://github.com/asciidoctor";
+// TODO: reset the base to https://github.com/asciidoctor once asciidoctor.js PR#1753 is merged
+const ASCIIDOCTOR_JS_REPO_BASE = process.env.ASCIIDOCTOR_JS_REPO_BASE || "https://github.com/janbiedermann";
 // Selected asciidoctor versions were working on Aug 19 2021, feel free to update.
 const ASCIIDOCTOR_COMMIT = "869e8236";
-const ASCIIDOCTOR_JS_COMMIT = "053fa0d3";
+// The asciidoctor.js fork pins a branch (opal2_compat) adding the
+// backtick_javascript comments the x-strings of the upstream repo need.
+const ASCIIDOCTOR_JS_COMMIT = "3bdf345";
 const TERSER = join(ROOT, "node_modules", "terser", "bin", "terser");
 
 const failures = [];
 const sh = (cmd, options = {}) => execSync(cmd, { cwd: ROOT, stdio: "inherit", shell: true, ...options });
+const git = (args, repo) => spawnSync("git", args, { cwd: join(PERF, repo), encoding: "utf8" });
 const hasCommand = (cmd) => spawnSync("sh", ["-c", `command -v ${cmd}`], { stdio: "ignore" }).status === 0;
 const now = () => Number(process.hrtime.bigint() / 1000n); // microseconds
 
@@ -67,12 +72,22 @@ class Size {
 
 function prepare() {
   mkdirSync(PERF, { recursive: true });
-  for (const [repo, commit] of [["asciidoctor", ASCIIDOCTOR_COMMIT], ["asciidoctor.js", ASCIIDOCTOR_JS_COMMIT]]) {
-    if (!existsSync(join(PERF, repo))) sh(`git clone -q ${ASCIIDOCTOR_REPO_BASE}/${repo}`, { cwd: PERF });
+  for (const [repo, base, commit] of [
+    ["asciidoctor", ASCIIDOCTOR_REPO_BASE, ASCIIDOCTOR_COMMIT],
+    ["asciidoctor.js", ASCIIDOCTOR_JS_REPO_BASE, ASCIIDOCTOR_JS_COMMIT],
+  ]) {
     const dir = join(PERF, repo);
-    const head = execSync("git rev-parse HEAD", { cwd: dir, encoding: "utf8" }).trim();
-    // (file mode changes, e.g. on shared folders, don't block the checkout)
-    if (!head.startsWith(commit)) sh(`git -c core.fileMode=false checkout -q ${commit}`, { cwd: dir });
+    if (!existsSync(dir)) sh(`git clone -q ${base}/${repo}`, { cwd: PERF });
+    // a leftover clone may point at the other base (the fork vs the upstream repo)
+    else if (git(["remote", "get-url", "origin"], repo).stdout.trim() !== `${base}/${repo}`)
+      sh(`git remote set-url origin ${base}/${repo}`, { cwd: dir, stdio: "ignore" });
+    const head = git(["rev-parse", "HEAD"], repo).stdout.trim();
+    if (!head.startsWith(commit)) {
+      // the pinned commit may be on a branch a previous clone hasn't fetched
+      if (git(["cat-file", "-e", `${commit}^{commit}`], repo).status !== 0) sh("git fetch -q origin", { cwd: dir });
+      // (file mode changes, e.g. on shared folders, don't block the checkout)
+      sh(`git -c core.fileMode=false checkout -q ${commit}`, { cwd: dir });
+    }
   }
   const data = readFileSync(join(PERF, "asciidoctor", "benchmark", "sample-data", "mdbasics.adoc"), "utf8");
   writeFileSync(join(PERF, "asciidoctor_test.rb"), readFileSync(join(ROOT, "tasks", "performance", "asciidoctor_test.rb"), "utf8") + "\n__END__\n" + data);

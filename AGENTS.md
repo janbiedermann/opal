@@ -75,6 +75,14 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 - The compiler fixtures (`spec/lib/fixtures/compiler/**/*.rb` and their
   expected `.js`) are regenerated with `node tasks/compiler/update_fixtures.mjs`;
   review the diff.
+- `tasks/performance.mjs` builds Asciidoctor from pinned checkouts it clones into
+  `tmp/performance`: `asciidoctor/asciidoctor@869e8236` and the *fork*
+  `janbiedermann/asciidoctor.js@3bdf345` (branch `opal2_compat`, its
+  `backtick_javascript` comments are what let the x-strings of that code compile
+  under Opal 2; the upstream repo works only once asciidoctor.js PR#1753 is
+  merged). `ASCIIDOCTOR_REPO_BASE` and `ASCIIDOCTOR_JS_REPO_BASE` override the
+  remotes; with the upstream source the bundle builds but fails at run time
+  (`sh: syntax error near unexpected token '('`).
 - Other tasks: `node tasks/dist.mjs` (build corelib/stdlib),
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
