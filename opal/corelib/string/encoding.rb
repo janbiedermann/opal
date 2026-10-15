@@ -1263,11 +1263,12 @@ end
     %x{
       const string = str.valueOf(), length = string.length;
       if (index === undefined) index = length;
-      if (index >= length) return self.$bytes_sum(str);
-      if (!/[\u0100-\uFFFF]/.test(string)) return index + 1;
+      // index is an inclusive character index; clamp to the last character.
+      const n = index >= length ? length : index + 1;
+      if (!/[\u0100-\uFFFF]/.test(string)) return n;
       // A character above 0xff is written as two bytes.
       let bytes = 0;
-      for (let i = 0; i <= index; i++) {
+      for (let i = 0; i < n; i++) {
         if (string.charCodeAt(i) > 0xff) bytes++;
         bytes++;
       }
