@@ -40,6 +40,7 @@ opal_filter "Integer" do
   fails "Integer#^ fixnum returns self bitwise EXCLUSIVE OR other" # Expected 5 == 18446744078004520000 to be truthy but was false
   fails "Integer#^ fixnum returns self bitwise XOR other when one operand is negative" # Expected -3 == -8589934593 to be truthy but was false
   fails "Integer#ceildiv returns a quotient of division which is rounded up to the nearest integer" # NoMethodError: undefined method `ceildiv' for 0
+  fails "Integer#chr with an encoding argument raises RangeError if self is invalid as a codepoint in the specified encoding" # NotImplementedError: SHIFT_JIS 0x80 is not rejected by the WHATWG decoder
   fails "Integer#chr with an encoding argument returns a String encoding self interpreted as a codepoint in the CESU-8 encoding" # NameError: uninitialized constant Encoding::CESU_8
   fails "Integer#chr with an encoding argument returns a new String for each call" # Expected " " not to be identical to " "
   fails "Integer#chr without argument returns a new String for each call" # Expected "R" not to be identical to "R"
