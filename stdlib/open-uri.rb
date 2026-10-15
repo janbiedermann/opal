@@ -814,6 +814,3 @@ function doRequest (options, data) {
     end
   end
 end
-
-# Node.js replaces the request (XMLHttpRequest) with its own
-require 'nodejs/open-uri' if defined?(::NodeJS)

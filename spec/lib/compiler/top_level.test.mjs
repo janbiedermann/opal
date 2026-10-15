@@ -38,5 +38,5 @@ test("BEGIN runs first, in FIFO order, in the top-level scope", () => {
 test("END registers its block once, run at exit like at_exit", () => {
   assert.equal(run({
     "main.rb": 'x = 1\n3.times { |i| END { puts "end #{i} #{x}" } }\nEND { puts "end2" }\nat_exit { puts "at_exit" }\ndef m; END { puts "in m" }; end\nm; m\nx = 2\nputs "main"\n',
-  }, ["-rnodejs"]), "main\nin m\nat_exit\nend2\nend 0 2\n");
+  }, []), "main\nin m\nat_exit\nend2\nend 0 2\n");
 });

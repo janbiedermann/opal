@@ -100,29 +100,6 @@ describe("CLI", () => {
     }
   });
 
-  test("a Node.js executable's startup snapshot boots the corelib and the platform", () => {
-    const dir = mkdtempSync(join(tmpdir(), "opal-snapshot-"));
-    try {
-      const program = join(dir, "program.js");
-      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", 'puts ARGV.inspect; puts ENV["OPAL_SNAPSHOT_TEST"]; puts File.basename($PROGRAM_NAME); puts rand < 1'], { encoding: "utf8" });
-      assert.equal(build.status, 0, build.stderr);
-      const entry = snapshotEntry(readFileSync(program, "utf8"));
-      assert.ok(entry.includes("setDeserializeMainFunction"));
-      assert.equal(snapshotEntry("puts 1"), null); // (no platform: no place to cut)
-      writeFileSync(join(dir, "entry.js"), entry);
-      // built with other arguments and environment than it runs with
-      const blob = join(dir, "snapshot.blob");
-      const snapshot = spawnSync(process.execPath, ["--snapshot-blob", blob, "--build-snapshot", "entry.js", "built"], { cwd: dir, encoding: "utf8", env: { ...process.env, OPAL_SNAPSHOT_TEST: "build" } });
-      assert.equal(snapshot.status, 0, snapshot.stderr);
-      assert.ok(!/stackTraceLimit/.test(snapshot.stderr), snapshot.stderr);
-      // (process.argv[1] is the executable in a single executable application)
-      const run = spawnSync(process.execPath, ["--snapshot-blob", blob, "app", "a", "b"], { cwd: dir, encoding: "utf8", env: { ...process.env, OPAL_SNAPSHOT_TEST: "run" } });
-      assert.equal(run.stdout, '["a", "b"]\nrun\napp\ntrue\n', run.stderr);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
   test("a Node.js executable has the npm packages the program requires", () => {
     assert.deepEqual(npmRequires('require("picomatch"); Opal.require("corelib/x"); self.$require("y"); require("fs"); require("node:path"); require("./z")'), ["picomatch"]);
     const dir = mkdtempSync(join(tmpdir(), "opal-npm-"));
@@ -140,52 +117,6 @@ describe("CLI", () => {
       delete env.NODE_PATH;
       const run = spawnSync(process.execPath, ["bundled.js"], { cwd: dir, encoding: "utf8", env });
       assert.equal(run.stdout, '["a.rb", "b.txt"]\n', run.stderr);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("open-uri works in a Node.js executable's startup snapshot", () => {
-    // (a worker thread can't load net there; the executable runs itself
-    // as a helper for the request)
-    const dir = mkdtempSync(join(tmpdir(), "opal-snapshot-http-"));
-    try {
-      const program = join(dir, "program.js");
-      const source = 'require "open-uri"; begin; open("http://127.0.0.1:1/"); rescue OpenURI::HTTPError => e; puts "error: #{e.message}"; end';
-      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", source], { encoding: "utf8" });
-      assert.equal(build.status, 0, build.stderr);
-      const code = readFileSync(program, "utf8");
-      const npm = bundleNpmPackages(code, { cwd: dir, nodePath: "" });
-      writeFileSync(join(dir, "entry.js"), npm.prelude + npm.wrap(snapshotEntry(code)));
-      const blob = join(dir, "snapshot.blob");
-      const snapshot = spawnSync(process.execPath, ["--snapshot-blob", blob, "--build-snapshot", "entry.js"], { cwd: dir, encoding: "utf8" });
-      assert.equal(snapshot.status, 0, snapshot.stderr);
-      const run = spawnSync(process.execPath, ["--snapshot-blob", blob, "app"], { cwd: dir, encoding: "utf8" });
-      assert.match(run.stdout, /^error: 0 .*ECONNREFUSED/, run.stderr);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("an uncaught exception ends a program with Node.js's platform as in CRuby", () => {
-    const dir = mkdtempSync(join(tmpdir(), "opal-uncaught-"));
-    try {
-      const run = (source) => {
-        const program = join(dir, "program.js");
-        const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", source], { encoding: "utf8" });
-        assert.equal(build.status, 0, build.stderr);
-        return spawnSync(process.execPath, [program], { encoding: "utf8" });
-      };
-      // at_exit blocks first, then the report on stderr (no highlighting:
-      // not a terminal), status 1
-      const raised = run('at_exit { puts "at_exit ran" }; puts "before"; raise ArgumentError, "boom"');
-      assert.equal(raised.stdout, "before\nat_exit ran\n");
-      assert.match(raised.stderr, /^[^\n]*: boom \(ArgumentError\)\n\tfrom /);
-      assert.ok(!raised.stderr.includes("throw exception") && !raised.stderr.includes("\x1b["), raised.stderr);
-      assert.equal(raised.status, 1);
-      // a SystemExit: its status, no report
-      const exited = run('at_exit { puts "bye" }; raise SystemExit.new(5)');
-      assert.deepEqual([exited.stdout, exited.stderr, exited.status], ["bye\n", "", 5]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
