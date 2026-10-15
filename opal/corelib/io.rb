@@ -1,4 +1,4 @@
-# helpers: platform, coerce_to, coerce_to_or_nil, coerce_to_or_raise, str, mode_to_flags, raise, yield1, hash_new, hash_get, to_ary
+# helpers: platform, coerce_to, coerce_to_or_nil, coerce_to_or_raise, str, mode_to_flags, raise, yield1, hash_new, hash_get, to_ary, pop_exception
 # backtick_javascript: true
 
 require 'io/buffer'
@@ -229,7 +229,7 @@ class ::IO
             do {
               if (truthy(src_length) && (total_bytes + bsize) > src_length) bsize = src_length - total_bytes;
               if (rpartial) {
-                try { data = src_io.$readpartial(bsize, nil); } catch { $gvars['!'] = nil; data = nil; }
+                try { data = src_io.$readpartial(bsize, nil); } catch (e) { $pop_exception(e); data = nil; }
               } else {
                 data = src_io.$read(bsize, nil);
               }
@@ -305,7 +305,7 @@ class ::IO
             io.$close();
           } catch (e) {
             if (e.$$class !== Opal.IOError) throw e;
-            $gvars['!'] = nil;
+            $pop_exception(e);
           }
         }
         let result;
@@ -928,8 +928,8 @@ class ::IO
               try {
                 limit = $coerce_to_or_raise(sep, Opal.Integer, "to_int");
                 sep = $gvars['/'] ?? nil;
-              } catch {
-                $gvars['!'] = nil;
+              } catch (e) {
+                $pop_exception(e);
                 sep = $coerce_to_or_raise(sep, Opal.String, "to_str");
               }
             } else if (sep === '') {
@@ -1245,7 +1245,7 @@ class ::IO
         if (arg.$$is_array) {
           if (arg.length !== 0) {
             let flat;
-            try { flat = arg.$flatten(); } catch { $gvars['!'] = nil; flat = arg; }
+            try { flat = arg.$flatten(); } catch (e) { $pop_exception(e); flat = arg; }
             for (let a of flat) {
               if (a['$=='](arg)) self.$write('[...]');
               else self.$puts(a);
@@ -1543,7 +1543,7 @@ class ::IO
             self.fd = $platform.io_open_path(path.toString(), Opal.mode_to_flags(mode));
           } catch (e) {
             if (e.$$class !== #{::Errno::ENOENT}) throw e;
-            $gvars['!'] = nil;
+            $pop_exception(e);
             if (!(self.opened === 'write' || self.opened === 'duplex')) throw e;
             self.fd = $platform.io_open_path(path.toString(), Opal.mode_to_flags('w+'));
           }
@@ -1562,7 +1562,7 @@ class ::IO
               self.fd = $platform.io_open_path(self.path.toString(), other_io.flags);
             } catch (e) {
               if (e.$$class !== #{::Errno::ENOENT}) throw e;
-              $gvars['!'] = nil;
+              $pop_exception(e);
               self.fd = $platform.io_open_path(self.path.toString(), Opal.mode_to_flags('w+'));
             }
           } else {
@@ -1577,7 +1577,7 @@ class ::IO
             self.fd = $platform.io_open_path(path.toString(), self.flags);
           } catch (e) {
             if (e.$$class !== #{::Errno::ENOENT}) throw e;
-            $gvars['!'] = nil;
+            $pop_exception(e);
             self.fd = $platform.io_open_path(path.toString(), Opal.mode_to_flags('w+'));
           }
         }

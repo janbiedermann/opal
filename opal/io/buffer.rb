@@ -1,4 +1,4 @@
-# helpers: raise, send, yieldX, yield1, gvars
+# helpers: raise, send, yieldX, yield1, pop_exception
 # backtick_javascript: true
 
 require 'corelib/string/encoding'
@@ -412,8 +412,8 @@ class ::IO
             try {
               res = encoding['$decode!'](self.$slice(offset, length));
               invalid = false;
-            } catch {
-              $gvars['!'] = nil;
+            } catch (e) {
+              $pop_exception(e);
               length += 1;
             }
           }
@@ -521,7 +521,7 @@ class ::IO
           return string;
         } catch (e) {
           if (!e || !e.$$is_exception) throw e;
-          $gvars['!'] = nil;
+          $pop_exception(e);
           return -4; // Errno::EINTR
         }
       }
@@ -535,7 +535,7 @@ class ::IO
           return io.$pwrite(self.$get_string(offset, length), from);
         } catch (e) {
           if (!e || !e.$$is_exception) throw e;
-          $gvars['!'] = nil;
+          $pop_exception(e);
           return -4; // Errno::EINTR
         }
       }
@@ -552,7 +552,7 @@ class ::IO
           return length;
         } catch (e) {
           if (!e || !e.$$is_exception) throw e;
-          $gvars['!'] = nil;
+          $pop_exception(e);
           return -4; // Errno::EINTR
         }
       }

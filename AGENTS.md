@@ -97,6 +97,11 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   lingering `firefox` processes. On a minimal EL10 system the browsers need
   `dnf install atk at-spi2-atk at-spi2-core libXcomposite libXdamage
   libXfixes libXrandr mesa-libgbm libxkbcommon alsa-lib gtk3 libXcursor`.
+- When porting Ruby bodies to `%x{}` JS: a raw `catch` that swallows an exception must call
+  `$pop_exception(e)` (helper `pop_exception`) or `$!` leaks and later `raise`s get a wrong
+  `cause`; JS regexes have no `\A`/`\Z` (use `^`/`$`); Opal `nil` is truthy in JS, so test
+  `x === nil` instead of `!x`; `super` inside `%x{}` loses JS locals (call the superclass
+  method directly instead).
 - On a machine in UTC, time zone bugs stay hidden; run the ruby/spec suite in
   other zones too (`TZ=America/Los_Angeles`, `TZ=Pacific/Chatham`) after
   changes to Time, Date or DateTime.
