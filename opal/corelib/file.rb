@@ -948,6 +948,8 @@ class ::File < ::IO
                   let c1 = String.fromCodePoint(string.codePointAt(s)).toUpperCase().codePointAt(0),
                       c2 = String.fromCodePoint(pat.codePointAt(p)).toUpperCase().codePointAt(0);
                   if (c1 != c2) continue;
+                } else {
+                  continue;
                 }
               }
               ok = true;
