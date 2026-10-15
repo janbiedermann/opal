@@ -5,6 +5,7 @@ opal_filter "File" do
   fails "File.expand_path raises an Encoding::CompatibilityError if the external encoding is not compatible" # Expected CompatibilityError but no exception was raised ("/home/jan/workspace/opal/spec/a" was returned)
   fails "File.extname for a filename ending with a dot returns '.'" # Expected "" == "." to be truthy but was false
   fails "File.ftype returns 'socket' when the file is a socket" # NameError: uninitialized constant SocketSpecs::Socket
+  fails "File.lutime sets the access and modification time for a symlink" # fs.lutimesSync is a silent no-op on a symlink over overlayfs
   fails "File.mkfifo creates a FIFO file with passed mode & ~umask" # Expected 4589 == 4580 to be truthy but was false
   fails "File.mkfifo when path passed is not a String value raises a TypeError" # Expected TypeError but got: Errno::ENOENT (No such file or directory - No such file or directory /tmp/fifo)
   fails "File.mtime returns the modification Time of the file with microseconds" # Expected 122000 == 123000 to be truthy but was false

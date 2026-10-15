@@ -1501,7 +1501,7 @@ class ::IO
             self.pos += bytes_read;
             if (bytes_read < read_len) break;
           }
-          if (bytes_read === 0) return $str('', enc);
+          if (total_bytes_read === 0) $raise(Opal.EOFError);
           return self.buffer.$get_raw_string(0, total_bytes_read, enc, false);
         } finally {
           // shrink buffer to original size, freeing memory
