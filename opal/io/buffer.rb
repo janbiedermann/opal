@@ -1,3 +1,4 @@
+# helpers: raise, send, yieldX, yield1, gvars
 # backtick_javascript: true
 
 require 'corelib/string/encoding'
@@ -125,17 +126,21 @@ class ::IO
     HOST_ENDIAN = `endianess()`
 
     class << self
-      def for(string)
+      def for(string, &block)
         # Ruby docs: Creates a zero-copy IO::Buffer from the given string’s memory.
         # Opal: We have to copy.
-        raise(TypeError, 'arg must be a String') unless string.is_a?(String)
-        buf = new(nil)
-        `buf.data_view = new DataView((new Uint8Array(string.$bytes())).buffer)`
-        `buf.readonly = true` if string.frozen?
-        return yield buf if block_given?
-        buf
-      ensure
-        `buf.readonly = true` if buf
+        %x{
+          if (!string.$$is_string) $raise(Opal.TypeError, 'arg must be a String');
+          let buf = self.$new(nil);
+          buf.data_view = new DataView((new Uint8Array(string.$bytes())).buffer);
+          if (string['$frozen?']()) buf.readonly = true;
+          try {
+            if (block !== nil) return block(buf);
+            return buf;
+          } finally {
+            buf.readonly = true;
+          }
+        }
       end
 
       def map(file, size = nil, offset = 0, flags = READONLY)
@@ -146,40 +151,47 @@ class ::IO
 
       def size_of(buffer_type)
         # Returns the size of the given buffer type(s) in bytes.
-        size = 0
-        if buffer_type.is_a?(Array)
-          buffer_type.each do |type|
-            size += `size_map.get(type.$to_s().toString())`
-          end
-        else
-          size = `size_map.get(buffer_type.$to_s().toString())`
-        end
-        size
+        %x{
+          let size = 0;
+          if (buffer_type.$$is_array) {
+            for (const type of buffer_type) {
+              size += size_map.get(type.$to_s().toString());
+            }
+          } else {
+            size = size_map.get(buffer_type.$to_s().toString());
+          }
+          return size;
+        }
       end
 
-      def string(length)
+      def string(length, &block)
         # Creates a new string of the given length and yields a zero-copy IO::Buffer
         # instance to the block which uses the string as a source. The block is
         # expected to write to the buffer and the string will be returned.
-        raise(ArgumentError, 'length must be a numer') unless length.is_a?(Number)
-        raise(ArgumentError, 'length must be >= 0') if length < 0
-        # We assume length is in bytes.
-        buffer = new(length)
-        yield buffer
-        buffer.get_string
+        %x{
+          if (!length.$$is_number) $raise(Opal.ArgumentError, 'length must be a numer');
+          if (length < 0) $raise(Opal.ArgumentError, 'length must be >= 0');
+          // We assume length is in bytes.
+          let buffer = self.$new(length);
+          block(buffer);
+          return buffer.$get_string();
+        }
       end
     end
 
     def initialize(size = DEFAULT_SIZE, flags = 0)
-      raise(NotImplementedError, 'mapped buffers are not supported') if (flags & MAPPED) > 0
-      @readonly = (flags & READONLY) > 0
-      @locked = (flags & LOCKED) > 0
-      @external = (flags & EXTERNAL) > 0
-      @internal = !@external
-      # dont allocate internal data_view when size is nil
-      # assuming it will be allocated and attached immediately
-      # by surrounding code, e.g. by IO::Buffer.for()
-      @data_view = `new DataView(new ArrayBuffer(size))` if size
+      %x{
+        if ((flags & #{MAPPED}) > 0) $raise(Opal.NotImplementedError, 'mapped buffers are not supported');
+        self.readonly = (flags & #{READONLY}) > 0;
+        self.locked = (flags & #{LOCKED}) > 0;
+        self.external = (flags & #{EXTERNAL}) > 0;
+        self.internal = !self.external;
+        // dont allocate internal data_view when size is nil
+        // assuming it will be allocated and attached immediately
+        // by surrounding code, e.g. by IO::Buffer.for()
+        if (size !== nil && size !== false) self.data_view = new DataView(new ArrayBuffer(size));
+        return nil;
+      }
     end
 
     #
@@ -224,55 +236,63 @@ class ::IO
     def ~
       # Generate a new buffer the same size as the source by applying the binary NOT
       # operation to the source.
-      dup.not!
+      `self.$dup()['$not!']()`
     end
 
     def not!
       # Modify the source buffer in place by applying the binary NOT operation to the source.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      `op_not(self, self, self.data_view.byteLength)`
-      self
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        op_not(self, self, self.data_view.byteLength);
+        return self;
+      }
     end
 
     def &(mask)
       # Generate a new buffer the same size as the source by applying the binary AND
       # operation to the source, using the mask, repeating as necessary.
-      dup.and!(mask)
+      `self.$dup()['$and!'](mask)`
     end
 
     def and!(mask)
       # Modify the source buffer in place by applying the binary AND
       # operation to the source, using the mask, repeating as necessary.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      `op_and(self, self, self.data_view.byteLength, mask)`
-      self
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        op_and(self, self, self.data_view.byteLength, mask);
+        return self;
+      }
     end
 
     def |(mask)
       # Generate a new buffer the same size as the source by applying the binary OR
       # operation to the source, using the mask, repeating as necessary.
-      dup.or!(mask)
+      `self.$dup()['$or!'](mask)`
     end
 
     def or!(mask)
       # Modify the source buffer in place by applying the binary OR operation to the source, using the mask.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      `op_or(self, self, self.data_view.byteLength, mask)`
-      self
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        op_or(self, self, self.data_view.byteLength, mask);
+        return self;
+      }
     end
 
     def ^(mask)
       # Generate a new buffer the same size as the source by applying the binary XOR
       # operation to the source, using the mask, repeating as necessary.
-      dup.xor!(mask)
+      `self.$dup()['$xor!'](mask)`
     end
 
     def xor!(mask)
       # Modify the source buffer in place by applying the binary XOR
       # operation to the source, using the mask, repeating as necessary.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      `op_xor(self, self, self.data_view.byteLength, mask)`
-      self
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        op_xor(self, self, self.data_view.byteLength, mask);
+        return self;
+      }
     end
 
     #
@@ -281,70 +301,77 @@ class ::IO
 
     def <=>(other)
       # Buffers are compared by size and exact contents of the memory they are referencing using memcmp
-      return -1 if size < other.size
-      return  1 if size > other.size
       %x{
+        let sz = self.$size(), osz = other.$size();
+        if (sz < osz) return -1;
+        if (sz > osz) return 1;
         let a, b, length = self.data_view.byteLength;
-        for(let i = 0; i < length; i++) {
+        for (let i = 0; i < length; i++) {
           a = self.data_view.getUint8(i);
           b = other.data_view.getUint8(i);
           if (a < b) { return -1; }
           if (a > b) { return 1; }
         }
+        return 0;
       }
-      0
     end
 
     def clear(value = 0, offset = 0, length = nil)
       # Fill buffer with value, starting with offset and going for length bytes.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      length ||= size
       %x{
+        if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+        if (length === nil) length = self.$size();
         let uint8_a = new Uint8Array(self.data_view.buffer, self.data_view.byteOffset, self.data_view.byteLength);
         uint8_a.fill(value, offset, length);
+        return self;
       }
-      self
     end
 
     def copy(source, offset = 0, length = nil, source_offset = 0)
       # Efficiently copy from a source IO::Buffer into the buffer,
       # at offset using memcpy. For copying String instances, see set_string.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      raise(ArgumentError, 'source must be a ::IO::Buffer') unless source.is_a?(Buffer)
-      length ||= offset + (source.size - source_offset)
-      if (offset + length) > size
-        raise(ArgumentError, 'Specified offset+length is bigger than the buffer size!')
-      end
-      `copy_dv(source.data_view, self.data_view, source_offset, offset, length)`
-      length
+      %x{
+        if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+        if (!source['$is_a?'](#{Buffer})) $raise(Opal.ArgumentError, 'source must be a ::IO::Buffer');
+        if (length === nil) length = offset + (source.$size() - source_offset);
+        if ((offset + length) > self.$size()) {
+          $raise(Opal.ArgumentError, 'Specified offset+length is bigger than the buffer size!');
+        }
+        copy_dv(source.data_view, self.data_view, source_offset, offset, length);
+        return length;
+      }
     end
 
-    def each(buffer_type, offset = 0, count = nil)
+    def each(buffer_type, offset = 0, count = nil, &block)
       # Iterates over the buffer, yielding each value of buffer_type starting from offset.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      return enum_for(:each, buffer_type, offset, count) unless block_given?
-      step = `size_map.get(buffer_type.$to_s().toString())`
-      count ||= (size / step).to_i
-      len = size - offset
-      max = offset + `Math.min(count * step, len)`
-      while offset < max
-        yield offset, get_value(buffer_type, offset)
-        offset += step
-      end
-      self
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        if (block === nil) return $send(self, 'enum_for', ['each', buffer_type, offset, count]);
+        let step = size_map.get(buffer_type.$to_s().toString());
+        if (count === nil) count = Math.floor(self.$size() / step);
+        let len = self.$size() - offset;
+        let max = offset + Math.min(count * step, len);
+        while (offset < max) {
+          $yieldX(block, [offset, self.$get_value(buffer_type, offset)]);
+          offset += step;
+        }
+        return self;
+      }
     end
 
-    def each_byte(offset = 0, count = nil)
+    def each_byte(offset = 0, count = nil, &block)
       # Iterates over the buffer, yielding each byte starting from offset.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      return enum_for(:each_byte, offset, count) unless block_given?
-      len = size - offset
-      max = offset + (count ? `Math.min(count, len)` : len)
-      while offset < max
-        yield `self.data_view.getUint8(offset)`
-        offset += 1
-      end
-      self
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        if (block === nil) return $send(self, 'enum_for', ['each_byte', offset, count]);
+        let len = self.$size() - offset;
+        let max = offset + (count !== nil ? Math.min(count, len) : len);
+        while (offset < max) {
+          $yield1(block, self.data_view.getUint8(offset));
+          offset += 1;
+        }
+        return self;
+      }
     end
 
     def empty?
@@ -354,89 +381,95 @@ class ::IO
 
     def free
       # If the buffer references memory, release it back to the operating system.
-      raise LockedError if locked?
-      @data_view = nil
-      @locked = true
+      %x{
+        if (self['$locked?']()) $raise(#{LockedError});
+        self.data_view = nil;
+        self.locked = true;
+        return nil;
+      }
     end
 
     def get_raw_string(offset = 0, length = nil, encoding = nil, ensure_valid = false)
       # not a Ruby method, but used by IO
-      raise(AccessError, 'Buffer has been freed!') if null?
-      s = size
-      length ||= s - offset
-      raise(ArgumentError, 'Offset + length is bigger than the buffer size') if offset > s || (offset + length) > s
-      raise(ArgumentError, "Offset can't be negative") if offset < 0
-      encoding ||= ::Encoding::BINARY
-      return encoding.decode(self) if offset == 0 && length == size
-      if ensure_valid
-        # Ensure the return of a valid last char when byte slicing the buffer with
-        # a maximum of 16 tries, meaning to slice up to 16 bytes above limit.
-        # Usually the JS TextDecoder is more forgiving than Ruby, so that specs,
-        # that test for the splicing of 16 bytes above limit, unfortunately still fail.
-        # Even though the TextDecoder may return earlier than Matz Ruby, in JS world
-        # the last character is valid, in Matz Ruby world then possibly not.
-        max_len = `Math.min(length + 16, s)`
-        invalid = true
-        res = nil
-        while invalid && length < max_len
-          begin
-            res = encoding.decode!(slice(offset, length))
-            invalid = false
-          rescue Exception
-            length += 1
-          end
-        end
-        if res.nil?
-          # unable to read anything valid from the buffer
-          return encoding.decode(slice(offset, length))
-        end
-        res
-      else
-        encoding.decode(slice(offset, length))
-      end
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        let s = self.$size();
+        if (length === nil) length = s - offset;
+        if (offset > s || (offset + length) > s) $raise(Opal.ArgumentError, 'Offset + length is bigger than the buffer size');
+        if (offset < 0) $raise(Opal.ArgumentError, "Offset can't be negative");
+        if (encoding === nil) encoding = #{::Encoding::BINARY};
+        if (offset === 0 && length === s) return encoding.$decode(self);
+        if (ensure_valid !== nil && ensure_valid !== false) {
+          // Ensure the return of a valid last char when byte slicing the buffer with
+          // a maximum of 16 tries, meaning to slice up to 16 bytes above limit.
+          // Usually the JS TextDecoder is more forgiving than Ruby, so that specs,
+          // that test for the splicing of 16 bytes above limit, unfortunately still fail.
+          // Even though the TextDecoder may return earlier than Matz Ruby, in JS world
+          // the last character is valid, in Matz Ruby world then possibly not.
+          let max_len = Math.min(length + 16, s);
+          let invalid = true, res = nil;
+          while (invalid && length < max_len) {
+            try {
+              res = encoding['$decode!'](self.$slice(offset, length));
+              invalid = false;
+            } catch {
+              $gvars['!'] = nil;
+              length += 1;
+            }
+          }
+          if (res === nil) {
+            // unable to read anything valid from the buffer
+            return encoding.$decode(self.$slice(offset, length));
+          }
+          return res;
+        } else {
+          return encoding.$decode(self.$slice(offset, length));
+        }
+      }
     end
 
     def get_string(offset = 0, length = nil, encoding = nil)
       # Read a chunk or all of the buffer into a string, in the specified encoding.
       # If no encoding is provided Encoding::BINARY is used.
-      encoding ||= ::Encoding::BINARY
-      string = get_raw_string(offset, length, encoding)
       %x{
+        if (encoding === nil) encoding = #{::Encoding::BINARY};
+        let string = self.$get_raw_string(offset, length, encoding);
         string = string.replace(/^\0+/, '');
         if (string.encoding != encoding) string = Opal.str(string, encoding.$name());
+        return string;
       }
-      string
     end
 
     def get_value(buffer_type, offset)
       # Read from buffer a value
-      raise(AccessError, 'Buffer has been freed!') if null?
-      buffer_type_s = buffer_type.to_s
       %x{
-        buffer_type_s = buffer_type_s.toString();
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        let buffer_type_s = buffer_type.$to_s().toString();
         let val = self.data_view['get' + fun_map.get(buffer_type_s)](offset, is_le(buffer_type_s));
-        if (typeof(val) === "bigint") { return Number(val); }
+        if (typeof(val) === 'bigint') { return Number(val); }
         return val;
       }
     end
 
     def get_values(buffer_types, offset)
       # Similar to get_value, except that it can handle multiple buffer types and returns an array of values.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      array = []
-      buffer_types.each do |buffer_type|
-        array << get_value(buffer_type, offset)
-        offset += `size_map.get(buffer_type.$to_s().toString())`
-      end
-      array
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        let array = [];
+        for (const buffer_type of buffer_types) {
+          array.push(self.$get_value(buffer_type, offset));
+          offset += size_map.get(buffer_type.$to_s().toString());
+        }
+        return array;
+      }
     end
 
     def hexdump(offset = 0, length = nil, _width = nil)
       # Returns a human-readable string representation of the buffer. The exact format is subject to change.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      length ||= size
       %x{
-        let res = []
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        if (length === nil) length = self.$size();
+        let res = [];
         for (let i = 0; i < length; i++) {
           res.push(self.data_view.getUint8(offset + i).toString(16).padStart(2, '0'));
         }
@@ -446,10 +479,10 @@ class ::IO
 
     def initialize_copy(orig)
       %x{
-        if (orig.data_view == nil) self.data_view = nil;
+        if (orig.data_view === nil || orig.data_view == null) self.data_view = nil;
         else self.data_view = new DataView(orig.data_view.buffer.slice());
+        return self;
       }
-      self
     end
 
     def inspect
@@ -457,12 +490,16 @@ class ::IO
       "##{self.class} #{hexdump(0, `Math.min(8, #{size})`)} INTERNAL #{' READONLY' if readonly?}"
     end
 
-    def locked
-      raise LockedError if locked?
-      @locked = true
-      yield
-    ensure
-      @locked = false
+    def locked(&block)
+      %x{
+        if (self['$locked?']()) $raise(#{LockedError});
+        self.locked = true;
+        try {
+          return block();
+        } finally {
+          self.locked = false;
+        }
+      }
     end
 
     def locked?
@@ -476,31 +513,49 @@ class ::IO
     def pread(io, from, length = nil, offset = 0)
       # Read at least length bytes from the io starting at the specified from position,
       # into the buffer starting at offset. If an error occurs, return -errno.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      string = io.pread(length, from)
-      set_string(string, offset)
-      string
-    rescue
-      -4 # Errno::EINTR
+      %x{
+        try {
+          if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+          let string = io.$pread(length, from);
+          self.$set_string(string, offset);
+          return string;
+        } catch (e) {
+          if (!e || !e.$$is_exception) throw e;
+          $gvars['!'] = nil;
+          return -4; // Errno::EINTR
+        }
+      }
     end
 
     def pwrite(io, from, length = nil, offset = 0)
       # Write at least length bytes from the buffer starting at offset,
       # into the io starting at the specified from position. If an error occurs, return -errno.
-      io.pwrite(get_string(offset, length), from)
-    rescue
-      -4 # Errno::EINTR
+      %x{
+        try {
+          return io.$pwrite(self.$get_string(offset, length), from);
+        } catch (e) {
+          if (!e || !e.$$is_exception) throw e;
+          $gvars['!'] = nil;
+          return -4; // Errno::EINTR
+        }
+      }
     end
 
     def read(io, length = nil, offset = 0)
       # Read at least length bytes from the io, into the buffer starting at offset.
       # If an error occurs, return -errno.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      string = io.read(length)
-      set_string(string, offset)
-      length
-    rescue
-      -4 # Errno::EINTR
+      %x{
+        try {
+          if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+          let string = io.$read(length);
+          self.$set_string(string, offset);
+          return length;
+        } catch (e) {
+          if (!e || !e.$$is_exception) throw e;
+          $gvars['!'] = nil;
+          return -4; // Errno::EINTR
+        }
+      }
     end
 
     def readonly?
@@ -510,22 +565,23 @@ class ::IO
 
     def resize(new_size)
       # Resizes a buffer to a new_size bytes, preserving its content.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      raise(AccessError, 'Buffer references external memory!') if external?
-      raise LockedError if locked?
-      if new_size < size || size < new_size
-        %x{
+      %x{
+        if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+        if (self['$external?']()) $raise(#{AccessError}, 'Buffer references external memory!');
+        if (self['$locked?']()) $raise(#{LockedError});
+        let sz = self.$size();
+        if (new_size < sz || sz < new_size) {
           // some engines don't have buffer.transfer
           if (typeof self.data_view.buffer.transfer === "function") {
-            self.data_view = new DataView(self.data_view.buffer.transfer(new_size))
+            self.data_view = new DataView(self.data_view.buffer.transfer(new_size));
           } else {
             let old_dv = self.data_view;
             self.data_view = new DataView(new ArrayBuffer(new_size));
             copy_dv(old_dv, self.data_view, 0, 0, Math.min(old_dv.byteLength, new_size));
           }
         }
-      end
-      self
+        return self;
+      }
     end
 
     def set_string(string, offset = 0, length = nil, source_offset = nil)
@@ -533,64 +589,69 @@ class ::IO
       # Ruby does a byte copy from the C string to the buffer, with the C string most likely
       # being UTF8 encoded. So we do the same, asuming UTF8 for Ruby compatibility,
       # although JavaScript is using UTF16. Efficiently here only happens for UTF8 anyway.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      string = string.byteslice(source_offset) unless source_offset.nil? || source_offset == 0
-      bytes = string.bytes
-      strg_dv = `new DataView((new Uint8Array(bytes)).buffer)`
       %x{
-        if (typeof(length) !== "number") length = strg_dv.byteLength;
+        if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+        if (!(source_offset === nil || source_offset === 0)) string = string.$byteslice(source_offset);
+        let bytes = string.$bytes();
+        let strg_dv = new DataView((new Uint8Array(bytes)).buffer);
+        if (typeof length !== "number") length = strg_dv.byteLength;
         length = Math.min(strg_dv.byteLength, self.data_view.byteLength);
         copy_dv(strg_dv, self.data_view, 0, offset, length);
+        return length;
       }
-      length
     end
 
     def set_value(buffer_type, offset, value)
       # Write to a buffer a value of type at offset.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      buffer_type_s = buffer_type.to_s
       %x{
-        buffer_type_s = buffer_type_s.toString();
+        if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+        let buffer_type_s = buffer_type.$to_s().toString();
         let fun = 'set' + fun_map.get(buffer_type_s);
         if (fun[3] === 'B') { value = BigInt(value); }
         self.data_view[fun](offset, value, is_le(buffer_type_s));
+        return offset + size_map.get(buffer_type_s);
       }
-      offset + `size_map.get(buffer_type_s)`
     end
 
     def set_values(buffer_types, offset, values)
       # Write values of buffer_types at offset to the buffer. buffer_types should be an array
       # of symbols as described in get_value. values should be an array of values to write.
-      raise(AccessError, 'Buffer is not writable!') if readonly? || null?
-      raise(ArgumentError, 'Argument buffer_types must be an array!') unless buffer_types.is_a?(Array)
-      raise(ArgumentError, 'Argument values must be an array!') unless values.is_a?(Array)
-      raise(ArgumentError, 'Arrays buffer_types and values must have the same length!') unless buffer_types.size == values.size
-      buffer_types.each_with_index do |buffer_type, idx|
-        offset = set_value(buffer_type, offset, values[idx])
-      end
-      offset
+      %x{
+        if (self['$readonly?']() || self['$null?']()) $raise(#{AccessError}, 'Buffer is not writable!');
+        if (!buffer_types.$$is_array) $raise(Opal.ArgumentError, 'Argument buffer_types must be an array!');
+        if (!values.$$is_array) $raise(Opal.ArgumentError, 'Argument values must be an array!');
+        if (buffer_types.length !== values.length) $raise(Opal.ArgumentError, 'Arrays buffer_types and values must have the same length!');
+        for (let idx = 0; idx < buffer_types.length; idx++) {
+          offset = self.$set_value(buffer_types[idx], offset, values[idx]);
+        }
+        return offset;
+      }
     end
 
     def size
       # Returns the size of the buffer that was explicitly set (on creation with ::new or on resize),
       # or deduced on buffer’s creation from string or file.
-      return 0 if null?
-      `self.data_view.byteLength`
+      %x{
+        if (self['$null?']()) return 0;
+        return self.data_view.byteLength;
+      }
     end
 
     def slice(offset = 0, length = nil)
       # Produce another IO::Buffer which is a slice (or view into) the current one
       # starting at offset bytes and going for length bytes.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      raise(ArgumentError, 'offset must be >= 0') if offset < 0
-      length ||= size - offset
-      raise(ArgumentError, 'length must be >= 0') if length < 0
-      end_pos = offset + length
-      raise(ArgumentError, "Index #{end_pos} out buffer bounds") if end_pos > size
-      io_buffer = Buffer.new(nil, EXTERNAL)
-      `io_buffer.data_view = new DataView(self.data_view.buffer, self.data_view.byteOffset + offset, length)`
-      `io_buffer.readonly = true` if readonly?
-      io_buffer
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        if (offset < 0) $raise(Opal.ArgumentError, 'offset must be >= 0');
+        if (length === nil) length = self.$size() - offset;
+        if (length < 0) $raise(Opal.ArgumentError, 'length must be >= 0');
+        let end_pos = offset + length;
+        if (end_pos > self.$size()) $raise(Opal.ArgumentError, "Index " + end_pos + " out buffer bounds");
+        let io_buffer = #{Buffer}.$new(nil, #{EXTERNAL});
+        io_buffer.data_view = new DataView(self.data_view.buffer, self.data_view.byteOffset + offset, length);
+        if (self['$readonly?']()) io_buffer.readonly = true;
+        return io_buffer;
+      }
     end
 
     def to_s
@@ -599,13 +660,15 @@ class ::IO
 
     def transfer
       # Transfers ownership of the underlying memory to a new buffer, causing the current buffer to become uninitialized.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      raise(LockedError, 'Cannot transfer ownership of locked buffer!') if locked?
-      io_buffer = Buffer.new(nil)
-      `io_buffer.data_view = self.data_view`
-      `io_buffer.readonly = true` if readonly?
-      @data_view = nil
-      io_buffer
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        if (self['$locked?']()) $raise(#{LockedError}, 'Cannot transfer ownership of locked buffer!');
+        let io_buffer = #{Buffer}.$new(nil);
+        io_buffer.data_view = self.data_view;
+        if (self['$readonly?']()) io_buffer.readonly = true;
+        self.data_view = nil;
+        return io_buffer;
+      }
     end
 
     def valid?
@@ -615,22 +678,26 @@ class ::IO
 
     def values(buffer_type, offset = 0, count = nil)
       # Returns an array of values of buffer_type starting from offset.
-      array = []
-      step = `size_map.get(buffer_type.$to_s().toString())`
-      count ||= (size / step).to_i
-      while count > 0
-        array << get_value(buffer_type, offset)
-        offset += step
-        count -= 1
-      end
-      array
+      %x{
+        let array = [];
+        let step = size_map.get(buffer_type.$to_s().toString());
+        if (count === nil) count = Math.floor(self.$size() / step);
+        while (count > 0) {
+          array.push(self.$get_value(buffer_type, offset));
+          offset += step;
+          count -= 1;
+        }
+        return array;
+      }
     end
 
     def write(io, length = nil, offset = 0)
       # Write at least length bytes from the buffer starting at offset, into the io. If an error occurs, return -errno.
-      raise(AccessError, 'Buffer has been freed!') if null?
-      length ||= size - offset
-      io.write(get_string(offset, length))
+      %x{
+        if (self['$null?']()) $raise(#{AccessError}, 'Buffer has been freed!');
+        if (length === nil) length = self.$size() - offset;
+        return io.$write(self.$get_string(offset, length));
+      }
     end
 
     #
