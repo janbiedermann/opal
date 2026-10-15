@@ -68,7 +68,8 @@ export function filterFiles(suite, platform, env) {
   if (suite === "opal") return opalspecFilters;
   // When we run an inverted test suite we should run only 'bugs'.
   // Unsupported features are not supported anyway
-  const pattern = env.INVERT_RUNNING_MODE ? "spec/filters/bugs/*.rb" : `spec/filters/{unsupported,bugs,platform/${platform}}/*.rb`;
+  const selection = platform === "nodejs" ? "node" : platform;
+  const pattern = env.INVERT_RUNNING_MODE ? "spec/filters/bugs/*.rb" : `spec/filters/{unsupported,bugs,platform/${selection}}/**/*.rb`;
   return glob(pattern).filter((f) => !opalspecFilters.includes(f));
 }
 
