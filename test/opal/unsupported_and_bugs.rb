@@ -69,6 +69,12 @@ if %w[firefox safari].include?(::Opal.JS[:platform].JS[:name])
     bug :test_should_preserve_stack
     bug :test_should_set_stack
   end
+
+  # A refused cross-origin port makes the synchronous XHR throw outside the
+  # page and the BiDi runner loses the session.
+  class TestOpenURI
+    unsupported :test_open_http_error
+  end
 end
 
 # These are only supposed to work on node compatible platforms
