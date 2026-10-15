@@ -1494,6 +1494,7 @@ class ::File < ::IO
 
       let fd;
       if (!path.$$is_number) {
+        if (!$platform.io_open_path) $platform.not_implemented("opening files by path");
         path = coerce_to_path(path);
         opts['$[]=']("path", path);
         if (perm === nil || perm === false) perm = 0o666;
