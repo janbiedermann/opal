@@ -38,7 +38,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   - `compiler`: the compiler, builder and CLI specs (`spec/lib/compiler`)
   - `mspec_opal`: the Opal-specific specs under `spec/opal`
   - `mspec_ruby`: the ruby/spec compatibility suite (`PATTERN=<glob>` limits
-    the run, `RUBYSPECS=true` with it only takes files of `spec/ruby_specs`)
+    the run, `RUBYSPECS=true` with it only takes files of `spec/selection/common`)
   - `minitest_cruby`: the vendored CRuby tests and Opal's stdlib additions
     from `test/opal` (`FILES=<glob>` runs other test files instead)
   - `minitest_node`: integration tests in `test/nodejs`
@@ -64,7 +64,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   IE11 and other ES5-era engines are not supported, so generated code and the
   runtime may use `?.`, `??`, `??=`, class fields, `Object.hasOwn`, `Array.at`,
   `Object.groupBy`, `Promise.withResolvers` and the RegExp `v` flag.
-- The list of MSpec files is in `spec/ruby_specs` and filters live in
+- The list of MSpec files is in `spec/selection/common` (with per-platform
+  additions/exclusions in `spec/selection/<platform>`, `!` lines exclude) and
+  filters live in
   `spec/filters` (`bin/format-filters` sorts them, `bin/remove-filters`
   removes the ones given on stdin).
 - Tests depend on initialized submodules (`spec/mspec`, `spec/ruby`,

@@ -1,7 +1,7 @@
 // Runs MSpec suites (ruby/spec, spec/opal) with exe/opal.
 //
 // Environment: SUITE (ruby/opal), PATTERN (a glob of spec files), RUBYSPECS
-// (with PATTERN: only files listed in spec/ruby_specs), RANDOM_SEED,
+// (with PATTERN: only files listed in spec/selection/common), RANDOM_SEED,
 // INVERT_RUNNING_MODE, LIST_UNUSED_FILTERS, BM (benchmark mode).
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -22,19 +22,25 @@ export const STUBS = [
 
 const isDirectory = (path) => existsSync(path) && statSync(path).isDirectory();
 
-// The spec files of a suite (or PATTERN).
-export function specFiles(env) {
+// The spec files of a suite (or PATTERN). The common set is in
+// spec/selection/common; spec/selection/<platform> then excludes or adds
+// specs for one platform ("!" lines are exclusions).
+export function specFiles(env, platform = "nodejs") {
+  const selection = platform === "nodejs" ? "node" : platform;
   const excepting = [];
-  const rubyspecs = readFileSync(join(ROOT, "spec", "ruby_specs"), "utf8").split("\n")
-    .map((l) => l.trim())
-    .filter((l) => {
-      if (l.startsWith("#") || l === "") return false;
-      if (l.startsWith("!")) {
-        excepting.push(l.replace("!", "spec/") + ".rb");
-        return false;
-      }
-      return true;
-    })
+  const lines = ["common", selection].flatMap((name) => {
+    const file = join(ROOT, "spec", "selection", name);
+    if (!existsSync(file)) return [];
+    return readFileSync(file, "utf8").split("\n").map((l) => l.trim());
+  }).filter((l) => {
+    if (l.startsWith("#") || l === "") return false;
+    if (l.startsWith("!")) {
+      excepting.push(l.replace("!", "spec/") + ".rb");
+      return false;
+    }
+    return true;
+  });
+  const rubyspecs = lines
     .flatMap((path) => {
       path = `spec/${path}`;
       return isDirectory(join(ROOT, path)) ? glob(`${path}/*.rb`) : [`${path}.rb`];
@@ -122,7 +128,7 @@ export async function mspec(suite, platform = "nodejs", baseEnv = process.env) {
   const env = { SUITE: suite, FORMATTER: platform, ...baseEnv };
   if (env.BM) env.BM_FILEPATH = benchmarkPath();
   if (!env.OPAL_PLATFORM_NAME) env.OPAL_PLATFORM_NAME = hostOs();
-  writeRunner(filename, filterFiles(suite, platform, env), specFiles(env), env);
+  writeRunner(filename, filterFiles(suite, platform, env), specFiles(env, platform), env);
 
   const stubs = STUBS.map((s) => `-s${s}`);
   // Specs run with cwd = spec/ so that relative paths in ruby/spec (like
