@@ -16,7 +16,7 @@ import { isIncomplete } from "../../../lib/opal/compiler/cli/repl.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
-import { seaConfig, seaUnsupported, snapshotEntry } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
+import { seaConfig, seaUnsupported } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
 import { npmRequires, bundleNpmPackages } from "../../../lib/opal/compiler/cli/npm_bundler.mjs";
 
 const FIXTURES = resolve(OPAL_ROOT, "spec", "lib", "fixtures");
