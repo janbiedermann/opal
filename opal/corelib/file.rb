@@ -1467,6 +1467,7 @@ class ::File < ::IO
             m = $coerce_to_or_raise(m, Opal.String, "to_str");
           } catch (e) {
             if (!e || !e.$$is_exception) throw e;
+            $pop_exception(e);
           }
           if (m.$$is_string) {
             if (m.indexOf(':') !== -1) {
