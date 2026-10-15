@@ -11,7 +11,6 @@ import { ROOT, envData, hostOs, randomSeed, runOpal } from "./common.mjs";
 export const STUBS = [
   "mspec/helpers/tmp",
   "mspec/helpers/environment",
-  "mspec/guards/block_device",
   "a_file",
   "lib/spec_helper",
   "mspec/commands/mspec-run",
