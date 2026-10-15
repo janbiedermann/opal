@@ -60,8 +60,11 @@ class TestIOBuffer
   # also check commented lines in RANGES in test_io_buffer.rb
 end
 
-class TestOpalError
-  if %w[firefox safari].include?(::Opal.JS[:platform].JS[:name])
+if %w[firefox safari].include?(::Opal.JS[:platform].JS[:name])
+  # The stack tests live in a file this suite does not load; create the class
+  # as a TestCase so the #bug filter below is defined.
+  Object.const_set(:TestOpalError, Class.new(Test::Unit::TestCase)) unless Object.const_defined?(:TestOpalError)
+  class TestOpalError
     bug :test_should_get_stack
     bug :test_should_preserve_stack
     bug :test_should_set_stack
