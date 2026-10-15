@@ -1,8 +1,6 @@
 # NOTE: run bin/format-filters after changing this file
 opal_filter "Hash" do
   fails "Hash#== compares keys with eql? semantics" # Expected true to be false
-  fails "Hash#== computes equality for complex recursive hashes" # Exception: Maximum call stack size exceeded
-  fails "Hash#== computes equality for recursive hashes & arrays" # Exception: Maximum call stack size exceeded
   fails "Hash#[] compares keys with eql? semantics" # Expected "x" == nil to be truthy but was false
   fails "Hash#[] does not create copies of the immediate default value" # NotImplementedError: String#<< not supported. Mutable String methods are not supported in Opal.
   fails "Hash#[] does not dispatch to hash for Boolean, Integer, Float, String, or Symbol" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x6576>
@@ -12,9 +10,6 @@ opal_filter "Hash" do
   fails "Hash#each always yields an Array of 2 elements, even when given a callable of arity 2" # Expected ArgumentError but no exception was raised ({"a"=>1} was returned)
   fails "Hash#each_pair always yields an Array of 2 elements, even when given a callable of arity 2" # Expected ArgumentError but no exception was raised ({"a"=>1} was returned)
   fails "Hash#eql? compares keys with eql? semantics" # Expected true to be false
-  fails "Hash#eql? computes equality for complex recursive hashes" # Exception: Maximum call stack size exceeded
-  fails "Hash#eql? computes equality for recursive hashes & arrays" # Exception: Maximum call stack size exceeded
-  fails "Hash#except always returns a Hash without a default" # Expected #<Class:0x8666> == Hash to be truthy but was false
   fails "Hash#inspect calls #to_s on the object returned from #inspect if the Object isn't a String" # Expected "{\"a\"=>abc}" == "{:a=>abc}" to be truthy but was false
   fails "Hash#inspect does not call #to_s on a String returned from #inspect" # Expected "{\"a\"=>\"abc\"}" == "{:a=>\"abc\"}" to be truthy but was false
   fails "Hash#inspect does not call #to_str on the object returned from #inspect when it is not a String" # Expected "{\"a\"=>#<MockObject:0x40e02>}" =~ /^\{:a=>#<MockObject:0x[0-9a-f]+>\}$/ to be truthy but was nil
@@ -22,8 +17,6 @@ opal_filter "Hash" do
   fails "Hash#invert compares new keys with eql? semantics" # Expected "b" == "a" to be truthy but was false
   fails "Hash#store does not dispatch to hash for Boolean, Integer, Float, String, or Symbol" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x627dc @method="store" @object=nil>
   fails "Hash#store keeps the existing String key in the hash if there is a matching one" # Expected "foo" not to be identical to "foo"
-  fails "Hash#to_proc the returned proc has an arity of 1" # Expected -1 == 1 to be truthy but was false
-  fails "Hash#to_proc the returned proc is a lambda" # Expected #<Proc:0x42df6>.lambda? to be truthy but was false
   fails "Hash#to_s calls #to_s on the object returned from #inspect if the Object isn't a String" # Expected "{\"a\"=>abc}" == "{:a=>abc}" to be truthy but was false
   fails "Hash#to_s does not call #to_s on a String returned from #inspect" # Expected "{\"a\"=>\"abc\"}" == "{:a=>\"abc\"}" to be truthy but was false
   fails "Hash#to_s does not call #to_str on the object returned from #inspect when it is not a String" # Expected "{\"a\"=>#<MockObject:0xb4f9a>}" =~ /^\{:a=>#<MockObject:0x[0-9a-f]+>\}$/ to be truthy but was nil

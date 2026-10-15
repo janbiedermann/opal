@@ -1,4 +1,4 @@
-# helpers: yield1, hash_clone, hash_delete, hash_each, hash_get, hash_put, deny_frozen_access, freeze, opal32_init, opal32_add, coerce_to_or_nil, coerce_to_or_raise
+# helpers: yield1, hash_clone, hash_delete, hash_get, hash_put, deny_frozen_access, freeze, opal32_init, opal32_add, coerce_to_or_nil, coerce_to_or_raise
 # backtick_javascript: true
 # use_strict: true
 
@@ -16,9 +16,11 @@ class ::Hash < `Map`
   # Mark all hash instances as valid hashes (used to check keyword args, etc)
   `self.$$prototype.$$is_hash = true`
 
+  `var $equal_pairs = []`
+
   def self.[](*argv)
     %x{
-      var hash, argc = argv.length, arg, i;
+      let hash, argc = argv.length, arg, i;
 
       if (argc === 1) {
         hash = $coerce_to_or_nil(argv[0], Opal.Hash, "to_hash");
@@ -66,7 +68,7 @@ class ::Hash < `Map`
 
   def self.allocate
     %x{
-      var hash = new self.$$constructor();
+      let hash = new self.$$constructor();
 
       hash.$$none = nil;
       hash.$$proc = nil;
@@ -119,14 +121,27 @@ class ::Hash < `Map`
         return false;
       }
 
-      var entry, other_value;
-      for (entry of self) {
-        other_value = $hash_get(other, entry[0]);
-        if (other_value === undefined || !entry[1]['$eql?'](other_value)) {
-          return false;
+      // cycle guard: a pair already being compared is equal to itself
+      for (let i = 0; i < $equal_pairs.length; i += 2) {
+        if ($equal_pairs[i] === self && $equal_pairs[i + 1] === other) {
+          return true;
         }
       }
-      return true;
+
+      $equal_pairs.push(self, other);
+      try {
+        let other_value;
+        for (let entry of self) {
+          other_value = $hash_get(other, entry[0]);
+          if (other_value === undefined || !entry[1]['$eql?'](other_value)) {
+            return false;
+          }
+        }
+        return true;
+      } finally {
+        $equal_pairs.pop();
+        $equal_pairs.pop();
+      }
     }
   end
 
@@ -179,7 +194,7 @@ class ::Hash < `Map`
 
   def [](key)
     %x{
-      var value = $hash_get(self, key);
+      let value = $hash_get(self, key);
 
       if (value !== undefined) {
         return value;
@@ -200,8 +215,7 @@ class ::Hash < `Map`
 
   def assoc(object)
     %x{
-      var entry;
-      for (entry of self) {
+      for (let entry of self) {
         if (#{`entry[0]` == object}) {
           return [entry[0], entry[1]];
         }
@@ -224,7 +238,7 @@ class ::Hash < `Map`
 
   def clone
     %x{
-      var hash = self.$class().$new();
+      let hash = self.$class().$new();
       $hash_clone(self, hash);
       return self["$frozen?"]() ? hash.$freeze() : hash;
     }
@@ -232,7 +246,7 @@ class ::Hash < `Map`
 
   def compact
     %x{
-      var hash = new Map();
+      let hash = new Map();
 
       self.forEach((value, key, s) => {
         if (value !== nil && value != null)
@@ -247,15 +261,16 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      var result = nil;
+      let result = nil;
 
-      return $hash_each(self, result, function(key, value) {
-        if (value === nil || value == null) {
-          $hash_delete(self, key);
+      for (let entry of self) {
+        if (entry[1] === nil || entry[1] == null) {
+          $hash_delete(self, entry[0]);
           result = self;
         }
-        return [false, result];
-      });
+      }
+
+      return result;
     }
   end
 
@@ -314,7 +329,7 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      var proc = default_proc;
+      let proc = default_proc;
 
       if (proc !== nil) {
         proc = $coerce_to_or_raise(proc, #{::Proc}, "to_proc");
@@ -334,7 +349,7 @@ class ::Hash < `Map`
   def delete(key, &block)
     %x{
       $deny_frozen_access(self);
-      var value = $hash_delete(self, key);
+      let value = $hash_delete(self, key);
 
       if (value !== undefined) {
         return value;
@@ -354,14 +369,15 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      return $hash_each(self, self, function(key, value) {
-        var obj = block(key, value);
+      for (let entry of self) {
+        let obj = block(entry[0], entry[1]);
 
         if (obj !== false && obj !== nil) {
-          $hash_delete(self, key);
+          $hash_delete(self, entry[0]);
         }
-        return [false, self];
-      });
+      }
+
+      return self;
     }
   end
 
@@ -392,10 +408,10 @@ class ::Hash < `Map`
       // A block with two parameters gets the key and the value directly, which
       // is what Opal.yield1 would end up doing with the pair array anyway.
       const pair = block.length === 2 && block.$$direct === true;
-      return $hash_each(self, self, function(key, value) {
-        pair ? block(key, value) : $yield1(block, [key, value]);
-        return [false, self];
-      });
+      for (let entry of self) {
+        pair ? block(entry[0], entry[1]) : $yield1(block, [entry[0], entry[1]]);
+      }
+      return self;
     }
   end
 
@@ -403,10 +419,10 @@ class ::Hash < `Map`
     return enum_for(:each_key) { size } unless block
 
     %x{
-      return $hash_each(self, self, function(key, value) {
-        block(key);
-        return [false, self];
-      });
+      for (let entry of self) {
+        block(entry[0]);
+      }
+      return self;
     }
   end
 
@@ -414,10 +430,10 @@ class ::Hash < `Map`
     return enum_for(:each_value) { size } unless block
 
     %x{
-      return $hash_each(self, self, function(key, value) {
-        block(value);
-        return [false, self];
-      });
+      for (let entry of self) {
+        block(entry[1]);
+      }
+      return self;
     }
   end
 
@@ -426,7 +442,20 @@ class ::Hash < `Map`
   end
 
   def except(*keys)
-    dup.except!(*keys)
+    %x{
+      // MRI always returns a plain Hash without a default or default proc
+      let hash = new Map(), i;
+
+      for (let entry of self) {
+        $hash_put(hash, entry[0], entry[1]);
+      }
+
+      for (i = 0; i < keys.length; i++) {
+        $hash_delete(hash, keys[i]);
+      }
+
+      return hash;
+    }
   end
 
   def except!(*keys)
@@ -436,7 +465,7 @@ class ::Hash < `Map`
 
   def fetch(key, defaults = undefined, &block)
     %x{
-      var value = $hash_get(self, key);
+      let value = $hash_get(self, key);
 
       if (value !== undefined) {
         return value;
@@ -462,24 +491,26 @@ class ::Hash < `Map`
     level = `$coerce_to_or_raise(level, Opal.Integer, "to_int")`
 
     %x{
-      var result = [];
+      let result = [];
 
-      return $hash_each(self, result, function(key, value) {
+      for (let entry of self) {
+        let key = entry[0], value = entry[1];
         result.push(key);
 
         if (value.$$is_array) {
           if (level === 1) {
             result.push(value);
-            return [false, result];
+            continue;
           }
 
           result = result.concat(#{`value`.flatten(`level - 2`)});
-          return [false, result];
+          continue;
         }
 
         result.push(value);
-        return [false, result];
-      });
+      }
+
+      return result;
     }
   end
 
@@ -495,7 +526,7 @@ class ::Hash < `Map`
 
   def has_value?(value)
     %x{
-      var val, values = self.values();
+      let val, values = self.values();
       for (val of values) {
         if (#{`val` == value}) {
           return true;
@@ -509,7 +540,7 @@ class ::Hash < `Map`
 
   def hash
     %x{
-      var top = ($hash_ids === undefined),
+      let top = ($hash_ids === undefined),
           hash_id = self.$object_id(),
           result = $opal32_init(),
           key, item, i, values, entry,
@@ -538,8 +569,15 @@ class ::Hash < `Map`
         $hash_ids.set(hash_id, self);
         i = 0;
 
-        for (entry of self) {
-          ary[i] = [0x70414952, entry[0], entry[1]].$hash();
+        for (let entry of self) {
+          // same chain as [0x70414952, key, value].$hash(), without the array
+          let pair = $opal32_init();
+          pair = $opal32_add(pair, 0xA);
+          pair = $opal32_add(pair, 3);
+          pair = $opal32_add(pair, 0x70414952);
+          pair = $opal32_add(pair, entry[0].$hash());
+          pair = $opal32_add(pair, entry[1].$hash());
+          ary[i] = pair;
           i++;
         }
 
@@ -560,8 +598,7 @@ class ::Hash < `Map`
 
   def index(object)
     %x{
-      var entry;
-      for (entry of self) {
+      for (let entry of self) {
         if (#{`entry[1]` == object}) {
           return entry[0];
         }
@@ -572,9 +609,9 @@ class ::Hash < `Map`
 
   def indexes(*args)
     %x{
-      var result = [];
+      let result = [];
 
-      for (var i = 0, length = args.length, key, value; i < length; i++) {
+      for (let i = 0, length = args.length, key, value; i < length; i++) {
         key = args[i];
         value = $hash_get(self, key);
 
@@ -595,29 +632,27 @@ class ::Hash < `Map`
   def inspect
     %x{
       var top = (inspect_ids === undefined),
-          hash_id = self.$object_id(),
           result = [];
     }
 
     begin
       %x{
         if (top) {
-          inspect_ids = {};
+          inspect_ids = new Set();
         }
 
-        if (inspect_ids.hasOwnProperty(hash_id)) {
+        if (inspect_ids.has(self)) {
           return '{...}';
         }
 
-        inspect_ids[hash_id] = true;
+        inspect_ids.add(self);
 
-        $hash_each(self, false, function(key, value) {
-          value = #{Opal.inspect(`value`)}
-          key = #{Opal.inspect(`key`)}
+        for (let entry of self) {
+          let value = #{Opal.inspect(`entry[1]`)},
+              key = #{Opal.inspect(`entry[0]`)};
 
           result.push(key + '=>' + value);
-          return [false, false];
-        })
+        }
 
         return '{' + result.join(', ') + '}';
       }
@@ -629,12 +664,13 @@ class ::Hash < `Map`
 
   def invert
     %x{
-      var hash = new Map();
+      let hash = new Map();
 
-      return $hash_each(self, hash, function(key, value) {
-        $hash_put(hash, value, key);
-        return [false, hash];
-      });
+      for (let entry of self) {
+        $hash_put(hash, entry[1], entry[0]);
+      }
+
+      return hash;
     }
   end
 
@@ -644,14 +680,15 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      return $hash_each(self, self, function(key, value) {
-        var obj = block(key, value);
+      for (let entry of self) {
+        let obj = block(entry[0], entry[1]);
 
         if (obj === false || obj === nil) {
-          $hash_delete(self, key);
+          $hash_delete(self, entry[0]);
         }
-        return [false, self];
-      });
+      }
+
+      return self;
     }
   end
 
@@ -671,27 +708,24 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      var i, j, other;
+      let i, j, other, entry;
       for (i = 0; i < others.length; ++i) {
         other = $coerce_to_or_raise(others[i], Opal.Hash, "to_hash");
 
         if (block === nil) {
-          $hash_each(other, false, function(key, value) {
-            $hash_put(self, key, value);
-            return [false, false];
-          });
+          for (entry of other) {
+            $hash_put(self, entry[0], entry[1]);
+          }
         } else {
-          $hash_each(other, false, function(key, value) {
-            var val = $hash_get(self, key);
+          for (entry of other) {
+            let val = $hash_get(self, entry[0]);
 
             if (val === undefined) {
-              $hash_put(self, key, value);
-              return [false, false];
+              $hash_put(self, entry[0], entry[1]);
+            } else {
+              $hash_put(self, entry[0], block(entry[0], val, entry[1]));
             }
-
-            $hash_put(self, key, block(key, val, value));
-            return [false, false];
-          });
+          }
         }
       }
 
@@ -701,8 +735,7 @@ class ::Hash < `Map`
 
   def rassoc(object)
     %x{
-      var entry;
-      for (entry of self) {
+      for (let entry of self) {
         if (#{`entry[1]` == object}) {
           return [entry[0], entry[1]];
         }
@@ -722,10 +755,10 @@ class ::Hash < `Map`
     return enum_for(:reject) { size } unless block
 
     %x{
-      var hash = new Map();
+      let hash = new Map();
 
       self.forEach((value, key, s) => {
-        var obj = block(key, value);
+        let obj = block(key, value);
 
         if (obj === false || obj === nil) {
           $hash_put(hash, key, value);
@@ -742,17 +775,18 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      var result = nil;
+      let result = nil;
 
-      return $hash_each(self, result, function(key, value) {
-        var obj = block(key, value);
+      for (let entry of self) {
+        let obj = block(entry[0], entry[1]);
 
         if (obj !== false && obj !== nil) {
-          $hash_delete(self, key);
+          $hash_delete(self, entry[0]);
           result = self;
         }
-        return [false, result];
-      });
+      }
+
+      return result;
     }
   end
 
@@ -764,10 +798,9 @@ class ::Hash < `Map`
     %x{
       self.$clear();
 
-      $hash_each(other, false, function(key, value) {
-        $hash_put(self, key, value);
-        return [false, false];
-      });
+      for (let entry of other) {
+        $hash_put(self, entry[0], entry[1]);
+      }
     }
 
     if other.default_proc
@@ -783,10 +816,10 @@ class ::Hash < `Map`
     return enum_for(:select) { size } unless block
 
     %x{
-      var hash = new Map();
+      let hash = new Map();
 
       self.forEach((value, key, s) => {
-        var obj = block(key, value);
+        let obj = block(key, value);
 
         if (obj !== false && obj !== nil) {
           $hash_put(hash, key, value);
@@ -803,17 +836,18 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      var result = nil;
+      let result = nil;
 
-      return $hash_each(self, result, function(key, value) {
-        var obj = block(key, value);
+      for (let entry of self) {
+        let obj = block(entry[0], entry[1]);
 
         if (obj === false || obj === nil) {
-          $hash_delete(self, key);
+          $hash_delete(self, entry[0]);
           result = self;
         }
-        return [false, result];
-      });
+      }
+
+      return result;
     }
   end
 
@@ -821,18 +855,24 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      return $hash_each(self, nil, function(key, value) {
-        return [true, [key, $hash_delete(self, key)]];
-      });
+      let first = self.entries().next();
+
+      if (first.done) {
+        return nil;
+      }
+
+      let key = first.value[0];
+
+      return [key, $hash_delete(self, key)];
     }
   end
 
   def slice(*keys)
     %x{
-      var result = new Map();
+      let result = new Map();
 
-      for (var i = 0, length = keys.length; i < length; i++) {
-        var key = keys[i], value = $hash_get(self, key);
+      for (let i = 0, length = keys.length; i < length; i++) {
+        let key = keys[i], value = $hash_get(self, key);
 
         if (value !== undefined) {
           $hash_put(result, key, value);
@@ -855,7 +895,7 @@ class ::Hash < `Map`
         return self;
       }
 
-      var hash = new Map();
+      let hash = new Map();
 
       $hash_clone(self, hash);
 
@@ -868,28 +908,20 @@ class ::Hash < `Map`
   end
 
   def to_proc
-    proc do |key = undefined|
-      %x{
-        if (key == null) {
-          #{::Kernel.raise ::ArgumentError, 'no key given'}
-        }
-      }
-
-      self[key]
-    end
+    ->(key) { self[key] }
   end
 
   def transform_keys(keys_hash = nil, &block)
     return enum_for(:transform_keys) { size } if !block && !keys_hash
 
     %x{
-      var result = new Map();
+      let result = new Map();
 
       self.forEach((value, key, s) => {
-        var new_key;
+        let new_key;
         if (keys_hash !== nil)
           new_key = $hash_get(keys_hash, key);
-        if (new_key === undefined && block && block !== nil)
+        if (new_key === undefined && block !== nil && block !== undefined)
           new_key = block(key);
         if (new_key === undefined)
           new_key = key // key not modified
@@ -906,22 +938,26 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      var modified_keys = new Map();
+      let modified_keys = new Map();
 
-      return $hash_each(self, self, function(key, value) {
-        var new_key;
+      // transform_keys! inserts new keys, so iterate over a snapshot: live
+      // Map iteration would visit the re-added keys again.
+      for (let entry of Array.from(self)) {
+        let new_key;
+        let key = entry[0], value = entry[1];
         if (keys_hash !== nil)
           new_key = $hash_get(keys_hash, key);
-        if (new_key === undefined && block && block !== nil)
+        if (new_key === undefined && block !== nil && block !== undefined)
           new_key = block(key);
         if (new_key === undefined)
-          return [false, self]; // key not modified
+          continue; // key not modified
         if (!$hash_get(modified_keys, key))
           $hash_delete(self, key);
         $hash_put(self, new_key, value);
-        $hash_put(modified_keys, new_key, true)
-        return [false, self];
-      });
+        $hash_put(modified_keys, new_key, true);
+      }
+
+      return self;
     }
   end
 
@@ -929,7 +965,7 @@ class ::Hash < `Map`
     return enum_for(:transform_values) { size } unless block
 
     %x{
-      var result = new Map();
+      let result = new Map();
 
       self.forEach((value, key, s) => $hash_put(result, key, block(value)));
 
@@ -943,10 +979,11 @@ class ::Hash < `Map`
     %x{
       $deny_frozen_access(self);
 
-      return $hash_each(self, self, function(key, value) {
-        $hash_put(self, key, block(value));
-        return [false, self];
-      });
+      for (let entry of self) {
+        self.set(entry[0], block(entry[1]));
+      }
+
+      return self;
     }
   end
 

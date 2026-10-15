@@ -600,10 +600,9 @@ unless Hash.method_defined? :_initialize
       %x{
         var result = {};
 
-        Opal.hash_each(self, false, function(key, value) {
-          result[#{Native.try_convert(`key`, `key`)}] = #{Native.try_convert(`value`, `value`)};
-          return [false, false];
-        });
+        for (var entry of self) {
+          result[#{Native.try_convert(`entry[0]`, `entry[0]`)}] = #{Native.try_convert(`entry[1]`, `entry[1]`)};
+        }
 
         return result;
       }

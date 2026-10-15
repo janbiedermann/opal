@@ -157,10 +157,9 @@ class Hash
     %x{
       var result = [];
 
-      Opal.hash_each(self, false, function(key, value) {
-        result.push(#{`key`.to_s.to_json} + ':' + #{`value`.to_json});
-        return [false, false];
-      });
+      for (var entry of self) {
+        result.push(#{`entry[0]`.to_s.to_json} + ':' + #{`entry[1]`.to_json});
+      }
 
       return '{' + result.join(',') + '}';
     }

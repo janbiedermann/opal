@@ -15,30 +15,24 @@ module ::Opal
   # and at the same time provides the performance improvement of using .set
   # with a overall smaller overhead than creating arrays for each pair.
   # For primitive keys:
-  def self.hash_new
+  def self.hash_new(*args)
     %x{
       let h = new Map();
-      for (let i = 0; i < arguments.length; i += 2) {
-        h.set(arguments[i], arguments[i + 1]);
+      for (let i = 0; i < args.length; i += 2) {
+        h.set(args[i], args[i + 1]);
       }
       return h;
     }
   end
 
   # The same as above, except for complex keys:
-  def self.hash_new2
+  def self.hash_new2(*args)
     %x{
       let h = new Map();
-      for (let i = 0; i < arguments.length; i += 2) {
-        Opal.hash_put(h, arguments[i], arguments[i + 1]);
+      for (let i = 0; i < args.length; i += 2) {
+        Opal.hash_put(h, args[i], args[i + 1]);
       }
       return h;
-    }
-  end
-
-  def self.hash_init(_hash)
-    %x{
-      console.warn("DEPRECATION: Opal.hash_init is deprecated and is now a no-op.")
     }
   end
 
@@ -47,16 +41,17 @@ module ::Opal
       to_hash.$$none = from_hash.$$none;
       to_hash.$$proc = from_hash.$$proc;
 
-      return Opal.hash_each(from_hash, to_hash, function(key, value) {
-        Opal.hash_put(to_hash, key, value);
-        return [false, to_hash];
-      });
+      for (let entry of from_hash) {
+        Opal.hash_put(to_hash, entry[0], entry[1]);
+      }
+
+      return to_hash;
     }
   end
 
   def self.hash_put(hash, key, value)
     %x{
-      var type = typeof key;
+      let type = typeof key;
       if (type === "string" || type === "symbol" || type === "number" || type === "boolean" || type === "bigint") {
         hash.set(key, value)
       } else if (key.$$is_string) {
@@ -65,7 +60,7 @@ module ::Opal
         if (!hash.$$keys)
           hash.$$keys = new Map();
 
-        var key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash()),
+        let key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash()),
             keys = hash.$$keys;
 
         if (!keys.has(key_hash)) {
@@ -74,11 +69,9 @@ module ::Opal
           return;
         }
 
-        var objects = keys.get(key_hash),
-            object;
+        let objects = keys.get(key_hash);
 
-        for (var i=0; i<objects.length; i++) {
-          object = objects[i];
+        for (let object of objects) {
           if (key === object || key['$eql?'](object)) {
             hash.set(object, value);
             return;
@@ -93,17 +86,15 @@ module ::Opal
 
   def self.hash_get(hash, key)
     %x{
-      var type = typeof key;
+      let type = typeof key;
       if (type === "string" || type === "symbol" || type === "number" || type === "boolean" || type === "bigint") {
         return hash.get(key)
       } else if (hash.$$keys) {
-        var key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash()),
-            objects = hash.$$keys.get(key_hash),
-            object;
+        let key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash()),
+            objects = hash.$$keys.get(key_hash);
 
         if (objects !== undefined) {
-          for (var i=0; i<objects.length; i++) {
-            object = objects[i];
+          for (let object of objects) {
             if (key === object || key['$eql?'](object))
               return hash.get(object);
           }
@@ -116,71 +107,70 @@ module ::Opal
     }
   end
 
-  def self.hash_delete_stage2(hash, key)
-    %x{
-      var value = hash.get(key);
-      hash.delete(key);
-      return value;
-    }
-  end
-
   def self.hash_delete(hash, key)
     %x{
-      var type = typeof key
+      let type = typeof key, value;
       if (type === "string" || type === "symbol" || type === "number" || type === "boolean" || type === "bigint") {
-        return Opal.hash_delete_stage2(hash, key);
+        value = hash.get(key);
+        hash.delete(key);
+        return value;
       } else if (hash.$$keys) {
-        var key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash()),
-            objects = hash.$$keys.get(key_hash),
-            object;
+        let key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash()),
+            objects = hash.$$keys.get(key_hash);
 
         if (objects !== undefined) {
-          for (var i=0; i<objects.length; i++) {
-            object = objects[i];
+          for (let i = 0; i < objects.length; i++) {
+            let object = objects[i];
             if (key === object || key['$eql?'](object)) {
               objects.splice(i, 1);
               if (objects.length === 0)
                 hash.$$keys.delete(key_hash);
-              return Opal.hash_delete_stage2(hash, object);
+              value = hash.get(object);
+              hash.delete(object);
+              return value;
             }
           }
         } else if (key.$$is_string) {
-          return Opal.hash_delete_stage2(hash, key_hash);
+          value = hash.get(key_hash);
+          hash.delete(key_hash);
+          return value;
         }
       } else if (key.$$is_string) {
-        return Opal.hash_delete_stage2(hash, key.valueOf());
+        value = hash.get(key.valueOf());
+        hash.delete(key.valueOf());
+        return value;
       }
     }
   end
 
   def self.hash_rehash(hash)
     %x{
-      var keys = hash.$$keys;
+      let keys = hash.$$keys;
 
       if (keys)
         keys.clear();
 
-      Opal.hash_each(hash, false, function(key, value) {
-        var type = typeof key;
-        if (type === "string" || type === "symbol" || type === "number" || type === "boolean" || type === "bigint")
-          return [false, false]; // nothing to rehash
+      for (let entry of hash) {
+        let key = entry[0],
+            type = typeof key;
 
-        var key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash());
+        if (type === "string" || type === "symbol" || type === "number" || type === "boolean" || type === "bigint")
+          continue; // nothing to rehash
+
+        let key_hash = key.$$is_string ? key.valueOf() : (hash.$$by_identity ? Opal.id(key) : key.$hash());
 
         if (!keys)
           hash.$$keys = keys = new Map();
 
         if (!keys.has(key_hash)) {
           keys.set(key_hash, [key]);
-          return [false, false];
+          continue;
         }
 
-        var objects = keys.get(key_hash),
-            objects_copy = (objects.length === 1) ? objects : $slice(objects),
-            object;
+        let objects = keys.get(key_hash),
+            objects_copy = (objects.length === 1) ? objects : $slice(objects);
 
-        for (var i=0; i<objects_copy.length; i++) {
-          object = objects_copy[i];
+        for (let object of objects_copy) {
           if (key === object || key['$eql?'](object)) {
             // got a duplicate, remove it
             objects.splice(objects.indexOf(object), 1);
@@ -189,53 +179,49 @@ module ::Opal
         }
 
         objects.push(key);
-
-        return [false, false]
-      });
+      }
 
       return hash;
     }
   end
 
-  def self.hash
+  def self.hash(*args)
     %x{
-      var arguments_length = arguments.length,
-        args,
+      let args_length = args.length,
         hash,
         i,
         length,
         key,
         value;
 
-      if (arguments_length === 1 && arguments[0].$$is_hash) {
-        return arguments[0];
+      if (args_length === 1 && args[0].$$is_hash) {
+        return args[0];
       }
 
       hash = new Map();
 
-      if (arguments_length === 1) {
-        args = arguments[0];
+      if (args_length === 1) {
+        let arg = args[0];
 
-        if (arguments[0].$$is_array) {
-          length = args.length;
+        if (arg.$$is_array) {
+          length = arg.length;
 
           for (i = 0; i < length; i++) {
-            if (args[i].length !== 2) {
-              $raise(Opal.ArgumentError, 'value not of length 2: ' + args[i].$inspect());
+            if (arg[i].length !== 2) {
+              $raise(Opal.ArgumentError, 'value not of length 2: ' + arg[i].$inspect());
             }
 
-            key = args[i][0];
-            value = args[i][1];
+            key = arg[i][0];
+            value = arg[i][1];
 
             Opal.hash_put(hash, key, value);
           }
 
           return hash;
         } else {
-          args = arguments[0];
-          for (key in args) {
-            if ($has_own(args, key)) {
-              value = args[key];
+          for (key in arg) {
+            if ($has_own(arg, key)) {
+              value = arg[key];
 
               Opal.hash_put(hash, key, value);
             }
@@ -245,51 +231,18 @@ module ::Opal
         }
       }
 
-      if (arguments_length % 2 !== 0) {
+      if (args_length % 2 !== 0) {
         $raise(Opal.ArgumentError, 'odd number of arguments for Hash');
       }
 
-      for (i = 0; i < arguments_length; i += 2) {
-        key = arguments[i];
-        value = arguments[i + 1];
+      for (i = 0; i < args_length; i += 2) {
+        key = args[i];
+        value = args[i + 1];
 
         Opal.hash_put(hash, key, value);
       }
 
       return hash;
-    }
-  end
-
-  # A faster Hash creator for hashes that just use symbols and
-  # strings as keys. The map and keys array can be constructed at
-  # compile time, so they are just added here by the constructor
-  # function.
-
-  def self.hash2(keys, smap)
-    %x{
-      console.warn("DEPRECATION: `Opal.hash2` is deprecated and will be removed in Opal 2.0. Use $hash_new for primitive keys or $hash_new2 for complex keys instead.");
-
-      var hash = new Map();
-      for (var i = 0, max = keys.length; i < max; i++) {
-        hash.set(keys[i], smap[keys[i]]);
-      }
-      return hash;
-    }
-  end
-
-  def self.hash_each(hash, dres, fun)
-    %x{
-      // dres = default result, returned if hash is empty
-      // fun is called as fun(key, value) and must return a array with [break, result]
-      // if break is true, iteration stops and result is returned
-      // if break is false, iteration continues and eventually the last result is returned
-      var res;
-      for (var i = 0, entry, entries = Array.from(hash.entries()), l = entries.length; i < l; i++) {
-        entry = entries[i];
-        res = fun(entry[0], entry[1]);
-        if (res[0]) return res[1];
-      }
-      return res ? res[1] : dres;
     }
   end
 
@@ -308,7 +261,7 @@ module ::Opal
 
   def self.get_kwarg(kwargs, key)
     %x{
-      var kwarg = Opal.hash_get(kwargs, key);
+      let kwarg = Opal.hash_get(kwargs, key);
       if (kwarg === undefined) {
         $raise(Opal.ArgumentError, 'missing keyword: '+key);
       }
@@ -324,7 +277,7 @@ module ::Opal
 
   def self.extract_kwargs(parameters)
     %x{
-      var kwargs = parameters[parameters.length - 1];
+      let kwargs = parameters.at(-1);
       if (kwargs != null && Opal.respond_to(kwargs, '$to_hash', true)) {
         $splice(parameters, parameters.length - 1);
         return kwargs;
@@ -345,14 +298,13 @@ module ::Opal
 
   def self.kwrestargs(given_args, used_args)
     %x{
-      var map = new Map();
+      let map = new Map();
 
-      Opal.hash_each(given_args, false, function(key, value) {
-        if (!used_args[key]) {
-          Opal.hash_put(map, key, value);
+      for (let entry of given_args) {
+        if (!used_args[entry[0]]) {
+          Opal.hash_put(map, entry[0], entry[1]);
         }
-        return [false, false];
-      });
+      }
 
       return map;
     }
@@ -366,7 +318,7 @@ module ::Opal
         return value;
       }
       else if (value['$respond_to?']('to_hash', true)) {
-        var hash = value.$to_hash();
+        let hash = value.$to_hash();
         if (hash.$$is_hash) {
           return hash;
         }
