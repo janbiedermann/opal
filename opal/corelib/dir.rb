@@ -1,5 +1,5 @@
 # backtick_javascript: true
-# helpers: platform, str, glob_brace_expand, is_star_star_slash, mbinc, is_dirsep, coerce_to_or_raise
+# helpers: platform, str, glob_brace_expand, is_star_star_slash, mbinc, is_dirsep, coerce_to_or_raise, raise, send, yield1, hash_new, gvars
 
 class ::Dir
   include ::Enumerable
@@ -138,530 +138,499 @@ class ::Dir
         # Argument patterns is a string pattern or an array of string patterns;
         # note that these are not regexps.
 
-        # This a more or less straightforward port of dir_s_glob and related functions from ruby/dir.c.
-        base = if `base === undefined`
-                 nil
-               elsif base.nil?
-                 getwd
-               else
-                 base = `$coerce_to_or_raise(base, Opal.String, "to_path")`
-                 base == '.' || base == '' ? getwd : base
-               end
-        flags = patterns.pop if patterns.size == 2 && patterns[1].is_a?(::Integer)
-        flags = flags ? `$coerce_to_or_raise(flags, Opal.Integer, "to_int")` : 0
-
-        raise(ArgumentError, "expected true or false as sort: #{sort}") unless sort == true || sort == false
-
-        period = (flags & ::File::FNM_DOTMATCH) != ::File::FNM_DOTMATCH # as used in #fnmatch
-        escape = (flags & ::File::FNM_NOESCAPE) != ::File::FNM_NOESCAPE
-
-        # some constant values which are specific to glob
-        glob_verboseC = 1 << 24
-
-        path_unknownC = -2
-        path_noentC = -1
-        path_existC = 0
-        path_directoryC = 4
-        path_regularC = 8
-        path_symlinkC = 10
-
-        plainC = 1
-        alphaC = 2
-        braceC = 3
-        magicalC = 4
-        recursiveC = 5
-        match_allC = 6
-        match_dirC = 7
-
-        # just like in ruby/dir.c
-        find_dirsep = ->(pat, pi) do
-          op = nil
-          while (c = `pat[pi]`)
-            case c
-            when '['
-              op = true
-            when ']'
-              op = false
-            when '{'
-              op = true
-            when '}'
-              op = false
-            when '/'
-              return pi unless op
-            when '\\'
-              return pi if escape && !(c = `pat[pi++]`)
-            when "\x00"
-              raise(ArgumentError, 'nul-separated pattern')
-            end
-            pi = `$mbinc(pat, pi)`
-          end
-          pi
-        end
-
-        # just like in ruby/dir.c
-        has_magic = ->(pat, pi, pe) do
-          hasalpha = false
-          hasmagical = false
-          while pi < pe && (c = `pat[pi]`) && `c != '\x00'`
-            case c
-            when '{'
-              return braceC
-            when '*', '?', '['
-              hasmagical = true
-            when '\\'
-              break if escape && (`pi++` >= pe)
-            when '.'
-              # nothing if `$platform.windows`
-            when '~'
-              hasalpha = true if `$platform.windows`
-            else
-              hasalpha = true if `$platform.windows || c.match(/[a-zA-Z]/)`
-            end
-            pi = `$mbinc(pat, pi)`
-          end
-          hasmagical ? magicalC : (hasalpha ? alphaC : plainC)
-        end
-
-        # just like in ruby/dir.c
-        glob_make_pattern = ->(pat) do
-          dirsep = recursive = false
-          list = tail = tmp = nil
-          pi = 0
-
-          while `pat[pi]`
-            if `$is_star_star_slash(pat, pi)`
-              pi += 3
-              pi += 1 while `pat[pi] == '/'`
-              while `$is_star_star_slash(pat, pi)`
-                pi += 3
-                pi += 1 while `pat[pi] == '/'`
-              end
-              tmp = { str: nil, type: recursiveC }
-              dirsep = true
-              recursive = true
-            else
-              m = find_dirsep.(pat, pi)
-              magic = has_magic.(pat, pi, m)
-              non_magic = ::File::FNM_SYSCASE > 0 || `$platform.windows` ? plainC : alphaC
-              if !(::File::FNM_SYSCASE > 0 || magic > non_magic) && !recursive && `pat[m]`
-                while has_magic.(pat, m + 1, m2 = find_dirsep.(pat, m + 1)) <= non_magic && `pat[m2]`
-                  m = m2
-                end
-              end
-              tmp = { str: `pat.slice(pi, m)`,
-                      type: magic > magicalC ? magicalC : (magic > non_magic ? magic : plainC) }
-              if `pat[m]`
-                dirsep = true
-                pi = m + 1
-              else
-                dirsep = false
-                pi = m
-              end
-            end
-
-            if !list
-              list = tail = tmp
-            else
-              tail = tail[:next] = tmp
-            end
-          end
-
-          tmp = { str: nil, type: dirsep ? match_dirC : match_allC, next: nil }
-
-          return tmp unless tail
-
-          tail[:next] = tmp
-
-          list
-        end
-
-        # just like in ruby/dir.c
-        join_path_from_pattern = ->(pl) do
-          path = nil
-          str = nil
-          while pl
-            case pl[:type]
-            when recursiveC
-              str = '**'
-            when match_dirC
-              str = ''
-            else
-              str = pl[:str]
-              unless str
-                pl = pl[:next]
-                next
-              end
-            end
-            if !path
-              path = str
-            else
-              path = path + '/' + str
-            end
-            pl = pl[:next]
-          end
-          path
-        end
-
-        # just like in ruby/dir.c
-        join_path = ->(path, len, dirsep, name, namelen) do
-          path = `len < path.length ? path.slice(0, len) : path`
-          path += '/' if dirsep
-          path += `namelen < name.length ? name.slice(0, namelen) : name`
-        end
-
-        glob_helper = nil
-
-        # just like in ruby/dir.c
-        push_caller = ->(path, args) do
-          list = glob_make_pattern.(path)
-          return nil unless list
-          glob_helper.(args[:path], args[:baselen], args[:namelen], args[:dirsep],
-                       args[:pathtype], [list], args[:flags], args[:arg]
-                      )
-        end
-
-        # unlike in ruby/dir.c, this is used together with File.lstat and File.stat
-        # instead of having do_lstat or do_stat
-        detect_pathtype = ->(st) do
-          if !st
-            path_noentC
-          elsif st.directory?
-            path_directoryC
-          elsif st.symlink?
-            path_symlinkC
-          elsif st.file?
-            path_regularC
-          else
-            path_existC
-          end
-        end
-
-        # just like in ruby/dir.c
-        glob_open_dir = ->(dirp, flgs) do
-          entries = dirp.to_a
-          return entries if flgs % ::File::FNM_GLOB_NOSORT == ::File::FNM_GLOB_NOSORT
-          entries.sort
-        end
-
-        # just like in ruby/dir.c
-        remove_backslashes = ->(name) do
-          `name.replaceAll(/\\(.)/g, '$1')`
-        end
-
-        # the literally label extracted from glob_helper, because we dont have goto
-        literally = ->(path, baselen, namelen, dirsep, list, flgs, arg) do
-          status = false
-          pathlen = baselen + namelen
-
-          copy_list = []
-          list.each do |pl|
-            copy_list.push(pl[:type] <= alphaC ? pl : nil)
-          end
-
-          cur = 0
-          while cur < `copy_list.length`
-            pl = copy_list[cur]
-            if pl
-              name = pl[:str]
-              name = remove_backslashes.(name) if escape
-              new_list = []
-              new_list << pl[:next]
-
-              cur2 = cur + 1
-              while cur2 < `copy_list.length`
-                pl2 = copy_list[cur2]
-                if pl2 && ::File.fnmatch(pl2[:str], name, flgs)
-                  new_list << pl2[:next]
-                  cur2 = 0
-                end
-                cur2 += 1
-              end
-
-              buf = join_path.(path, pathlen, dirsep, name, `name.length`)
-
-              # this is probably correctly done by js engines on windows, so we dont need to,
-              # we couldn't do it anyway, unless we would have access to getattrlist on windows
-              # if `$platform.windows`
-              #   if pl[:type] == alphaC
-              #     buf = replace_real_basename.(buf, (pathlen + dirsep ? 1 : 0), flgs)
-              #     break unless buf
-              #   end
-              # end
-
-              status = glob_helper.(buf, baselen, namelen + `buf.length` - pathlen, true,
-                                    path_unknownC, new_list, flgs, arg
-                                   )
-
-              break if status
-            end
-            cur += 1
-          end
-
-          status
-        end
-
-        # just like in ruby/dir.c
-        dirent_match = ->(pat, name, flgs) do
-          ::File.fnmatch(pat, name, flgs)
-        end
-
-        # just like in ruby/dir.c
-        dirent_match_brace = ->(pat, arg) { dirent_match.(pat, arg[:name], arg[:flags]) }
-
-        # just like in ruby/dir.c
-        glob_helper = ->(path, baselen, namelen, dirsep, pathtype, list, flgs, arg) do
-          brace = magical = match_all = match_dir = plain = recursive = status = false
-          pathlen = baselen + namelen
-
-          list.each do |pl|
-            if pl[:type] == recursiveC
-              recursive = true
-              pl = pl[:next]
-            end
-
-            case pl[:type]
-            when plainC
-              plain = true
-            when alphaC
-              if `$platform.windows`
-                plain = true
-              else
-                magical = 1
-              end
-            when braceC
-              str = pl[:str]
-              brace = true if !recursive || `str.indexOf('/') != -1`
-            when magicalC
-              magical = 2
-            when match_allC
-              match_all = true
-            when match_dirC
-              match_dir = true
-            when recursiveC
-              raise 'BUG! continuous RECURSIVEs'
-            end
-          end
-
-          if brace
-            brace_path = join_path_from_pattern.(list[0])
-            return nil unless brace_path
-            args = {
-              path: path,
-              baselen: baselen,
-              namelen: namelen,
-              dirsep: dirsep,
-              pathtype: pathtype,
-              flags: flgs,
-              arg: arg
-            }
-            return `$glob_brace_expand(brace_path, push_caller, escape, args)`
-          end
-
-          if `path.length > 0`
-            if match_all && pathtype == path_unknownC
-              st = ::File.lstat(path) rescue nil
-              pathtype = detect_pathtype.(st)
-            end
-
-            if match_dir && pathtype == path_unknownC || pathtype == path_symlinkC
-              st = ::File.stat(path) rescue nil
-              pathtype = detect_pathtype.(st)
-            end
-
-            if match_all && pathtype > path_noentC
-              subpath = `path.slice(baselen + (baselen > 0 && path[baselen] == '/' ? 1 : 0))`
-              if `subpath.length > 0`
-                status = arg[:match_func].(subpath, arg)
-                return status if status
-              end
-            end
-
-            if match_dir && pathtype == path_directoryC
-              seplen = `baselen > 0 && path[baselen] == '/' ? 1 : 0`
-              subpath = `path.slice(baselen + seplen)`
-              tmp = join_path.(subpath, namelen - seplen, dirsep, '', 0)
-              status = arg[:match_func].(tmp, arg)
-              return status if status
-            end
-          end
-
-          return false if pathtype == path_noentC
-
-          if magical || recursive
-
-            # this would be the call to do_opendir
-            begin
-              dirp = new(path == '' ? '.' : path)
-            rescue ::Errno::ENOENT, ::Errno::ENOTDIR
-              dirp = nil
-            rescue ::Errno::EACCES
-              return literally.(path, baselen, namelen, dirsep, list, flgs, arg) if ::File::FNM_SYSCASE > 0 && !recursive
-              dirp = nil
-            rescue => e
-              return err_func.(path, e)
-            end
-
-            return status unless dirp
-
-            begin
-              glob_entries = glob_open_dir.(dirp, flgs)
-
-              skipdot = (flgs & ::File::FNM_GLOB_SKIPDOT) == ::File::FNM_GLOB_SKIPDOT
-              flgs |= ::File::FNM_GLOB_SKIPDOT
-
-              glob_entries.each do |name|
-                new_pathtype = path_unknownC
-                dotfile = 0
-                namlen = `name.length`
-
-                if `name[0] == '.'`
-                  dotfile += 1
-                  if namlen == 1
-                    # unless DOTMATCH, skip current directories not to recurse infinitely
-                    next if recursive && period
-                    next if skipdot
-                    dotfile += 1
-                    new_pathtype = path_directoryC
-                  elsif namlen == 2 && `name[1] == '.'`
-                    # always skip parent directories not to recurse infinitely
-                    next
-                  end
-                end
-
-                buf = join_path.(path, pathlen, dirsep, name, namlen)
-                n = dirsep ? 1 : 0
-
-                st = ::File.lstat(buf)
-                new_pathtype = detect_pathtype.(st)
-
-                if recursive && dotfile < (period ? 1 : 2) && new_pathtype == path_unknownC
-                  new_pathtype = path_noentC
-                end
-
-                new_list = []
-
-                list.each do |pl|
-                  if pl[:type] == recursiveC
-                    if path_existC <= new_pathtype && new_pathtype < path_symlinkC
-                      new_list << pl if dotfile < (period ? 1 : 2)
-                    end
-                    pl = pl[:next]
-                  end
-
-                  case pl[:type]
-                  when braceC
-                    args = { name: name, flags: flgs }
-                    new_list << pl[:next] if `$glob_brace_expand(pl.get('str'), dirent_match_brace, escape, args)`
-                  when alphaC, plainC, magicalC
-                    new_list << pl[:next] if dirent_match.(pl[:str], name, flgs)
-                  end
-                end
-
-                status = glob_helper.(buf, baselen, `pathlen + n - baselen + namlen`, true,
-                                      new_pathtype, new_list, flgs, arg
-                                    )
-
-                break if status
-              end
-            ensure
-              dirp.close
-            end
-
-          elsif plain
-            # literally:
-            status = literally.(path, baselen, namelen, dirsep, list, flgs, arg)
-          end
-
-          status
-        end
-
-        # just like in ruby/file.c
-        rb_path_skip_prefix = ->(path) do
-          if `path[0]?.match(/[a-zA-Z]/) && path[1] == ':'`
-            2
-          elsif `$is_dirsep(path[0]) && $is_dirsep(path[1])`
-            i = 1
-            while `$is_dirsep(path[i+1])`
-              i += 1
-            end
-            i
-          else
-            0
-          end
-        end
-
-        # just like in ruby/dir.c
-        # this lambda is passed on to Opal.glob_brace_expand, hence using the call signature with arg
-        ruby_glob0 = ->(pat, arg) do
-          base = arg[:base]
-
-          baselen = 0
-          root = start = 0
-          dirsep = false
-
-          return `$glob_brace_expand(pat, ruby_glob0, escape, arg)` if `pat[root] == '{'`
-
-          flgs = arg[:flags] | ::File::FNM_SYSCASE
-
-          root = rb_path_skip_prefix.(`pat.slice(root)`) if `$platform.windows`
-
-          root += 1 if `pat[root] == '/'`
-
-          n = root
-          buf = if n == 0 && base
-                  dirsep = true
-                  baselen = n = `base.length`
-                  base
-                else
-                  `pat.slice(start, start + n)`
-                end
-
-          list = glob_make_pattern.(`root > 0 ? pat.slice(root) : pat`)
-
-          return nil unless list
-
-          glob_helper.(buf, baselen, `n - baselen`, dirsep, path_unknownC, [list], flgs, arg)
-        end
-
-        # just like in ruby/dir.c
-        push_pattern = ->(path, arg) do
-          arg[:res] << path
-          false # indicating no error
-        end
-
-        # just like in ruby/dir.c
-        rb_glob_error = ->(path, exc) do
-          $stderr.puts "glob warning #{path}" if exc.is_a?(::Errno::EACCES)
-          raise exc
-        end
-
-        res = []
-
-        patterns.each do |pattern|
-          if pattern.is_a?(::Array)
-            res.concat(glob(*pattern, flags: flags, base: base))
-          else
-            begin
-              pattern = `$coerce_to_or_raise(pattern, Opal.String, "to_path")`
-              arg = {
-                base: base,
-                flags: flags | glob_verboseC,
-                res: res,
-                match_func: push_pattern,
-                err_func: rb_glob_error
+        # This is a port of dir_s_glob and related functions from ruby/dir.c,
+        # kept in JavaScript for size and speed.
+        %x{
+          let FNM_DOTMATCH = #{::File::FNM_DOTMATCH},
+              FNM_NOESCAPE = #{::File::FNM_NOESCAPE},
+              FNM_SYSCASE = #{::File::FNM_SYSCASE},
+              FNM_GLOB_NOSORT = #{::File::FNM_GLOB_NOSORT},
+              FNM_GLOB_SKIPDOT = #{::File::FNM_GLOB_SKIPDOT},
+              ENOENT = #{::Errno::ENOENT},
+              ENOTDIR = #{::Errno::ENOTDIR},
+              EACCES = #{::Errno::EACCES},
+              windows = $platform.windows,
+              dir_class = self,
+
+              // some constant values which are specific to glob
+              glob_verboseC = 1 << 24,
+
+              path_unknownC = -2,
+              path_noentC = -1,
+              path_existC = 0,
+              path_directoryC = 4,
+              path_regularC = 8,
+              path_symlinkC = 10,
+
+              plainC = 1,
+              alphaC = 2,
+              braceC = 3,
+              magicalC = 4,
+              recursiveC = 5,
+              match_allC = 6,
+              match_dirC = 7;
+
+          if (base === undefined) {
+            base = nil;
+          } else if (base === nil) {
+            base = self.$getwd();
+          } else {
+            base = $coerce_to_or_raise(base, Opal.String, "to_path");
+            if (base === '.' || base === '') base = self.$getwd();
+          }
+
+          if (patterns.length === 2 && patterns[1].$$is_number) flags = patterns.pop();
+          flags = (flags === nil || !flags) ? 0 : $coerce_to_or_raise(flags, Opal.Integer, "to_int");
+
+          if (sort !== true && sort !== false) {
+            $raise(Opal.ArgumentError, "expected true or false as sort: " + sort.$inspect());
+          }
+
+          let period = (flags & FNM_DOTMATCH) !== FNM_DOTMATCH, // as used in #fnmatch
+              escape = (flags & FNM_NOESCAPE) !== FNM_NOESCAPE;
+
+          // just like in ruby/dir.c
+          function find_dirsep(pat, pi) {
+            let op = null, c;
+            while ((c = pat[pi])) {
+              switch (c) {
+              case '[': op = true; break;
+              case ']': op = false; break;
+              case '\x7b': op = true; break;
+              case '\x7d': op = false; break;
+              case '/': if (!op) return pi; break;
+              case '\\': if (escape && !(c = pat[pi++])) return pi; break;
+              case '\x00': $raise(Opal.ArgumentError, 'nul-separated pattern');
               }
-              ruby_glob0.(pattern, arg)
-            rescue ::Errno::ENOENT, ::Errno::ENOTDIR
-              return []
-            rescue ::Errno::EACCES
-              return nil
-            end
-          end
-        end
+              pi = $mbinc(pat, pi);
+            }
+            return pi;
+          }
 
-        return res unless block_given?
-        res.each(&block)
-        nil
+          // just like in ruby/dir.c
+          function has_magic(pat, pi, pe) {
+            let hasalpha = false, hasmagical = false, c;
+            while (pi < pe && (c = pat[pi]) && c !== '\x00') {
+              switch (c) {
+              case '\x7b': return braceC;
+              case '*': case '?': case '[': hasmagical = true; break;
+              case '\\': if (escape && (pi++ >= pe)) break; break;
+              case '.': break;
+              case '~': if (windows) hasalpha = true; break;
+              default: if (windows || /[a-zA-Z]/.test(c)) hasalpha = true;
+              }
+              pi = $mbinc(pat, pi);
+            }
+            return hasmagical ? magicalC : (hasalpha ? alphaC : plainC);
+          }
+
+          // just like in ruby/dir.c
+          function glob_make_pattern(pat) {
+            let dirsep = false, recursive = false,
+                list = null, tail = null, tmp = null,
+                pi = 0;
+
+            while (pat[pi]) {
+              if ($is_star_star_slash(pat, pi)) {
+                pi += 3;
+                while (pat[pi] === '/') pi++;
+                while ($is_star_star_slash(pat, pi)) {
+                  pi += 3;
+                  while (pat[pi] === '/') pi++;
+                }
+                tmp = { str: null, type: recursiveC };
+                dirsep = true;
+                recursive = true;
+              } else {
+                let m = find_dirsep(pat, pi),
+                    magic = has_magic(pat, pi, m),
+                    non_magic = FNM_SYSCASE > 0 || windows ? plainC : alphaC;
+                if (!(FNM_SYSCASE > 0 || magic > non_magic) && !recursive && pat[m]) {
+                  let m2;
+                  while (has_magic(pat, m + 1, m2 = find_dirsep(pat, m + 1)) <= non_magic && pat[m2]) {
+                    m = m2;
+                  }
+                }
+                tmp = { str: pat.slice(pi, m),
+                        type: magic > magicalC ? magicalC : (magic > non_magic ? magic : plainC) };
+                if (pat[m]) {
+                  dirsep = true;
+                  pi = m + 1;
+                } else {
+                  dirsep = false;
+                  pi = m;
+                }
+              }
+
+              if (!list) {
+                list = tail = tmp;
+              } else {
+                tail = tail.next = tmp;
+              }
+            }
+
+            tmp = { str: null, type: dirsep ? match_dirC : match_allC, next: null };
+
+            if (!tail) return tmp;
+
+            tail.next = tmp;
+
+            return list;
+          }
+
+          // just like in ruby/dir.c
+          function join_path_from_pattern(pl) {
+            let path = null, str = null;
+            while (pl) {
+              switch (pl.type) {
+              case recursiveC: str = '**'; break;
+              case match_dirC: str = ''; break;
+              default:
+                str = pl.str;
+                if (!str) { pl = pl.next; continue; }
+              }
+              path = path === null ? str : path + '/' + str;
+              pl = pl.next;
+            }
+            return path;
+          }
+
+          // just like in ruby/dir.c
+          function join_path(path, len, dirsep, name, namelen) {
+            path = len < path.length ? path.slice(0, len) : path;
+            if (dirsep) path += '/';
+            path += namelen < name.length ? name.slice(0, namelen) : name;
+            return path;
+          }
+
+          let glob_helper = null;
+
+          // just like in ruby/dir.c
+          function push_caller(path, args) {
+            let list = glob_make_pattern(path);
+            if (!list) return null;
+            return glob_helper(args.path, args.baselen, args.namelen, args.dirsep,
+                               args.pathtype, [list], args.flags, args.arg);
+          }
+
+          // unlike in ruby/dir.c, this is used together with File.lstat and File.stat
+          // instead of having do_lstat or do_stat
+          function detect_pathtype(st) {
+            if (!st) return path_noentC;
+            if (st['$directory?']()) return path_directoryC;
+            if (st['$symlink?']()) return path_symlinkC;
+            if (st['$file?']()) return path_regularC;
+            return path_existC;
+          }
+
+          // just like in ruby/dir.c
+          function glob_open_dir(dirp, flgs) {
+            let entries = dirp.$to_a();
+            if (flgs % FNM_GLOB_NOSORT === FNM_GLOB_NOSORT) return entries;
+            return entries.$sort();
+          }
+
+          // just like in ruby/dir.c
+          function remove_backslashes(name) {
+            return name.replaceAll(/\\(.)/g, '$1');
+          }
+
+          // the literally label extracted from glob_helper, because we dont have goto
+          function literally(path, baselen, namelen, dirsep, list, flgs, arg) {
+            let status = false,
+                pathlen = baselen + namelen;
+
+            let copy_list = list.map((pl) => pl.type <= alphaC ? pl : null);
+
+            for (let cur = 0; cur < copy_list.length; cur++) {
+              let pl = copy_list[cur];
+              if (pl) {
+                let name = pl.str;
+                if (escape) name = remove_backslashes(name);
+                let new_list = [pl.next];
+
+                for (let cur2 = cur + 1; cur2 < copy_list.length; cur2++) {
+                  let pl2 = copy_list[cur2];
+                  if (pl2 && Opal.File.$fnmatch(pl2.str, name, flgs)) {
+                    new_list.push(pl2.next);
+                    cur2 = 0;
+                  }
+                }
+
+                let buf = join_path(path, pathlen, dirsep, name, name.length);
+
+                // this is probably correctly done by js engines on windows, so we dont need to,
+                // we couldn't do it anyway, unless we would have access to getattrlist on windows
+
+                status = glob_helper(buf, baselen, namelen + buf.length - pathlen, true,
+                                     path_unknownC, new_list, flgs, arg);
+
+                if (status) break;
+              }
+            }
+
+            return status;
+          }
+
+          // just like in ruby/dir.c
+          function dirent_match(pat, name, flgs) {
+            return Opal.File.$fnmatch(pat, name, flgs);
+          }
+
+          // just like in ruby/dir.c
+          function dirent_match_brace(pat, arg) { return dirent_match(pat, arg.name, arg.flags); }
+
+          // just like in ruby/dir.c
+          glob_helper = function (path, baselen, namelen, dirsep, pathtype, list, flgs, arg) {
+            let brace = false, magical = false, match_all = false, match_dir = false,
+                plain = false, recursive = false, status = false,
+                pathlen = baselen + namelen;
+
+            for (let pl of list) {
+              if (pl.type === recursiveC) {
+                recursive = true;
+                pl = pl.next;
+              }
+
+              switch (pl.type) {
+              case plainC: plain = true; break;
+              case alphaC:
+                if (windows) plain = true; else magical = 1;
+                break;
+              case braceC:
+                if (!recursive || pl.str.indexOf('/') !== -1) brace = true;
+                break;
+              case magicalC: magical = 2; break;
+              case match_allC: match_all = true; break;
+              case match_dirC: match_dir = true; break;
+              case recursiveC: throw new Error('BUG! continuous RECURSIVEs');
+              }
+            }
+
+            if (brace) {
+              let brace_path = join_path_from_pattern(list[0]);
+              if (!brace_path) return null;
+              let args = {
+                path: path,
+                baselen: baselen,
+                namelen: namelen,
+                dirsep: dirsep,
+                pathtype: pathtype,
+                flags: flgs,
+                arg: arg
+              };
+              return $glob_brace_expand(brace_path, push_caller, escape, args);
+            }
+
+            if (path.length > 0) {
+              if (match_all && pathtype === path_unknownC) {
+                let st = null;
+                try { st = Opal.File.$lstat(path); } catch { $gvars['!'] = nil; }
+                pathtype = detect_pathtype(st);
+              }
+
+              if ((match_dir && pathtype === path_unknownC) || pathtype === path_symlinkC) {
+                let st = null;
+                try { st = Opal.File.$stat(path); } catch { $gvars['!'] = nil; }
+                pathtype = detect_pathtype(st);
+              }
+
+              if (match_all && pathtype > path_noentC) {
+                let subpath = path.slice(baselen + (baselen > 0 && path[baselen] === '/' ? 1 : 0));
+                if (subpath.length > 0) {
+                  status = arg.match_func(subpath, arg);
+                  if (status) return status;
+                }
+              }
+
+              if (match_dir && pathtype === path_directoryC) {
+                let seplen = baselen > 0 && path[baselen] === '/' ? 1 : 0,
+                    subpath = path.slice(baselen + seplen),
+                    tmp = join_path(subpath, namelen - seplen, dirsep, '', 0);
+                status = arg.match_func(tmp, arg);
+                if (status) return status;
+              }
+            }
+
+            if (pathtype === path_noentC) return false;
+
+            if (magical || recursive) {
+              // this would be the call to do_opendir
+              let dirp;
+              try {
+                dirp = dir_class.$new(path === '' ? '.' : path);
+              } catch (e) {
+                $gvars['!'] = nil;
+                if (e.$$class === ENOENT || e.$$class === ENOTDIR) {
+                  dirp = null;
+                } else if (e.$$class === EACCES) {
+                  if (FNM_SYSCASE > 0 && !recursive) return literally(path, baselen, namelen, dirsep, list, flgs, arg);
+                  dirp = null;
+                } else {
+                  return arg.err_func(path, e);
+                }
+              }
+
+              if (!dirp) return status;
+
+              try {
+                let glob_entries = glob_open_dir(dirp, flgs),
+                    skipdot = (flgs & FNM_GLOB_SKIPDOT) === FNM_GLOB_SKIPDOT;
+
+                flgs |= FNM_GLOB_SKIPDOT;
+
+                for (let name of glob_entries) {
+                  let new_pathtype = path_unknownC,
+                      dotfile = 0,
+                      namlen = name.length;
+
+                  if (name[0] === '.') {
+                    dotfile += 1;
+                    if (namlen === 1) {
+                      // unless DOTMATCH, skip current directories not to recurse infinitely
+                      if (recursive && period) continue;
+                      if (skipdot) continue;
+                      dotfile += 1;
+                      new_pathtype = path_directoryC;
+                    } else if (namlen === 2 && name[1] === '.') {
+                      // always skip parent directories not to recurse infinitely
+                      continue;
+                    }
+                  }
+
+                  let buf = join_path(path, pathlen, dirsep, name, namlen),
+                      n = dirsep ? 1 : 0;
+
+                  let st = Opal.File.$lstat(buf);
+                  new_pathtype = detect_pathtype(st);
+
+                  if (recursive && dotfile < (period ? 1 : 2) && new_pathtype === path_unknownC) {
+                    new_pathtype = path_noentC;
+                  }
+
+                  let new_list = [];
+
+                  for (let pl of list) {
+                    if (pl.type === recursiveC) {
+                      if (path_existC <= new_pathtype && new_pathtype < path_symlinkC) {
+                        if (dotfile < (period ? 1 : 2)) new_list.push(pl);
+                      }
+                      pl = pl.next;
+                    }
+
+                    switch (pl.type) {
+                    case braceC: {
+                      let args = { name: name, flags: flgs };
+                      if ($glob_brace_expand(pl.str, dirent_match_brace, escape, args)) new_list.push(pl.next);
+                      break;
+                    }
+                    case alphaC: case plainC: case magicalC:
+                      if (dirent_match(pl.str, name, flgs)) new_list.push(pl.next);
+                      break;
+                    }
+                  }
+
+                  status = glob_helper(buf, baselen, pathlen + n - baselen + namlen, true,
+                                       new_pathtype, new_list, flgs, arg);
+
+                  if (status) break;
+                }
+              } finally {
+                dirp.$close();
+              }
+            } else if (plain) {
+              // literally:
+              status = literally(path, baselen, namelen, dirsep, list, flgs, arg);
+            }
+
+            return status;
+          };
+
+          // just like in ruby/file.c
+          function rb_path_skip_prefix(path) {
+            if (path[0] && /[a-zA-Z]/.test(path[0]) && path[1] === ':') {
+              return 2;
+            } else if ($is_dirsep(path[0]) && $is_dirsep(path[1])) {
+              let i = 1;
+              while ($is_dirsep(path[i + 1])) i++;
+              return i;
+            }
+            return 0;
+          }
+
+          // just like in ruby/dir.c
+          // this function is passed on to Opal.glob_brace_expand, hence using the call signature with arg
+          function ruby_glob0(pat, arg) {
+            let base = arg.base,
+                baselen = 0,
+                root = 0, start = 0,
+                dirsep = false;
+
+            if (pat[root] === '\x7b') return $glob_brace_expand(pat, ruby_glob0, escape, arg);
+
+            let flgs = arg.flags | FNM_SYSCASE;
+
+            if (windows) root = rb_path_skip_prefix(pat.slice(root));
+
+            if (pat[root] === '/') root++;
+
+            let n = root,
+                buf;
+            if (n === 0 && base !== nil) {
+              dirsep = true;
+              baselen = n = base.length;
+              buf = base;
+            } else {
+              buf = pat.slice(start, start + n);
+            }
+
+            let list = glob_make_pattern(root > 0 ? pat.slice(root) : pat);
+
+            if (!list) return null;
+
+            return glob_helper(buf, baselen, n - baselen, dirsep, path_unknownC, [list], flgs, arg);
+          }
+
+          // just like in ruby/dir.c
+          function push_pattern(path, arg) {
+            arg.res.push(path);
+            return false; // indicating no error
+          }
+
+          // just like in ruby/dir.c
+          function rb_glob_error(path, exc) {
+            if (exc.$$class === EACCES) $gvars['stderr'].$puts('glob warning ' + path);
+            throw exc;
+          }
+
+          let res = [];
+
+          for (let pattern of patterns) {
+            if (pattern.$$is_array) {
+              res = res.concat(Opal.send(self, 'glob', [...pattern, $hash_new('flags', flags, 'base', base)]));
+            } else {
+              try {
+                pattern = $coerce_to_or_raise(pattern, Opal.String, "to_path");
+                let arg = {
+                  base: base,
+                  flags: flags | glob_verboseC,
+                  res: res,
+                  match_func: push_pattern,
+                  err_func: rb_glob_error
+                };
+                ruby_glob0(pattern, arg);
+              } catch (e) {
+                if (e.$$class === ENOENT || e.$$class === ENOTDIR) return [];
+                if (e.$$class === EACCES) return nil;
+                throw e;
+              }
+            }
+          }
+
+          if (block === nil) return res;
+          for (let r of res) $yield1(block, r);
+          return nil;
+        }
       end
     else
       alias glob __not_implemented__
