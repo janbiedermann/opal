@@ -247,44 +247,49 @@ module ::Math
   end
 
   def log(x, base = undefined)
-    if ::String === x
-      ::Kernel.raise `$type_error(x, #{::Float})`
-    end
+    %x{
+      if (x.$$is_string) {
+        #{::Kernel.raise `$type_error(x, #{::Float})`}
+      }
 
-    if `base == null`
-      ::Math.checked :log, ::Math.float!(x)
-    else
-      if ::String === base
-        ::Kernel.raise `$type_error(base, #{::Float})`
-      end
+      if (base == null) {
+        return #{::Math}.$checked('log', #{::Math}['$float!'](x))
+      }
 
-      ::Math.checked(:log, ::Math.float!(x)) / ::Math.checked(:log, ::Math.float!(base))
-    end
+      if (base.$$is_string) {
+        #{::Kernel.raise `$type_error(base, #{::Float})`}
+      }
+
+      return #{::Math}.$checked('log', #{::Math}['$float!'](x)) /
+        #{::Math}.$checked('log', #{::Math}['$float!'](base))
+    }
   end
 
   def log10(x)
-    if ::String === x
-      ::Kernel.raise `$type_error(x, #{::Float})`
-    end
-
-    ::Math.checked :log10, ::Math.float!(x)
+    %x{
+      if (x.$$is_string) {
+        #{::Kernel.raise `$type_error(x, #{::Float})`}
+      }
+      return #{::Math}.$checked('log10', #{::Math}['$float!'](x))
+    }
   end
 
   def log2(x)
-    if ::String === x
-      ::Kernel.raise `$type_error(x, #{::Float})`
-    end
-
-    ::Math.checked :log2, ::Math.float!(x)
+    %x{
+      if (x.$$is_string) {
+        #{::Kernel.raise `$type_error(x, #{::Float})`}
+      }
+      return #{::Math}.$checked('log2', #{::Math}['$float!'](x))
+    }
   end
 
   def tan(x)
-    x = ::Math.float!(x)
+    %x{
+      x = #{::Math}['$float!'](x);
 
-    if x.infinite?
-      return ::Float::NAN
-    end
+      if (x === Infinity || x === -Infinity) return NaN;
 
-    ::Math.checked :tan, ::Math.float!(x)
+      return #{::Math}.$checked('tan', x)
+    }
   end
 end
