@@ -550,7 +550,6 @@ class ::IO
         }
       }
 
-      if (typeof self.binmode === 'object' && self.binmode !== null && self.binmode !== nil) console.error('DBG2', mode.$$name || mode, new Error().stack.split('\n').slice(1,8).join(' | '));
       if (!truthy(self.binmode)) self.binmode = truthy($hash_get(opts, 'binmode'));
       if (!truthy(textmode)) textmode = truthy($hash_get(opts, 'textmode'));
 
