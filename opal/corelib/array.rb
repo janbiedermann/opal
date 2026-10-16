@@ -1583,7 +1583,7 @@ class ::Array < `Array`
         count = self.length;
       }
 
-      return self.slice(self.length - count, self.length);
+      return self.slice(self.length - count);
     }
   end
 
@@ -2338,7 +2338,7 @@ class ::Array < `Array`
         block = (a, b) => #{`a` <=> `b`};
       }
 
-      return self.slice(0).sort((x, y) => {
+      return self.toSorted((x, y) => {
         let ret = block(x, y);
 
         if (ret === nil) {
@@ -2360,17 +2360,14 @@ class ::Array < `Array`
     %x{
       $deny_frozen_access(self)
 
-      let result;
+      // Array#sort copies and sorts in one step (toSorted), so this copies
+      // once; writing back keeps self untouched when the comparison fails.
+      if (self.length > 1) {
+        const result = #{`self`.sort(&block)};
 
-      if (#{block_given?}) {
-        result = #{`self.slice(0)`.sort(&block)};
+        self.length = 0;
+        fast_push(self, result);
       }
-      else {
-        result = #{`self.slice(0)`.sort};
-      }
-
-      self.length = 0;
-      fast_push(self, result);
 
       return self;
     }
