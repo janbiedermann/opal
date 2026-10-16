@@ -1267,7 +1267,7 @@ class ::String < `String`
           copy.initialize_clone(self, freeze: freeze)
 
           if freeze == true
-            `if (!copy.$$frozen) copy.$$frozen = true;`
+            `copy.$$frozen = true`
           elsif freeze.nil?
             `if (typeof self === "string" || self.$$frozen) copy.$$frozen = true;`
           end
@@ -1728,7 +1728,7 @@ class ::String < `String`
             case "'": return slashes.slice(1) + s.slice(match.index + match[0].length);
             default:  return slashes.slice(1) + (match[command] || '');
             }
-          }).replace(/\\\\/g, '\\');
+          }).replaceAll('\\\\', '\\');
         }
 
         if (pattern.lastIndex === match.index) {
@@ -2572,7 +2572,7 @@ class ::String < `String`
               case "'": return slashes.slice(1) + s.slice(match.index + match[0].length);
               default:  return slashes.slice(1) + (match[command] || '');
               }
-            }).replace(/\\\\/g, '\\');
+            }).replaceAll('\\\\', '\\');
 
             result = s.slice(0, match.index) + replacement + s.slice(match.index + match[0].length);
           }
@@ -2666,11 +2666,11 @@ class ::String < `String`
   def to_f
     %x{
       let s = self.valueOf();
-      if (s.charAt(0) === '_') {
+      if (s[0] === '_') {
         return 0;
       }
 
-      var result = parseFloat(s.replace(/_/g, ''));
+      var result = parseFloat(s.replaceAll('_', ''));
 
       if (isNaN(result) || result == Infinity || result == -Infinity) {
         return 0;
@@ -2760,7 +2760,7 @@ class ::String < `String`
 
         var recv = args[0];
 
-        if (recv == null) recv = nil;
+        recv ??= nil;
 
         var body = recv[jsid];
 

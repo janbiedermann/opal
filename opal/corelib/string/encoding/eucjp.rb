@@ -253,11 +253,11 @@ require 'corelib/string/encoding/tables/jis_ext_inverted'
       let result = scrubbing_decoder(self, 'euc-jp').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/�/g, (byte)=>{ return #{yield `byte`}; });
+        result = result.replaceAll('\uFFFD', (byte)=>{ return #{yield `byte`}; });
       } else if (replacement && replacement !== nil) {
         // this may replace valid � that have existed in the string before,
         // but there currently is no way to specify a other replacement character for TextDecoder
-        result = result.replace(/�/g, replacement);
+        result = result.replaceAll('\uFFFD', replacement);
       }
       return $str(result, self);
     }

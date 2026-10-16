@@ -366,7 +366,7 @@ class ::Rational < ::Numeric
         var match = str.match(re);
         var number = match[0];
         str = str.slice(number.length);
-        return number.replace(/_/g, '');
+        return number.replaceAll('_', '');
       }
 
       if (isFloat()) {

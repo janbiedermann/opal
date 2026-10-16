@@ -636,11 +636,11 @@ end
       let result = scrubbing_decoder(self, 'utf-8').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/�/g, (byte) => #{yield `byte`});
+        result = result.replaceAll('\uFFFD', (byte) => #{yield `byte`});
       } else if (replacement !== nil && replacement !== undefined) {
         // this may replace valid � that have existed in the string before,
         // but there currently is no way to specify a other replacement character for TextDecoder
-        result = result.replace(/�/g, replacement);
+        result = result.replaceAll('\uFFFD', replacement);
       }
       return $str(result, self);
     }
@@ -823,11 +823,11 @@ end
       let result = scrubbing_decoder(self, 'utf-16le').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/�/g, (byte) => #{yield `byte`});
+        result = result.replaceAll('\uFFFD', (byte) => #{yield `byte`});
       } else if (replacement !== nil && replacement !== undefined) {
         // this may replace valid � that have existed in the string before,
         // but there currently is no way to specify a other replacement character for TextDecoder
-        result = result.replace(/�/g, replacement);
+        result = result.replaceAll('\uFFFD', replacement);
       }
       return $str(result, self);
     }
@@ -924,11 +924,11 @@ end
       let result = scrubbing_decoder(self, 'utf-16be').decode(new Uint8Array(self.$bytes(str)));
       if (block !== nil) {
         // dont know the bytes anymore ... ¯\_(ツ)_/¯
-        result = result.replace(/�/g, (byte) => #{yield `byte`});
+        result = result.replaceAll('\uFFFD', (byte) => #{yield `byte`});
       } else if (replacement !== nil && replacement !== undefined) {
         // this may replace valid � that have existed in the string before,
         // but there currently is no way to specify a other replacement character for TextDecoder
-        result = result.replace(/�/g, replacement);
+        result = result.replaceAll('\uFFFD', replacement);
       }
       return $str(result, self);
     }
