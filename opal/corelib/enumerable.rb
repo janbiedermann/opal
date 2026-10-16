@@ -1,4 +1,4 @@
-# helpers: truthy, coerce_to, eqeq, yield1, yieldX, deny_frozen_access
+# helpers: truthy, coerce_to, eqeq, yield1, yieldX, deny_frozen_access, send, thrower
 # backtick_javascript: true
 # use_strict: true
 
@@ -6,11 +6,13 @@ module ::Enumerable
   %x{
     function comparableForPattern(value) {
       if (value.length === 0) {
-        value = [nil];
+        return [nil];
       }
 
       if (value.length > 1) {
-        value = [value];
+        // the yielded values become a single Array argument, so it has to be
+        // a real Array (callers may pass the `arguments` of a yield)
+        return [Array.isArray(value) ? value : Array.prototype.slice.call(value)];
       }
 
       return value;
@@ -18,51 +20,75 @@ module ::Enumerable
   }
 
   def all?(pattern = undefined, &block)
-    if `pattern !== undefined`
-      each do |*value|
-        comparable = `comparableForPattern(value)`
+    %x{
+      let $return = $thrower('return');
 
-        return false unless pattern.public_send(:===, *comparable)
-      end
-    elsif block_given?
-      each do |*value|
-        unless yield(*value)
-          return false
-        end
-      end
-    else
-      each do |*value|
-        unless ::Opal.destructure(value)
-          return false
-        end
-      end
-    end
+      try {
+        if (pattern !== undefined) {
+          self.$each.$$p = function $$all() {
+            if (!$truthy($send(pattern, '===', comparableForPattern(arguments)))) {
+              $return.$throw(false, $$all.$$is_lambda);
+            }
+          };
+        } else if (block !== nil) {
+          self.$each.$$p = function $$all() {
+            if (!$truthy($yieldX(block, arguments))) {
+              $return.$throw(false, $$all.$$is_lambda);
+            }
+          };
+        } else {
+          self.$each.$$p = function $$all() {
+            if (!$truthy(Opal.$destructure(arguments))) {
+              $return.$throw(false, $$all.$$is_lambda);
+            }
+          };
+        }
 
-    true
+        self.$each();
+        return true;
+      } catch ($e) {
+        if ($e === $return) return $e.$v;
+        throw $e;
+      } finally {
+        $return.is_orphan = true;
+      }
+    }
   end
 
   def any?(pattern = undefined, &block)
-    if `pattern !== undefined`
-      each do |*value|
-        comparable = `comparableForPattern(value)`
+    %x{
+      let $return = $thrower('return');
 
-        return true if pattern.public_send(:===, *comparable)
-      end
-    elsif block_given?
-      each do |*value|
-        if yield(*value)
-          return true
-        end
-      end
-    else
-      each do |*value|
-        if ::Opal.destructure(value)
-          return true
-        end
-      end
-    end
+      try {
+        if (pattern !== undefined) {
+          self.$each.$$p = function $$any() {
+            if ($truthy($send(pattern, '===', comparableForPattern(arguments)))) {
+              $return.$throw(true, $$any.$$is_lambda);
+            }
+          };
+        } else if (block !== nil) {
+          self.$each.$$p = function $$any() {
+            if ($truthy($yieldX(block, arguments))) {
+              $return.$throw(true, $$any.$$is_lambda);
+            }
+          };
+        } else {
+          self.$each.$$p = function $$any() {
+            if ($truthy(Opal.$destructure(arguments))) {
+              $return.$throw(true, $$any.$$is_lambda);
+            }
+          };
+        }
 
-    false
+        self.$each();
+        return false;
+      } catch ($e) {
+        if ($e === $return) return $e.$v;
+        throw $e;
+      } finally {
+        $return.is_orphan = true;
+      }
+    }
   end
 
   def chunk(&block)
@@ -107,6 +133,8 @@ module ::Enumerable
   def chunk_while(&block)
     ::Kernel.raise ::ArgumentError, 'no block given' unless block_given?
 
+    # left in Ruby: a JS body needs a wrapper block to negate the test, and
+    # that wrapper measured ~10% slower than this
     slice_when { |before, after| !(yield before, after) }
   end
 
@@ -154,7 +182,7 @@ module ::Enumerable
   end
 
   def compact
-    to_a.compact
+    `self.$to_a()['$compact']()`
   end
 
   def count(object = undefined, &block)
@@ -245,14 +273,26 @@ module ::Enumerable
   def detect(ifnone = undefined, &block)
     return enum_for :detect, ifnone unless block_given?
 
-    each do |*args|
-      value = ::Opal.destructure(args)
-      if yield(value)
-        return value
-      end
-    end
-
     %x{
+      let $return = $thrower('return');
+
+      try {
+        self.$each.$$p = function $$detect() {
+          let value = Opal.$destructure(arguments);
+
+          if ($truthy($yield1(block, value))) {
+            $return.$throw(value, $$detect.$$is_lambda);
+          }
+        };
+
+        self.$each();
+      } catch ($e) {
+        if ($e === $return) return $e.$v;
+        throw $e;
+      } finally {
+        $return.is_orphan = true;
+      }
+
       if (ifnone !== undefined) {
         if (typeof(ifnone) === 'function') {
           return ifnone();
@@ -260,9 +300,9 @@ module ::Enumerable
           return ifnone;
         }
       }
-    }
 
-    nil
+      return nil;
+    }
   end
 
   def drop(number)
@@ -571,41 +611,53 @@ module ::Enumerable
   end
 
   def grep(pattern, &block)
-    result = []
+    %x{
+      let result = [];
 
-    each do |*value|
-      cmp = `comparableForPattern(value)`
-      next unless pattern.__send__(:===, *cmp)
-      if block_given?
-        value = [value] if value.length > 1
-        value = yield(*value)
-      elsif value.length <= 1
-        value = value[0]
-      end
+      self.$each.$$p = function $$grep() {
+        if (!$truthy($send(pattern, '===', comparableForPattern(arguments)))) {
+          return;
+        }
 
-      result.push(value)
-    end
+        // the yielded values, as an Array the caller can see
+        let value = arguments.length > 1 ? Array.prototype.slice.call(arguments) : arguments;
 
-    result
+        if (block !== nil) {
+          result.push($yieldX(block, arguments.length > 1 ? [value] : value));
+        } else {
+          result.push(arguments.length <= 1 ? value[0] ?? nil : value);
+        }
+      };
+
+      self.$each();
+
+      return result;
+    }
   end
 
   def grep_v(pattern, &block)
-    result = []
+    %x{
+      let result = [];
 
-    each do |*value|
-      cmp = `comparableForPattern(value)`
-      next if pattern.__send__(:===, *cmp)
-      if block_given?
-        value = [value] if value.length > 1
-        value = yield(*value)
-      elsif value.length <= 1
-        value = value[0]
-      end
+      self.$each.$$p = function $$grep_v() {
+        if ($truthy($send(pattern, '===', comparableForPattern(arguments)))) {
+          return;
+        }
 
-      result.push(value)
-    end
+        // the yielded values, as an Array the caller can see
+        let value = arguments.length > 1 ? Array.prototype.slice.call(arguments) : arguments;
 
-    result
+        if (block !== nil) {
+          result.push($yieldX(block, arguments.length > 1 ? [value] : value));
+        } else {
+          result.push(arguments.length <= 1 ? value[0] ?? nil : value);
+        }
+      };
+
+      self.$each();
+
+      return result;
+    }
   end
 
   def group_by(&block)
@@ -634,13 +686,25 @@ module ::Enumerable
   end
 
   def include?(obj)
-    each do |*args|
-      if ::Opal.destructure(args) == obj
-        return true
-      end
-    end
+    %x{
+      let $return = $thrower('return');
 
-    false
+      try {
+        self.$each.$$p = function $$include() {
+          if ($eqeq(Opal.$destructure(arguments), obj)) {
+            $return.$throw(true, $$include.$$is_lambda);
+          }
+        };
+
+        self.$each();
+        return false;
+      } catch ($e) {
+        if ($e === $return) return $e.$v;
+        throw $e;
+      } finally {
+        $return.is_orphan = true;
+      }
+    }
   end
 
   def inject(object = undefined, sym = undefined, &block)
@@ -696,7 +760,7 @@ module ::Enumerable
   end
 
   def enumerator_size
-    respond_to?(:size) ? size : nil
+    `self['$respond_to?']('size') ? self.$size() : nil`
   end
 
   def max(n = undefined, &block)
@@ -1019,58 +1083,76 @@ module ::Enumerable
   end
 
   def none?(pattern = undefined, &block)
-    if `pattern !== undefined`
-      each do |*value|
-        comparable = `comparableForPattern(value)`
+    %x{
+      let $return = $thrower('return');
 
-        return false if pattern.public_send(:===, *comparable)
-      end
-    elsif block_given?
-      each do |*value|
-        if yield(*value)
-          return false
-        end
-      end
-    else
-      each do |*value|
-        item = ::Opal.destructure(value)
+      try {
+        if (pattern !== undefined) {
+          self.$each.$$p = function $$none() {
+            if ($truthy($send(pattern, '===', comparableForPattern(arguments)))) {
+              $return.$throw(false, $$none.$$is_lambda);
+            }
+          };
+        } else if (block !== nil) {
+          self.$each.$$p = function $$none() {
+            if ($truthy($yieldX(block, arguments))) {
+              $return.$throw(false, $$none.$$is_lambda);
+            }
+          };
+        } else {
+          self.$each.$$p = function $$none() {
+            if ($truthy(Opal.$destructure(arguments))) {
+              $return.$throw(false, $$none.$$is_lambda);
+            }
+          };
+        }
 
-        return false if item
-      end
-    end
-
-    true
+        self.$each();
+        return true;
+      } catch ($e) {
+        if ($e === $return) return $e.$v;
+        throw $e;
+      } finally {
+        $return.is_orphan = true;
+      }
+    }
   end
 
   def one?(pattern = undefined, &block)
-    count = 0
+    %x{
+      let count = 0,
+          $return = $thrower('return');
 
-    if `pattern !== undefined`
-      each do |*value|
-        comparable = `comparableForPattern(value)`
+      try {
+        if (pattern !== undefined) {
+          self.$each.$$p = function $$one() {
+            if ($truthy($send(pattern, '===', comparableForPattern(arguments))) && ++count > 1) {
+              $return.$throw(false, $$one.$$is_lambda);
+            }
+          };
+        } else if (block !== nil) {
+          self.$each.$$p = function $$one() {
+            if ($truthy($yieldX(block, arguments)) && ++count > 1) {
+              $return.$throw(false, $$one.$$is_lambda);
+            }
+          };
+        } else {
+          self.$each.$$p = function $$one() {
+            if ($truthy(Opal.$destructure(arguments)) && ++count > 1) {
+              $return.$throw(false, $$one.$$is_lambda);
+            }
+          };
+        }
 
-        if pattern.public_send(:===, *comparable)
-          count += 1
-          return false if count > 1
-        end
-      end
-    elsif block_given?
-      each do |*value|
-        next unless yield(*value)
-        count += 1
-
-        return false if count > 1
-      end
-    else
-      each do |*value|
-        next unless ::Opal.destructure(value)
-        count += 1
-
-        return false if count > 1
-      end
-    end
-
-    count == 1
+        self.$each();
+        return count === 1;
+      } catch ($e) {
+        if ($e === $return) return $e.$v;
+        throw $e;
+      } finally {
+        $return.is_orphan = true;
+      }
+    }
   end
 
   def partition(&block)
@@ -1284,20 +1366,47 @@ module ::Enumerable
   end
 
   def sort(&block)
-    ary = to_a
-    block = ->(a, b) { a <=> b } unless block_given?
-    ary.sort(&block)
+    %x{
+      let ary = self.$to_a();
+
+      if (block !== nil) {
+        ary.$sort.$$p = block;
+      }
+
+      return ary.$sort();
+    }
   end
 
   def sort_by(&block)
     return enum_for(:sort_by) { enumerator_size } unless block_given?
 
-    dup = map do
-      arg = ::Opal.destructure(`arguments`)
-      [yield(arg), arg]
-    end
-    dup.sort! { |a, b| `a[0]` <=> `b[0]` }
-    dup.map! { |i| `i[1]` }
+    %x{
+      let pairs = [];
+
+      self.$each.$$p = function $$sort_by() {
+        let arg = Opal.$destructure(arguments);
+        pairs.push([$yield1(block, arg), arg]);
+      };
+
+      self.$each();
+
+      // the same comparison Array#sort! does, without its two array copies
+      pairs.sort(function $$sort_by_cmp(a, b) {
+        let ret = a[0]['$<=>'](b[0]);
+
+        if (ret === nil) {
+          #{::Kernel.raise ::ArgumentError, "comparison of #{`a[0]`.inspect} with #{`b[0]`.inspect} failed"}
+        }
+
+        return ret > 0 ? 1 : (ret < 0 ? -1 : 0);
+      });
+
+      for (let i = 0, length = pairs.length; i < length; i++) {
+        pairs[i] = pairs[i][1];
+      }
+
+      return pairs;
+    }
   end
 
   # This method implements the Kahan summation algorithm if it is possible to apply one.
@@ -1335,7 +1444,7 @@ module ::Enumerable
   end
 
   def take(num)
-    first(num)
+    `self.$first(num)`
   end
 
   def take_while(&block)
@@ -1429,11 +1538,16 @@ module ::Enumerable
   end
 
   def to_set(klass = ::Set, *args, &block)
-    klass.new(self, *args, &block)
+    `$send(klass, 'new', [self].concat(args), block)`
   end
 
   def zip(*others, &block)
-    to_a.zip(*others)
+    %x{
+      // the block is not forwarded, as before
+      let ary = self.$to_a();
+
+      return ary.$zip.apply(ary, others);
+    }
   end
 
   alias find detect
