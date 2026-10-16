@@ -1,4 +1,4 @@
-# helpers: coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, global_regexp, prop, opal32_init, opal32_add, transform_regexp, str
+# helpers: is_a, send, truthy, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, global_regexp, prop, opal32_init, opal32_add, transform_regexp, str
 # backtick_javascript: true
 
 # depends on:
@@ -227,12 +227,29 @@ class ::String < `String`
       return String.fromCodePoint(str.codePointAt(0));
     }
 
+    // A lone surrogate in a string means it holds a character outside the BMP,
+    // so its UTF-16 indexes stop being character indexes. Built with
+    // new RegExp: the parser rejects a lone-surrogate escape in a regexp literal.
+    const SURROGATE = new RegExp('[\\uD800-\\uDFFF]');
+
+    // The characters that make a Regexp source more than the literal text it
+    // is, so that String#match? can tell when a String pattern is a plain
+    // substring test.
+    const REGEXP_METACHARS = /[\^$.|?*+(){}\[\]\\]/;
+
     // UTF-16 aware find_index_of, args:
     //   str: string
     //   search: the string to search for in str
     //   search_l: is optional, if given must be search.$length(), do NOT use search.length
     //   last: boolean, optional too, if true returns the last index otherwise the first
     function find_index_of(str, search, search_l, last) {
+      // Fast path: indexOf/lastIndexOf scan the whole string in one native
+      // pass, and their index is a character index as long as no surrogate
+      // pair sits before the match. A miss is a miss either way, so only a hit
+      // in a string that holds a surrogate pair needs the walk below.
+      let fast = last ? str.lastIndexOf(search) : str.indexOf(search);
+      if (fast === -1 || !SURROGATE.test(str)) return fast;
+
       let search_f = (search.length === 1) ? search : first_char(search);
       let i = 0, col = [], l = 0, idx = -1;
       for (const c of str) {
@@ -1926,15 +1943,26 @@ class ::String < `String`
   end
 
   def match?(pattern, pos = undefined)
-    if String === pattern || pattern.respond_to?(:to_str)
-      pattern = ::Regexp.new(pattern.to_str)
-    end
+    %x{
+      // A String pattern is turned into a Regexp, which transpiles the whole
+      // source from Ruby to JS syntax. Without a metacharacter that
+      // transpilation is the identity and a substring test answers the same
+      // question, so skip it.
+      if (pos === undefined && (pattern.$$is_string || typeof pattern === 'string') &&
+          !REGEXP_METACHARS.test(pattern)) {
+        return self.valueOf().indexOf(pattern) !== -1;
+      }
 
-    unless ::Regexp === pattern
-      ::Kernel.raise ::TypeError, "wrong argument type #{pattern.class} (expected Regexp)"
-    end
+      if ($is_a(pattern, #{::String}) || $truthy($respond_to(pattern, '$to_str', false))) {
+        pattern = $send(#{::Regexp}, 'new', [pattern['$to_str']()]);
+      }
 
-    pattern.match?(self, pos)
+      if (!$is_a(pattern, #{::Regexp})) {
+        #{::Kernel.raise ::TypeError, "wrong argument type #{pattern.class} (expected Regexp)"}
+      }
+
+      return $truthy(pattern['$match?'](self, pos));
+    }
   end
 
   def next
