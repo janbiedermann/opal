@@ -118,19 +118,34 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   method directly instead).
 - More `%x{}` traps, each one found through a failing suite: the body sees the
   compiler's JS names (`@begin` is `self.begin`, `Opal.destructure` is
-  `Opal.$destructure`) and only the helpers listed in the file's
-  `# helpers:` comment; a Ruby parameter named after a JS reserved word (e.g.
-  `def merge(enum)`) is rewritten by the compiler for Ruby code but is a
-  syntax error inside `%x{}`, so rename the parameter; `Opal.is_a(x, K)`
+  `Opal.$destructure`, `Opal.inspect` is `Opal.$inspect`) and only the helpers
+  listed in the file's `# helpers:` comment; a Ruby parameter named after a
+  JS reserved word (e.g. `def merge(enum)`) is rewritten by the compiler for
+  Ruby code but is a syntax error inside `%x{}`, so rename the parameter; a
+  `def m(n = nil)` default is `Opal.nil`, a JS object, so a body guard
+  `n == null` never matches it (a `n = undefined` default does) - test
+  `n === undefined || n === nil` like Enumerable#min does; `Opal.is_a(x, K)`
   bypasses an overridden `is_a?` (ruby/spec's `SetSpecs::SetLike` catches
   that) while `x['$is_a?'](K)` does not; and `Opal.Enumerable['$include?']`
   is `Module#include?`, not the instance method - the faithful `super` is
   `$send2(self, $find_super(self, 'mid', self['$mid'], false, true), 'mid', [args], nil)`.
-- Files reached only through an `autoload` (like `corelib/set.rb`) are in none
-  of the `tasks/codesize.mjs` bundles; measure their size with
-  `node exe/opal --no-cache -c` on a script that requires the file and diff
-  the byte count. `--no-cache` also matters there: `exe/opal` caches compiled
-  corelib, so probing an edit without it shows the old code.
+- Files reached only through an `autoload` (like `corelib/set.rb` and
+  `corelib/struct.rb`) are in none of the `tasks/codesize.mjs` bundles; measure
+  their size with `node exe/opal --no-cache -c` on a script that requires or
+  uses the class and diff the byte count. `--no-cache` also matters there:
+  `exe/opal` caches compiled corelib, so probing an edit without it shows the
+  old code.
+- Per-method ns/call benchmarks that allocate (Array#sort, #reverse, #drop,
+  anything returning a new collection) are GC-dominated and swing by an order
+  of magnitude between runs; only compare runs of the same case, and re-measure
+  those methods in plain node with `acc += result.length` (keeping the result
+  alive in a variable makes the allocation cost the whole measurement).
+- `node --cpu-prof` on `tmp/performance/asciidoctor_test.js` plus aggregating
+  self time per function is the fastest way to pick what to optimize; the
+  callers of a hot function come from walking `parent` links of the profile
+  nodes. Beware: `bin/opal` on `master` is still a Ruby script, so building a
+  bundle with `> file` after checking out master leaves an empty bundle - the
+  shell truncates the file before the command fails.
 - On a machine in UTC, time zone bugs stay hidden; run the ruby/spec suite in
   other zones too (`TZ=America/Los_Angeles`, `TZ=Pacific/Chatham`) after
   changes to Time, Date or DateTime.
