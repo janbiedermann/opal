@@ -1,6 +1,6 @@
 # backtick_javascript: true
 # use_strict: true
-# helpers: coerce_to_or_raise
+# helpers: coerce_to_or_raise, eqeq, truthy, send2, find_super
 
 require 'corelib/numeric'
 
@@ -486,19 +486,20 @@ class ::Number < ::Numeric
   end
 
   def is_a?(klass)
-    return true if klass == ::Integer && ::Integer === self
-    return true if klass == ::Integer && ::Integer === self
-    return true if klass == ::Float && ::Float === self
-
-    super
+    %x{
+      // the Ruby body repeated the Integer check twice
+      if ($eqeq(klass, #{::Integer}) && $truthy(#{::Integer}['$==='](self))) return true;
+      if ($eqeq(klass, #{::Float}) && $truthy(#{::Float}['$==='](self))) return true;
+      return $send2(self, $find_super(self, 'is_a?', self['$is_a?'], false, true), 'is_a?', [klass], nil);
+    }
   end
 
   def instance_of?(klass)
-    return true if klass == ::Integer && ::Integer === self
-    return true if klass == ::Integer && ::Integer === self
-    return true if klass == ::Float && ::Float === self
-
-    super
+    %x{
+      if ($eqeq(klass, #{::Integer}) && $truthy(#{::Integer}['$==='](self))) return true;
+      if ($eqeq(klass, #{::Float}) && $truthy(#{::Float}['$==='](self))) return true;
+      return $send2(self, $find_super(self, 'instance_of?', self['$instance_of?'], false, true), 'instance_of?', [klass], nil);
+    }
   end
 
   def lcm(other)
