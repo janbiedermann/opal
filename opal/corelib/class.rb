@@ -48,7 +48,15 @@ class ::Class
   end
 
   def descendants
-    subclasses + subclasses.map(&:descendants).flatten
+    %x{
+      const subclasses = self.$subclasses();
+      const result = subclasses.slice(0);
+      for (let i = 0; i < subclasses.length; i++) {
+        const below = subclasses[i].$descendants();
+        for (let j = 0; j < below.length; j++) result.push(below[j]);
+      }
+      return result;
+    }
   end
 
   def inherited(cls)
