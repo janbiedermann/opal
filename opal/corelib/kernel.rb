@@ -799,7 +799,7 @@ module ::Kernel
   def enum_for(method = :each, *args, &block)
     # Creates a new Enumerator which will enumerate by calling method on obj, passing args if any.
     %x{
-      return $send(#{::Enumerator}, 'for', [self, method].concat(args), block);
+      return $send(#{::Enumerator}, 'for', [self, method, ...args], block);
     }
   end
 
@@ -882,7 +882,7 @@ module ::Kernel
     # Returns true if the given instance variable is defined in obj.
     name = ::Opal.instance_variable_name!(name)
 
-    `Opal.hasOwnProperty.call(self, name.substr(1))`
+    `Opal.hasOwnProperty.call(self, name.slice(1))`
   end
 
   def instance_variable_get(name)
@@ -890,7 +890,7 @@ module ::Kernel
     name = ::Opal.instance_variable_name!(name)
 
     %x{
-      var ivar = self[Opal.ivar(name.substr(1))];
+      var ivar = self[Opal.ivar(name.slice(1))];
 
       return ivar == null ? nil : ivar;
     }
@@ -902,7 +902,7 @@ module ::Kernel
 
     name = ::Opal.instance_variable_name!(name)
 
-    `self[Opal.ivar(name.substr(1))] = value`
+    `self[Opal.ivar(name.slice(1))] = value`
   end
 
   def instance_variables
@@ -960,7 +960,7 @@ module ::Kernel
           #{::Kernel.raise ::NameError.new("undefined method `#{name}' for class `#{self.class}'", name)};
         }
         method_missing.$$p = wrapper.$$p;
-        return method_missing.apply(self, [name].concat($slice(arguments)));
+        return method_missing.apply(self, [name, ...$slice(arguments)]);
       };
       meth.$$parameters = [['rest']]
       meth.$$arity = -1;
@@ -1004,7 +1004,7 @@ module ::Kernel
     name = ::Opal.instance_variable_name!(name)
 
     %x{
-      var key = Opal.ivar(name.substr(1)),
+      var key = Opal.ivar(name.slice(1)),
           val;
       if (self.hasOwnProperty(key)) {
         val = self[key];
@@ -1086,7 +1086,7 @@ module ::Kernel
       var keys = Object.keys(other), i, ii, name;
       for (i = 0, ii = keys.length; i < ii; i++) {
         name = keys[i];
-        if (name.charAt(0) !== '$' && other.hasOwnProperty(name)) {
+        if (name[0] !== '$') {
           self[name] = other[name];
         }
       }
@@ -1109,7 +1109,7 @@ module ::Kernel
           }
         }
 
-        self_singleton_class.$$const = Object.assign({}, other_singleton_class.$$const);
+        self_singleton_class.$$const = { ...other_singleton_class.$$const };
         Object.setPrototypeOf(
           self_singleton_class.$$prototype,
           Object.getPrototypeOf(other_singleton_class.$$prototype)
@@ -1118,7 +1118,7 @@ module ::Kernel
 
       for (i = 0, names = Object.getOwnPropertyNames(other), length = names.length; i < length; i++) {
         name = names[i];
-        if (name.charAt(0) === '$' && name.charAt(1) !== '$' && other.hasOwnProperty(name)) {
+        if (name[0] === '$' && name[1] !== '$') {
           self[name] = other[name];
         }
       }
