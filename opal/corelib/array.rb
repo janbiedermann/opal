@@ -905,8 +905,21 @@ class ::Array < `Array`
     %x{
       const original = self.length;
 
+      // two plain strings or numbers answer == as identity, so the scan can
+      // skip the dispatch
+      const plain = typeof object === 'string' || typeof object === 'number';
+
       for (let i = 0, length = original; i < length; i++) {
-        if (#{`self[i]` == object}) {
+        const item = self[i];
+        let same;
+
+        if (plain && (typeof item === 'string' || typeof item === 'number')) {
+          same = item === object;
+        } else {
+          same = $eqeq(item, object);
+        }
+
+        if (same) {
           $deny_frozen_access(self);
 
           self.splice(i, 1);
@@ -1574,10 +1587,68 @@ class ::Array < `Array`
   end
 
   def max(n = undefined, &block)
+    # walking the Array directly skips the Enumerator Enumerable#max would
+    # build, and the block wrapper it yields through
+    if `n === undefined && block === nil`
+      %x{
+        let result, value;
+
+        for (let i = 0, length = self.length; i < length; i++) {
+          const item = self[i];
+
+          if (result === undefined) {
+            result = item;
+            continue;
+          }
+
+          value = item['$<=>'](result);
+
+          if (value === nil) {
+            #{::Kernel.raise ::ArgumentError, 'comparison failed'};
+          }
+
+          if (value > 0) {
+            result = item;
+          }
+        }
+
+        return result ?? nil;
+      }
+    end
+
     each.max(n, &block)
   end
 
   def min(n = nil, &block)
+    if `(n === undefined || n === nil) && block === nil`
+      %x{
+        let result, value;
+
+        for (let i = 0, length = self.length; i < length; i++) {
+          const item = self[i];
+
+          if (result === undefined) {
+            result = item;
+            continue;
+          }
+
+          // the same comparison Opal.compare does, with its message, but
+          // without a call per element
+          value = item['$<=>'](result);
+
+          if (value === nil) {
+            #{::Kernel.raise ::ArgumentError, "comparison of #{`item`.class} with #{`result`.class} failed"};
+          }
+
+          if (value < 0) {
+            result = item;
+          }
+        }
+
+        return result ?? nil;
+      }
+    end
+
     each.min(n, &block)
   end
 
@@ -2267,6 +2338,12 @@ class ::Array < `Array`
 
         if (ret === nil) {
           #{::Kernel.raise ::ArgumentError, "comparison of #{`x`.inspect} with #{`y`.inspect} failed"};
+        }
+
+        // <=> answers a plain number for the core classes, and only then are
+        // the two tests worth doing without a dispatch each
+        if (typeof ret === 'number') {
+          return ret > 0 ? 1 : (ret < 0 ? -1 : 0);
         }
 
         return #{`ret` > 0} ? 1 : (#{`ret` < 0} ? -1 : 0);
