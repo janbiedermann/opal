@@ -17,8 +17,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
     Prism 1.9. See `docs/potch.md`.
   - `lib/opal/compiler/` is the compiler (`index.mjs`, `nodes/`,
     `transforms/`), the builder (`builder/`) and the CLI with its runners
-    (`cli/`). `exe/opal` runs the CLI.
-  - `lib/opal/cli_runners/` holds the JS support files of the runners.
+    (`cli/runners/`: `nodejs.mjs`, `browsers.mjs` for Chrome and Firefox,
+    `cdp_interface.mjs`, `bidi_interface.mjs`, ...). `exe/opal` runs the CLI.
+  - `lib/opal/cli_runners/` only holds support files (`node_modules` with
+    `chrome-remote-interface`, the source-map shims), not the runners.
 - `opal/` provides the runtime and Ruby core library. Its layout is:
   - `corelib/` contains Ruby's built-ins implemented in Ruby.
   - `runtime/` holds JS helpers required at execution time.
@@ -44,9 +46,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   - `minitest_node`: integration tests in `test/nodejs`
 - Name suites to run only those (`node tasks/test.mjs mspec_ruby`; `mspec` and
   `minitest` name both of theirs), or pass spec/test files or directories to run
-  just them (`bin/test` does the same). `-R chrome` (firefox, safari, gjs,
-  ...) runs the Opal suites on another runner. `RANDOM_SEED` repeats a
-  randomized order.
+  just them (`bin/test` does the same). `-R chrome` (or `-R firefox`) runs the
+  Opal suites on another runner; `safari` only exists on macOS and the other
+  suites (`potch`, `compiler`, `minitest_node`) always run on Node.js.
+  `RANDOM_SEED` repeats a randomized order.
 
 ## Linting
 - Run `node tasks/lint.mjs` (or `yarn lint`) to check the JavaScript style. It
@@ -95,11 +98,12 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   and 125 characters; the benchmark is
   `benchmark/string-performance.rb`, `--methods=`/`--lengths=` limit the run),
   `node tasks/release.mjs` (changelog, release preparation).
-- Browser runners without a system browser: download one with
-  `npx @puppeteer/browsers install chrome-headless-shell@stable` (or
-  `firefox@stable`) and point `GOOGLE_CHROME_BINARY` /
-  `MOZILLA_FIREFOX_BINARY` at it. As root, Chrome needs
-  `CHROME_OPTS=--no-sandbox`. The Firefox runner drives Firefox directly
+- The browser runners find the system browser in `PATH` (`google-chrome-stable`,
+  `chromium`, `chromium-freeworld`, `chromium-browser`; `firefox`,
+  `firefox-esr`), so on this system `-R chrome` uses `chromium-browser` and
+  `-R firefox` the packaged Firefox. `GOOGLE_CHROME_BINARY` /
+  `MOZILLA_FIREFOX_BINARY` only point them at another binary. As root, Chrome
+  needs `CHROME_OPTS=--no-sandbox`. The Firefox runner drives Firefox directly
   over WebDriver BiDi (Firefox >= 112; Firefox 129+ dropped CDP, BiDi is
   its only remote protocol), the Chrome runner stays on CDP. A stray
   Firefox left on the runner port (9333) keeps an active BiDi session and
