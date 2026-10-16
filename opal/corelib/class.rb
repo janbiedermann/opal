@@ -72,19 +72,14 @@ class ::Class
 
   def subclasses
     %x{
-      if (typeof WeakRef !== 'undefined') {
-        var i, subclass, out = [];
-        for (i = 0; i < self.$$subclasses.length; i++) {
-          subclass = self.$$subclasses[i].deref();
-          if (subclass !== undefined) {
-            out.push(subclass);
-          }
+      var i, subclass, out = [];
+      for (i = 0; i < self.$$subclasses.length; i++) {
+        subclass = self.$$subclasses[i].deref();
+        if (subclass !== undefined) {
+          out.push(subclass);
         }
-        return out;
       }
-      else {
-        return self.$$subclasses;
-      }
+      return out;
     }
   end
 
