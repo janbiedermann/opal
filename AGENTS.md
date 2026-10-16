@@ -116,6 +116,21 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `cause`; JS regexes have no `\A`/`\Z` (use `^`/`$`); Opal `nil` is truthy in JS, so test
   `x === nil` instead of `!x`; `super` inside `%x{}` loses JS locals (call the superclass
   method directly instead).
+- More `%x{}` traps, each one found through a failing suite: the body sees the
+  compiler's JS names (`@begin` is `self.begin`, `Opal.destructure` is
+  `Opal.$destructure`) and only the helpers listed in the file's
+  `# helpers:` comment; a Ruby parameter named after a JS reserved word (e.g.
+  `def merge(enum)`) is rewritten by the compiler for Ruby code but is a
+  syntax error inside `%x{}`, so rename the parameter; `Opal.is_a(x, K)`
+  bypasses an overridden `is_a?` (ruby/spec's `SetSpecs::SetLike` catches
+  that) while `x['$is_a?'](K)` does not; and `Opal.Enumerable['$include?']`
+  is `Module#include?`, not the instance method - the faithful `super` is
+  `$send2(self, $find_super(self, 'mid', self['$mid'], false, true), 'mid', [args], nil)`.
+- Files reached only through an `autoload` (like `corelib/set.rb`) are in none
+  of the `tasks/codesize.mjs` bundles; measure their size with
+  `node exe/opal --no-cache -c` on a script that requires the file and diff
+  the byte count. `--no-cache` also matters there: `exe/opal` caches compiled
+  corelib, so probing an edit without it shows the old code.
 - On a machine in UTC, time zone bugs stay hidden; run the ruby/spec suite in
   other zones too (`TZ=America/Los_Angeles`, `TZ=Pacific/Chatham`) after
   changes to Time, Date or DateTime.
