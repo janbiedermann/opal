@@ -86,6 +86,18 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   merged). `ASCIIDOCTOR_REPO_BASE` and `ASCIIDOCTOR_JS_REPO_BASE` override the
   remotes; with the upstream source the bundle builds but fails at run time
   (`sh: syntax error near unexpected token '('`).
+  This is not an authoritative performance benchmark: it measures one
+  application with a limited footprint, and the text that application handles is
+  ASCII-only, so it never reaches a UTF-16 surrogate pair. Its purpose is to show
+  that a change does not regress within that limited footprint; it must not be
+  used to choose what to optimize, the per-method measurements do that.
+- JS indexes UTF-16 units while Ruby indexes characters, so an
+  `indexOf`/`lastIndexOf` fast path answers in characters only when no surrogate
+  pair precedes the match, and a test that proves it costs a scan of the whole
+  string. A fast path guarded that way is 10-40% slower for text outside the BMP,
+  which is the text most of the world writes. `benchmark/string-performance.rb`
+  uses `あ` (a BMP character) as its Japanese and cannot see that cost; measure
+  string changes with an astral character too (`𠀀`, U+20000).
 - Other tasks: `node tasks/dist.mjs` (build corelib/stdlib),
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
