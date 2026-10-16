@@ -1,4 +1,4 @@
-# helpers: truthy, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, Opal, deny_frozen_access, freeze, freeze_props, jsid, each_ivar, slice, platform
+# helpers: truthy, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, Opal, deny_frozen_access, freeze, freeze_props, jsid, each_ivar, slice, platform, gvars, send
 # use_strict: true
 # backtick_javascript: true
 
@@ -489,9 +489,12 @@ module ::Kernel
 
   def p(*args)
     # For each object obj, executes: $stdout.write(obj.inspect, "\n")
-    args.each { |obj| $stdout.puts obj.inspect }
-
-    args.length <= 1 ? args[0] : args
+    %x{
+      for (let i = 0; i < args.length; i++) {
+        $gvars.stdout['$puts'](args[i].$inspect());
+      }
+      return args.length > 1 ? args : (args[0] ?? nil);
+    }
   end
 
   # pp - is in stdlib/pp.rb
@@ -500,7 +503,9 @@ module ::Kernel
 
   def print(*strs)
     # Equivalent to $stdout.print(*objects)
-    $stdout.print(*strs)
+    %x{
+      return $send($gvars.stdout, 'print', strs)
+    }
   end
 
   # printf - is in corelib/kernel/format.rb
@@ -523,7 +528,9 @@ module ::Kernel
 
   def puts(*strs)
     # Equivalent to $stdout.puts(objects)
-    $stdout.puts(*strs)
+    %x{
+      return $send($gvars.stdout, 'puts', strs)
+    }
   end
 
   def raise(exception = undefined, string = nil, backtrace = nil)
@@ -745,7 +752,14 @@ module ::Kernel
       strs = strs.map { |s| "#{location}warning: #{s}" }
     end
 
-    $stderr.puts(*strs) unless $VERBOSE.nil? || strs.empty?
+    # the tail is the hot path and forwards a splat, so it runs through
+    # Opal.send; the uplevel branch above stays Ruby
+    %x{
+      const verbose = $gvars.VERBOSE;
+      if (verbose !== nil && verbose !== undefined && strs.length !== 0) {
+        $send($gvars.stderr, 'puts', strs);
+      }
+    }
   end
 
   # y - not supported
@@ -784,7 +798,9 @@ module ::Kernel
 
   def enum_for(method = :each, *args, &block)
     # Creates a new Enumerator which will enumerate by calling method on obj, passing args if any.
-    ::Enumerator.for(self, method, *args, &block)
+    %x{
+      return $send(#{::Enumerator}, 'for', [self, method].concat(args), block);
+    }
   end
 
   def extend(*mods)
