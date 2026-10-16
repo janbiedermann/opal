@@ -1937,15 +1937,17 @@ class ::String < `String`
   # lstrip! - not supported, mutates string
 
   def match(pattern, pos = undefined, &block)
-    if String === pattern || pattern.respond_to?(:to_str)
-      pattern = ::Regexp.new(pattern.to_str)
-    end
+    %x{
+      if (pattern.$$is_string || $respond_to(pattern, '$to_str')) {
+        pattern = #{::Regexp}.$new(pattern['$to_str']());
+      }
 
-    unless ::Regexp === pattern
-      ::Kernel.raise ::TypeError, "wrong argument type #{pattern.class} (expected Regexp)"
-    end
+      if (!pattern.$$is_regexp) {
+        #{::Kernel.raise ::TypeError, "wrong argument type #{pattern.class} (expected Regexp)"}
+      }
 
-    pattern.match(self, pos, &block)
+      return $send(pattern, 'match', [self, pos], block);
+    }
   end
 
   def match?(pattern, pos = undefined)
