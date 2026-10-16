@@ -104,6 +104,24 @@ class ::String < `String`
     const sub_pattern_regexps = new Map();
     const gsub_pattern_regexps = new Map();
 
+    // String#split with a limit turns a literal separator into a Regexp to walk
+    // the matches, which means escaping and transpiling it. The same separator
+    // comes back again and again, so the result is kept like the two above.
+    const split_pattern_regexps = new Map();
+
+    function split_literal_regexp(literal) {
+      const key = literal.valueOf();
+      let regexp = split_pattern_regexps.get(key);
+      if (regexp === undefined) {
+        if (split_pattern_regexps.size > 128) split_pattern_regexps.clear();
+        const transformed = $transform_regexp(Opal.escape_regexp(literal), 'gmu');
+        regexp = new RegExp(transformed[0], transformed[1]);
+        split_pattern_regexps.set(key, regexp);
+      }
+      regexp.lastIndex = 0;
+      return regexp;
+    }
+
     function regexp_for_pattern(pattern, global) {
       const key = pattern.valueOf(), cache = global ? gsub_pattern_regexps : sub_pattern_regexps;
       let regexp = cache.get(key);
@@ -2410,9 +2428,7 @@ class ::String < `String`
             }
           } else {
             if (!pattern.$$is_regexp) {
-              pattern = Opal.escape_regexp(pattern);
-              let pattern_flags = $transform_regexp(pattern, 'gmu');
-              pattern = new RegExp(pattern_flags[0], pattern_flags[1]);
+              pattern = split_literal_regexp(pattern);
             }
 
             match = pattern.exec(string);
