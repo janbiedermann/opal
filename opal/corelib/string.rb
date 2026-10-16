@@ -1232,7 +1232,7 @@ class ::String < `String`
 
       if (length <= 1) {
         result = "";
-      } else if (s.charAt(length - 1) === "\n" && s.charAt(length - 2) === "\r") {
+      } else if (s[length - 1] === "\n" && s[length - 2] === "\r") {
         result = s.substring(0, length - 2);
       } else {
         let cut = s.codePointAt(length - 2) > 0xFFFF ? 2 : 1;
@@ -2061,12 +2061,12 @@ class ::String < `String`
       }
 
       string = string.replace(number_prefix_i, function (original, head, flag, tail) {
-        switch (tail.charAt(0)) {
+        switch (tail[0]) {
         case '+':
         case '-':
           return original;
         case '0':
-          if (tail.charAt(1) === 'x' && flag === '0x') {
+          if (tail[1] === 'x' && flag === '0x') {
             return original;
           }
         }
@@ -2704,12 +2704,12 @@ class ::String < `String`
       }
 
       string = string.replace(number_prefix, function (original, head, flag, tail) {
-        switch (tail.charAt(0)) {
+        switch (tail[0]) {
         case '+':
         case '-':
           return original;
         case '0':
-          if (tail.charAt(1) === 'x' && flag === '0x' && (radix === 0 || radix === 16)) {
+          if (tail[1] === 'x' && flag === '0x' && (radix === 0 || radix === 16)) {
             return original;
           }
         }

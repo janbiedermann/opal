@@ -97,7 +97,7 @@ class ::Regexp < `RegExp`
 
         regexp = Opal.coerce_to_or_raise(regexp, Opal.String, "to_str");
 
-        if (regexp.charAt(regexp.length - 1) === '\\' && regexp.charAt(regexp.length - 2) !== '\\') {
+        if (regexp[regexp.length - 1] === '\\' && regexp[regexp.length - 2] !== '\\') {
           #{::Kernel.raise ::RegexpError, "too short escape sequence: /#{regexp}/"}
         }
 

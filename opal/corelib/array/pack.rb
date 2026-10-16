@@ -24,7 +24,7 @@ class ::Array
           case 6:
           case 7:
             // 0xxxxxxx
-            out += str.charAt(i - 1);
+            out += str[i - 1];
             break;
           case 12:
           case 13:

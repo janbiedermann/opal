@@ -845,10 +845,8 @@ class ::Module
     refinement_module, m, klass_id = self, nil, nil
     %x{
       klass_id = Opal.id(klass);
-      if (typeof self.$$refine_modules === "undefined") {
-        self.$$refine_modules = { __proto__: null };
-      }
-      if (typeof self.$$refine_modules[klass_id] === "undefined") {
+      self.$$refine_modules ??= { __proto__: null };
+      if (self.$$refine_modules[klass_id] === undefined) {
         m = self.$$refine_modules[klass_id] = #{::Refinement.new};
       }
       else {
@@ -864,7 +862,7 @@ class ::Module
   def refinements
     %x{
       var refine_modules = self.$$refine_modules, hash = #{{}};;
-      if (typeof refine_modules === "undefined") return hash;
+      if (refine_modules === undefined) return hash;
       for (var id in refine_modules) {
         hash['$[]='](refine_modules[id].refined_class, refine_modules[id]);
       }

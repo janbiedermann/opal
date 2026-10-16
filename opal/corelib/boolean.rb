@@ -92,13 +92,13 @@ class ::Boolean < `Boolean`
   # unless you define them on Boolean and not on TrueClass/FalseClass.
   def method_missing(method, *args, &block)
     `var body = self.$$class.$$prototype[Opal.jsid(#{method})]`
-    super unless `typeof body !== 'undefined' && !body.$$stub`
+    super unless `body !== undefined && !body.$$stub`
     `Opal.send(self, body, #{args}, #{block})`
   end
 
   def respond_to_missing?(method, _include_all = false)
     `var body = self.$$class.$$prototype[Opal.jsid(#{method})]`
-    `typeof body !== 'undefined' && !body.$$stub`
+    `body !== undefined && !body.$$stub`
   end
 
   alias eql? ==
