@@ -98,6 +98,15 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   which is the text most of the world writes. `benchmark/string-performance.rb`
   uses `あ` (a BMP character) as its Japanese and cannot see that cost; measure
   string changes with an astral character too (`𠀀`, U+20000).
+- Measure a JavaScript construct *inside* the Opal runtime, not in a clean V8:
+  corelib extends `Array.prototype` and `String.prototype`, and V8 then drops the
+  fast path of several builtins (the comment at `opal/corelib/array.rb:14-22`
+  already says this for `shift`). A `[...a, ...b]` spread is 3x faster than
+  `a.concat(b)` in a fresh process but 7x slower once `corelib/array` is loaded;
+  `a.slice(0).sort(cmp)` is 3x slower than `a.toSorted(cmp)`; `s.replace(/lit/g, x)`
+  is 3-6x slower than `s.replaceAll('lit', x)`. `Object.prototype` is untouched,
+  so object spread keeps its speed. Bisect by loading one corelib file at a time
+  into the same process, and measure with the `tmp/corelib-perf/*-probe.rb` files.
 - Other tasks: `node tasks/dist.mjs` (build corelib/stdlib),
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
