@@ -1,13 +1,16 @@
+# helpers: is_a, send, truthy, gvars
 # backtick_javascript: true
 # ::ARGF is a instance of this anonymous class, note the .new(ARGV) at the bottom
 ::ARGF = Class.new do
   include Enumerable
 
   def initialize(*args)
-    @argv = args[0].is_a?(Array) ? args[0] : args
-    @lineno = 0
-    @processed = false
-    @binmode = false
+    %x{
+      self.argv = $is_a(args[0], #{::Array}) ? args[0] : args;
+      self.lineno = 0;
+      self.processed = false;
+      self.binmode = false;
+    }
   end
 
   # Returns the ARGV array, which contains the arguments passed to your script, one per element.
@@ -15,9 +18,11 @@
 
   def binmode
     # Puts ARGF into binary mode. Once a stream is in binary mode, it cannot be reset to non-binary mode.
-    @binmode = true
-    file.binmode
-    self
+    %x{
+      self.binmode = true;
+      self.$file().$binmode();
+      return self;
+    }
   end
 
   # Returns true if ARGF is being read in binary mode; false otherwise.
@@ -27,23 +32,36 @@
 
   def close
     # Closes the current file and skips to the next file in ARGV.
-    return self if @file == $stdin
-    next_filename = argv.shift
-    if !next_filename && !@file
-      next_filename = '-'
-    elsif next_filename && next_filename != '-'
-      next_filename = argv.shift while next_filename && next_filename[0] == '-'
-    end
-    @file.close if @file
-    return self unless next_filename
-    $FILENAME = @filename = next_filename
-    @file = nil
-    self
+    %x{
+      if (self.file === $gvars.stdin) return self;
+
+      const argv = self.$argv();
+      let next_filename = argv['$shift']();
+
+      if (next_filename === nil && (self.file === undefined || self.file === nil)) {
+        next_filename = '-';
+      } else if (next_filename !== nil && next_filename !== '-') {
+        while (next_filename !== nil && next_filename[0] === '-') {
+          next_filename = argv['$shift']();
+        }
+      }
+
+      if (self.file !== undefined && self.file !== nil) self.file.$close();
+      if (next_filename === nil) return self;
+
+      $gvars.FILENAME = (self.filename = next_filename);
+      self.file = nil;
+      return self;
+    }
   end
 
   def closed?
     # Returns true if the current file has been closed; false otherwise.
-    !file || file.closed?
+    %x{
+      const io = self.$file();
+      if (io === nil) return true;
+      return $truthy(io['$closed?']());
+    }
   end
 
   def each(sep = $/, limit = nil, chomp: false)
@@ -102,7 +120,11 @@
 
   def eof
     # Returns true if the current file in ARGF is at end of file, i.e. it has no data to read.
-    !file || file.eof?
+    %x{
+      const io = self.$file();
+      if (io === nil) return true;
+      return $truthy(io['$eof?']());
+    }
   end
 
   alias_method :eof?, :eof
@@ -114,17 +136,24 @@
 
   def file
     # Returns the current file as an IO or File object.
-    return @file if @file
-    fn = filename
-    @file = fn == '-' ? $stdin : File.open(fn, 'r')
-    @file.binmode if binmode?
-    @file
+    %x{
+      if (self.file !== undefined && self.file !== nil) return self.file;
+
+      const filename = self.$filename();
+      const io = (filename === '-') ? ($gvars.stdin ?? nil) : $send(#{::File}, 'open', [filename, 'r']);
+      self.file = io;
+      if ($truthy(self['$binmode?']())) io.$binmode();
+      return io;
+    }
   end
 
   # Returns the current filename. “-” is returned when the current file is STDIN.
   def filename
-    close unless @filename
-    @filename
+    %x{
+      self.filename ??= nil;
+      if (self.filename === nil) self.$close();
+      return self.filename;
+    }
   end
 
   def fileno
@@ -339,20 +368,29 @@
   end
 
   def skip
-    return self unless @processed
-    return self if @file == $stdin
-    next_filename = argv.shift
-    if !next_filename && !@file
-      next_filename = '-'
-    elsif next_filename && next_filename != '-'
-      next_filename = argv.shift while next_filename && next_filename[0] == '-'
-    end
-    return self unless next_filename
-    @processed = false
-    @file.close
-    $FILENAME = @filename = next_filename
-    @file = nil
-    self
+    %x{
+      if (!self.processed || self.processed === nil) return self;
+      if (self.file === $gvars.stdin) return self;
+
+      const argv = self.$argv();
+      let next_filename = argv['$shift']();
+
+      if (next_filename === nil && (self.file === undefined || self.file === nil)) {
+        next_filename = '-';
+      } else if (next_filename !== nil && next_filename !== '-') {
+        while (next_filename !== nil && next_filename[0] === '-') {
+          next_filename = argv['$shift']();
+        }
+      }
+
+      if (next_filename === nil) return self;
+
+      self.processed = false;
+      self.file.$close();
+      $gvars.FILENAME = (self.filename = next_filename);
+      self.file = nil;
+      return self;
+    }
   end
 
   alias_method :tell, :pos
