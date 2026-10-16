@@ -355,11 +355,22 @@ class ::Time < `Date`
     # http://javascript.about.com/library/bldayyear.htm
     # also see moment.js implementation: http://git.io/vCKNE
 
-    start_of_year = Time.new(year).to_i
-    start_of_day  = Time.new(year, month, day).to_i
-    one_day       = 86_400
+    %x{
+      // Time.new(year) is new Date(year, 0, 1) and Time.new(year, month, day)
+      // is new Date(year, month - 1, day) (see self.new), so the two midnights
+      // are built directly instead of through two Time objects
+      const year = self.$year(),
+          start_of_year = new Date(year, 0, 1),
+          start_of_day = new Date(year, self.$month() - 1, self.$day());
 
-    ((start_of_day - start_of_year) / one_day).round + 1
+      if (year < 100) {
+        start_of_year.setFullYear(year);
+        start_of_day.setFullYear(year);
+      }
+
+      return Math.round((parseInt(start_of_day.getTime() / 1000, 10) -
+        parseInt(start_of_year.getTime() / 1000, 10)) / 86400) + 1;
+    }
   end
 
   def isdst
