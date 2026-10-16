@@ -77,18 +77,18 @@ module ::Opal
           // For all refinements there are, starting from the last `using` call to the furthest...
           for (k = refinements.length - 1; k >= 0; k--) {
             refinement = refinements[k];
-            if (typeof refinement.$$refine_modules === 'undefined') continue;
+            if (refinement.$$refine_modules === undefined) continue;
 
             // A single module being given as an argument of the `using` call contains multiple
             // refinement modules
             refine_modules = refinement.$$refine_modules;
 
             // Does this module refine a given call for a given ancestor module?
-            if (typeof refine_modules[ancestor] === 'undefined') continue;
+            if (refine_modules[ancestor] === undefined) continue;
             refine_module = refine_modules[ancestor];
 
             // Does this module define a method we want to call?
-            if (typeof refine_module.$$prototype[$jsid(method)] !== 'undefined') {
+            if (refine_module.$$prototype[$jsid(method)] !== undefined) {
               body = refine_module.$$prototype[$jsid(method)];
               return Opal.send2(recv, body, method, args, block, blockopts);
             }

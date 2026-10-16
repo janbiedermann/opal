@@ -14,7 +14,7 @@ module ::Opal
   end
 
   %x{
-    if (typeof Opal.eval === 'undefined') {
+    if (Opal.eval === undefined) {
       #{
         def self.eval(str)
           `Opal.load_parser()`
@@ -25,7 +25,7 @@ module ::Opal
   }
 
   %x{
-    if (typeof Opal.compile === 'undefined') {
+    if (Opal.compile === undefined) {
       #{
         def self.compile(str, options)
           `Opal.load_parser()`

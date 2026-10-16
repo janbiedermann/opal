@@ -107,7 +107,7 @@
       return result;
     }
   }
-  if (typeof Opal.global.TextDecoder === "undefined") Opal.global.TextDecoder = Opal.generic_text_decoder;
+  if (Opal.global.TextDecoder === undefined) Opal.global.TextDecoder = Opal.generic_text_decoder;
 
   //
   // Sleep
@@ -128,9 +128,9 @@
   //
 
   // Some platforms are missing console.warn, console.info or console.error; QuickJS, etc.
-  if (typeof console.error === "undefined") console.error = console.log;
-  if (typeof console.info === "undefined") console.info = console.log;
-  if (typeof console.warn === "undefined") console.warn = console.log;
+  if (console.error === undefined) console.error = console.log;
+  if (console.info === undefined) console.info = console.log;
+  if (console.warn === undefined) console.warn = console.log;
 
   //
   // OPAL_PLATFORM

@@ -188,7 +188,7 @@ module ::Opal
           alias;
 
       // Aliasing on main means aliasing on Object...
-      if (typeof obj.$$prototype === 'undefined') {
+      if (obj.$$prototype === undefined) {
         obj = Opal.Object;
       }
 

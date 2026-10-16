@@ -162,7 +162,7 @@ module ::Opal
           // JS undefined value
           return 'undefined';
         }
-        else if (typeof value.$$class === 'undefined') {
+        else if (value.$$class === undefined) {
           // JS object / other value that is not bridged
           return Object.prototype.toString.apply(value);
         }

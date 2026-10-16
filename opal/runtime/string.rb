@@ -53,7 +53,7 @@ module ::Opal
   # @param type [String] possible values are either `"encoding"`, `"binary_encoding"`, or `undefined
   def self.set_encoding(str = undefined, name = undefined, type = undefined)
     %x{
-      if (typeof type === "undefined") type = "encoding";
+      if (type === undefined) type = "encoding";
       if (typeof str === "string" || str.$$frozen === true)
         $raise(Opal.FrozenError, "can't modify frozen String", new Map([["receiver", str]]));
       str[type] = Opal.find_encoding(name);
