@@ -49,10 +49,10 @@ class ::Enumerator
       if (block === nil && args.length === 0) return self;
 
       // @args + args, but args is already a fresh array when @args is empty
-      if (self.args.length !== 0) args = self.args.concat(args);
+      if (self.args.length !== 0) args = [...self.args, ...args];
 
       if (block === nil) {
-        return $send(self.$class(), 'new', [self.object, self.method].concat(args));
+        return $send(self.$class(), 'new', [self.object, self.method, ...args]);
       }
 
       return $send(self.object, self.method, args, block);

@@ -1538,7 +1538,7 @@ module ::Enumerable
   end
 
   def to_set(klass = ::Set, *args, &block)
-    `$send(klass, 'new', [self].concat(args), block)`
+    `$send(klass, 'new', [self, ...args], block)`
   end
 
   def zip(*others, &block)

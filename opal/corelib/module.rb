@@ -295,7 +295,7 @@ class ::Module
   def self.constants(inherit = undefined)
     %x{
       if (inherit == null) {
-        var nesting = (self.$$nesting || []).concat($Object),
+        var nesting = [...(self.$$nesting || []), $Object],
             constant, constants = {},
             i, ii;
 
@@ -811,7 +811,7 @@ class ::Module
       copyInstanceMethods(other, self);
       copyIncludedModules(other, self);
       copyPrependedModules(other, self);
-      $prop(self, '$$cloned_from', $has_own(other, '$$cloned_from') ? other.$$cloned_from.concat(other) : [other]);
+      $prop(self, '$$cloned_from', $has_own(other, '$$cloned_from') ? [...other.$$cloned_from, other] : [other]);
     }
     copy_class_variables(other)
     copy_constants(other)

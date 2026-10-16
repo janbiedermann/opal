@@ -167,8 +167,7 @@ class ::Proc < `Function`
         }
 
         result = function () {
-          return curried.apply(null,
-            args.concat($slice(arguments)));
+          return curried.apply(null, [...args, ...$slice(arguments)]);
         }
         result.$$is_lambda = self.$$is_lambda;
         result.$$is_curried = true;

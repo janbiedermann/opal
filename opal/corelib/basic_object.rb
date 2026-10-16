@@ -45,7 +45,7 @@ class ::BasicObject
         self.$method_missing.$$p = block;
       }
 
-      return self.$method_missing.apply(self, [symbol].concat(args));
+      return self.$method_missing.apply(self, [symbol, ...args]);
     }
   end
 
