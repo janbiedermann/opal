@@ -1462,6 +1462,23 @@ class ::Array < `Array`
     end
 
     %x{
+      // Fast path: an array of plain strings and numbers needs no coercion
+      // protocol and no second array, native join does it in one pass.
+      let plain = true;
+
+      for (let i = 0, length = self.length; i < length; i++) {
+        const item = self[i];
+
+        if (!(item.$$is_string || item.$$is_number)) {
+          plain = false;
+          break;
+        }
+      }
+
+      if (plain) {
+        return self.join(sep === nil ? '' : $coerce_to_or_raise(sep, Opal.String, 'to_str').toString());
+      }
+
       const result = [];
       let i, length, item, tmp;
 
@@ -1816,7 +1833,19 @@ class ::Array < `Array`
   end
 
   def reverse
-    `self.slice(0).reverse()`
+    %x{
+      // slice alone keeps any hole where it is, and swapping in place beats
+      // Array#reverse, which runs the generic spec algorithm
+      const result = self.slice(0);
+
+      for (let i = 0, j = result.length - 1; i < j; i++, j--) {
+        const item = result[i];
+        result[i] = result[j];
+        result[j] = item;
+      }
+
+      return result;
+    }
   end
 
   def reverse!
