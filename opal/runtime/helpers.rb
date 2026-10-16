@@ -1,4 +1,4 @@
-# helpers: type_error, coerce_to, coerce_to_or_raise
+# helpers: type_error, coerce_to, coerce_to_or_raise, raise, rescue, pop_exception, dstr
 # backtick_javascript: true
 # use_strict: true
 
@@ -12,21 +12,21 @@ module ::Opal
   end
 
   def self.try_convert(object, type, method)
-    return object if type === object
-
-    if object.respond_to? method
-      object.__send__ method
-    end
+    %x{
+      if ($truthy(type['$==='](object))) return object;
+      if ($truthy(object['$respond_to?'](method))) return object.$__send__(method);
+      return nil;
+    }
   end
 
   def self.compare(a, b)
-    compare = a <=> b
-
-    if `compare === nil`
-      ::Kernel.raise ::ArgumentError, "comparison of #{a.class} with #{b.class} failed"
-    end
-
-    compare
+    %x{
+      var cmp = a['$<=>'](b);
+      if (cmp === nil) {
+        $raise(Opal.ArgumentError, 'comparison of ' + a.$class()['$to_s']() + ' with ' + b.$class()['$to_s']() + ' failed');
+      }
+      return cmp;
+    }
   end
 
   def self.destructure(args)
@@ -149,11 +149,11 @@ module ::Opal
   def self.inspect(value = undefined)
     # We use an `#inspect` name, but when someone calls just
     # `Opal.inspect` we should return "Opal".
-    return 'Opal' if `arguments.length == 0`
+    %x{
+      if (arguments.length === 0) return 'Opal';
 
-    `var pushed = false`
-    begin
-      %x{
+      var pushed = false;
+      try {
         if (value === null) {
           // JS null value
           return 'null';
@@ -168,25 +168,30 @@ module ::Opal
         }
         else if (typeof value.$inspect !== 'function' || value.$inspect.$$stub) {
           // BasicObject and friends
-          return #{"#<#{`value.$$class`}:0x#{value.__id__.to_s(16)}>"}
+          return $dstr("#<", value.$$class, ":0x", value.$__id__().$to_s(16), ">");
         }
-        else if (inspect_stack.indexOf(#{value.__id__}) !== -1) {
+        else if (inspect_stack.indexOf(value.$__id__()) !== -1) {
           // inspect recursing inside inspect to find out about the
           // same object
-          return #{"#<#{`value.$$class`}:0x#{value.__id__.to_s(16)}>"}
+          return $dstr("#<", value.$$class, ":0x", value.$__id__().$to_s(16), ">");
         }
         else {
           // anything supporting Opal
-          inspect_stack.push(#{value.__id__});
+          inspect_stack.push(value.$__id__());
           pushed = true;
           return value.$inspect();
         }
+      } catch ($err) {
+        if ($rescue($err, [Opal.Exception])) {
+          try {
+            return $dstr("#<", value.$$class, ":0x", value.$__id__().$to_s(16), ">");
+          } finally { $pop_exception($err); }
+        } else {
+          throw $err;
+        }
+      } finally {
+        if (pushed) inspect_stack.pop();
       }
-      nil
-    rescue ::Exception => e # rubocop:disable Lint/RescueException
-      "#<#{`value.$$class`}:0x#{value.__id__.to_s(16)}>"
-    ensure
-      `if (pushed) inspect_stack.pop()`
-    end
+    }
   end
 end
