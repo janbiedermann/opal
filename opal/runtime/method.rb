@@ -386,7 +386,7 @@ module ::Opal
       var mod = Opal.get_singleton_class(obj);
       var singleton_methods = Opal.own_instance_methods(mod);
       var instance_methods = Opal.own_instance_methods(mod.$$super);
-      return singleton_methods.concat(instance_methods);
+      return [...singleton_methods, ...instance_methods];
     }
   end
 

@@ -181,8 +181,8 @@ module ::Opal
 
       var module, modules = [cref], i, ii, constants = {}, constant;
 
-      if (inherit) modules = modules.concat(Opal.ancestors(cref));
-      if (inherit && cref.$$is_module) modules = modules.concat([Opal.Object]).concat(Opal.ancestors(Opal.Object));
+      if (inherit) modules = [...modules, ...Opal.ancestors(cref)];
+      if (inherit && cref.$$is_module) modules = [...modules, Opal.Object, ...Opal.ancestors(Opal.Object)];
 
       for (i = 0, ii = modules.length; i < ii; i++) {
         module = modules[i];
@@ -253,7 +253,7 @@ module ::Opal
   # ------------------
 
   def self.own_ancestors(mod)
-    `mod.$$own_prepended_modules.concat([mod]).concat(mod.$$own_included_modules)`
+    `[...mod.$$own_prepended_modules, mod, ...mod.$$own_included_modules]`
   end
 
   # The Array of ancestors for a given module/class
