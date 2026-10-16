@@ -1,4 +1,4 @@
-# helpers: truthy, falsy, yield1, hash_get, hash_put, hash_delete, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, deny_frozen_access, freeze, opal32_init, opal32_add, has_own, eqeq
+# helpers: truthy, falsy, yield1, hash_get, hash_put, hash_delete, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, deny_frozen_access, freeze, opal32_init, opal32_add, has_own, eqeq, find_super, send2
 # backtick_javascript: true
 
 require 'corelib/enumerable'
@@ -714,11 +714,12 @@ class ::Array < `Array`
   end
 
   def count(object = undefined, &block)
-    if `object !== undefined` || block
-      super
-    else
-      size
-    end
+    %x{
+      // Counting every element is just the size; only an argument or a block
+      // needs Enumerable#count.
+      if (object === undefined && block === nil) return self.length;
+      return $send2(self, $find_super(self, 'count', self['$count'], false, true), 'count', [object], block);
+    }
   end
 
   def initialize_copy(other)
@@ -972,7 +973,11 @@ class ::Array < `Array`
   end
 
   def difference(*arrays)
-    arrays.reduce(to_a.dup) { |a, b| a - b }
+    %x{
+      let result = self.$to_a()['$dup']();
+      for (let i = 0; i < arrays.length; i++) result = result['$-'](arrays[i]);
+      return result;
+    }
   end
 
   def dig(idx, *idxs)
@@ -2473,7 +2478,11 @@ class ::Array < `Array`
   end
 
   def union(*arrays)
-    arrays.reduce(uniq) { |a, b| a | b }
+    %x{
+      let result = self.$uniq();
+      for (let i = 0; i < arrays.length; i++) result = result['$|'](arrays[i]);
+      return result;
+    }
   end
 
   def uniq(&block)
@@ -2634,7 +2643,15 @@ class ::Array < `Array`
   end
 
   def instance_variables
-    super.reject { |ivar| `/^@\d+$/.test(#{ivar})` || ivar == '@length' }
+    %x{
+      const names = $send2(self, $find_super(self, 'instance_variables', self['$instance_variables'], false, true), 'instance_variables', [], nil);
+      const result = [];
+      for (let i = 0; i < names.length; i++) {
+        const ivar = names[i];
+        if (!/^@\d+$/.test(ivar) && ivar !== '@length') result.push(ivar);
+      }
+      return result;
+    }
   end
 
   def pack(*args)
