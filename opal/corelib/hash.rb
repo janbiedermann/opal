@@ -1,4 +1,4 @@
-# helpers: yield1, hash_clone, hash_delete, hash_get, hash_put, deny_frozen_access, freeze, opal32_init, opal32_add, coerce_to_or_nil, coerce_to_or_raise
+# helpers: yield1, hash_clone, hash_delete, hash_get, hash_put, deny_frozen_access, freeze, opal32_init, opal32_add, coerce_to_or_nil, coerce_to_or_raise, send
 # backtick_javascript: true
 # use_strict: true
 
@@ -79,14 +79,22 @@ class ::Hash < `Map`
 
   # Opal has no hashes flagged as keywords (see Module#ruby2_keywords).
   def self.ruby2_keywords_hash?(hash)
-    ::Kernel.raise ::TypeError, "wrong argument type #{hash.nil? ? 'nil' : hash.class} (expected Hash)" unless ::Hash === hash
-    false
+    %x{
+      if (!hash.$$is_hash) {
+        #{::Kernel.raise ::TypeError, "wrong argument type #{hash.nil? ? 'nil' : hash.class} (expected Hash)"}
+      }
+      return false;
+    }
   end
 
   # A copy of the hash (as a hash flagged as keywords).
   def self.ruby2_keywords_hash(hash)
-    ::Kernel.raise ::TypeError, "wrong argument type #{hash.nil? ? 'nil' : hash.class} (expected Hash)" unless ::Hash === hash
-    hash.dup
+    %x{
+      if (!hash.$$is_hash) {
+        #{::Kernel.raise ::TypeError, "wrong argument type #{hash.nil? ? 'nil' : hash.class} (expected Hash)"}
+      }
+      return hash['$dup']();
+    }
   end
 
   def self.try_convert(obj)
@@ -459,8 +467,10 @@ class ::Hash < `Map`
   end
 
   def except!(*keys)
-    keys.each { |key| delete(key) }
-    self
+    %x{
+      for (let i = 0; i < keys.length; i++) self.$delete(keys[i]);
+      return self;
+    }
   end
 
   def fetch(key, defaults = undefined, &block)
@@ -484,7 +494,13 @@ class ::Hash < `Map`
   end
 
   def fetch_values(*keys, &block)
-    keys.map { |key| fetch(key, &block) }
+    %x{
+      const result = [];
+      for (let i = 0; i < keys.length; i++) {
+        result.push($send(self, 'fetch', [keys[i]], block));
+      }
+      return result;
+    }
   end
 
   def flatten(level = 1)
@@ -701,7 +717,9 @@ class ::Hash < `Map`
   end
 
   def merge(*others, &block)
-    dup.merge!(*others, &block)
+    %x{
+      return $send(self.$dup(), 'merge!', others, block)
+    }
   end
 
   def merge!(*others, &block)
