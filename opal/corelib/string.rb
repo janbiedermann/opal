@@ -245,11 +245,6 @@ class ::String < `String`
       return String.fromCodePoint(str.codePointAt(0));
     }
 
-    // A lone surrogate in a string means it holds a character outside the BMP,
-    // so its UTF-16 indexes stop being character indexes. Built with
-    // new RegExp: the parser rejects a lone-surrogate escape in a regexp literal.
-    const SURROGATE = new RegExp('[\\uD800-\\uDFFF]');
-
     // The characters that make a Regexp source more than the literal text it
     // is, so that String#match? can tell when a String pattern is a plain
     // substring test.
@@ -261,13 +256,6 @@ class ::String < `String`
     //   search_l: is optional, if given must be search.$length(), do NOT use search.length
     //   last: boolean, optional too, if true returns the last index otherwise the first
     function find_index_of(str, search, search_l, last) {
-      // Fast path: indexOf/lastIndexOf scan the whole string in one native
-      // pass, and their index is a character index as long as no surrogate
-      // pair sits before the match. A miss is a miss either way, so only a hit
-      // in a string that holds a surrogate pair needs the walk below.
-      let fast = last ? str.lastIndexOf(search) : str.indexOf(search);
-      if (fast === -1 || !SURROGATE.test(str)) return fast;
-
       let search_f = (search.length === 1) ? search : first_char(search);
       let i = 0, col = [], l = 0, idx = -1;
       for (const c of str) {
