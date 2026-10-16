@@ -1,4 +1,4 @@
-# helpers: slice, coerce_to, deny_frozen_access
+# helpers: slice, coerce_to, deny_frozen_access, send, respond_to
 # backtick_javascript: true
 # use_strict: true
 
@@ -45,17 +45,27 @@ class ::Enumerator
   end
 
   def each(*args, &block)
-    return self if block.nil? && args.empty?
+    %x{
+      if (block === nil && args.length === 0) return self;
 
-    args = @args + args
+      // @args + args, but args is already a fresh array when @args is empty
+      if (self.args.length !== 0) args = self.args.concat(args);
 
-    return self.class.new(@object, @method, *args) if block.nil?
+      if (block === nil) {
+        return $send(self.$class(), 'new', [self.object, self.method].concat(args));
+      }
 
-    @object.__send__(@method, *args, &block)
+      return $send(self.object, self.method, args, block);
+    }
   end
 
   def size
-    @size.respond_to?(:call) ? @size.call(*@args) : @size
+    %x{
+      const size = self.size;
+      if (size === undefined || size === nil) return nil;
+      if ($respond_to(size, '$call')) return $send(size, 'call', self.args);
+      return size;
+    }
   end
 
   def with_index(offset = 0, &block)
@@ -97,25 +107,42 @@ class ::Enumerator
   end
 
   def peek_values
-    @values ||= map { |*i| i }
-    ::Kernel.raise ::StopIteration, 'iteration reached an end' if @cursor >= @values.length
-    @values[@cursor]
+    %x{
+      if (self.values === undefined || self.values === nil) {
+        // @values ||= map { |*i| i }, with the block as a JS function so the
+        // walk doesn't pay a Ruby block call per element
+        const values = [];
+        self.$each.$$p = function () { values.push(Array.prototype.slice.call(arguments)); };
+        self.$each();
+        self.values = values;
+      }
+      if (self.cursor >= self.values.length) {
+        #{::Kernel.raise ::StopIteration, 'iteration reached an end'}
+      }
+      return self.values[self.cursor];
+    }
   end
 
   def peek
-    values = peek_values
-    values.length <= 1 ? values[0] : values
+    %x{
+      const values = self.$peek_values();
+      return (values.length <= 1 ? values[0] : values);
+    }
   end
 
   def next_values
-    out = peek_values
-    @cursor += 1
-    out
+    %x{
+      const out = self.$peek_values();
+      self.cursor += 1;
+      return out;
+    }
   end
 
   def next
-    values = next_values
-    values.length <= 1 ? values[0] : values
+    %x{
+      const values = self.$next_values();
+      return (values.length <= 1 ? values[0] : values);
+    }
   end
 
   def feed(arg)
