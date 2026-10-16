@@ -256,10 +256,10 @@ class ::Hash < `Map`
     %x{
       let hash = new Map();
 
-      self.forEach((value, key, s) => {
-        if (value !== nil && value != null)
-          $hash_put(hash, key, value);
-      });
+      for (let entry of self) {
+        if (entry[1] !== nil && entry[1] != null)
+          $hash_put(hash, entry[0], entry[1]);
+      }
 
       return hash;
     }
@@ -775,13 +775,13 @@ class ::Hash < `Map`
     %x{
       let hash = new Map();
 
-      self.forEach((value, key, s) => {
-        let obj = block(key, value);
+      for (let entry of self) {
+        let obj = block(entry[0], entry[1]);
 
         if (obj === false || obj === nil) {
-          $hash_put(hash, key, value);
+          $hash_put(hash, entry[0], entry[1]);
         }
-      });
+      }
 
       return hash;
     }
@@ -836,13 +836,13 @@ class ::Hash < `Map`
     %x{
       let hash = new Map();
 
-      self.forEach((value, key, s) => {
-        let obj = block(key, value);
+      for (let entry of self) {
+        let obj = block(entry[0], entry[1]);
 
         if (obj !== false && obj !== nil) {
-          $hash_put(hash, key, value);
+          $hash_put(hash, entry[0], entry[1]);
         }
-      });
+      }
 
       return hash;
     }
@@ -935,8 +935,8 @@ class ::Hash < `Map`
     %x{
       let result = new Map();
 
-      self.forEach((value, key, s) => {
-        let new_key;
+      for (let entry of self) {
+        let key = entry[0], value = entry[1], new_key;
         if (keys_hash !== nil)
           new_key = $hash_get(keys_hash, key);
         if (new_key === undefined && block !== nil && block !== undefined)
@@ -944,7 +944,7 @@ class ::Hash < `Map`
         if (new_key === undefined)
           new_key = key // key not modified
         $hash_put(result, new_key, value);
-      });
+      }
 
       return result;
     }
@@ -985,7 +985,8 @@ class ::Hash < `Map`
     %x{
       let result = new Map();
 
-      self.forEach((value, key, s) => $hash_put(result, key, block(value)));
+      for (let entry of self)
+        $hash_put(result, entry[0], block(entry[1]));
 
       return result;
     }
