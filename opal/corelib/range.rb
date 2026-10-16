@@ -1,3 +1,4 @@
+# helpers: truthy, eqeq, eqeqeq, rb_gt, rb_lt, is_a, thrower, find_super, send2
 # backtick_javascript: true
 # use_strict: true
 
@@ -20,8 +21,7 @@ class ::Range
   end
 
   def ===(value)
-    return false if `value.$$is_range`
-    cover? value
+    `value.$$is_range ? false : self['$cover?'](value)`
   end
 
   %x{
@@ -30,6 +30,12 @@ class ::Range
           self.begin === -Infinity || self.end === Infinity ||
           self.begin === Infinity || self.end === -Infinity) return true;
       return false;
+    }
+
+    // `a <=> b || 1`: an incomparable pair counts as "a after b"
+    function range_compare(a, b) {
+      let cmp = a['$<=>'](b);
+      return cmp === nil ? 1 : cmp;
     }
   }
 
@@ -46,34 +52,40 @@ class ::Range
   end
 
   def cover?(value)
-    compare = ->(a, b) {
-      a <=> b || 1
+    %x{
+      let $begin = self.begin,
+          $end = self.end,
+          excl = self.excl;
+
+      if (value.$$is_range) {
+        let val_begin = value.$begin(),
+            val_end = value.$end(),
+            val_excl = value['$exclude_end?']();
+
+        if (($begin !== nil && val_begin === nil) ||
+            ($end !== nil && val_end === nil) ||
+            (val_begin !== nil && val_end !== nil &&
+              ($truthy(val_excl) ? range_compare(val_begin, val_end) >= 0 : range_compare(val_begin, val_end) > 0)) ||
+            (val_begin !== nil && !self['$cover?'](val_begin))) {
+          return false;
+        }
+
+        let cmp = range_compare($end, val_end);
+
+        if ($eqeq(excl, val_excl)) return cmp >= 0;
+        if ($truthy(excl)) return cmp > 0;
+        if (cmp >= 0) return true;
+
+        let val_max = value.$max();
+        return val_max !== nil && range_compare(val_max, $end) <= 0;
+      }
+
+      if ($begin !== nil && range_compare($begin, value) > 0) return false;
+      if ($end === nil) return true;
+
+      let end_cmp = range_compare(value, $end);
+      return $truthy(excl) ? end_cmp < 0 : end_cmp <= 0;
     }
-
-    if `value.$$is_range`
-      val_begin = value.begin
-      val_end = value.end
-      val_excl = value.exclude_end?
-      if (@begin && val_begin.nil?) ||
-         (@end && val_end.nil?) ||
-         (val_begin && val_end && compare.call(val_begin, val_end).then { |c| val_excl ? c >= 0 : c > 0 }) ||
-         (val_begin && !cover?(val_begin))
-        return false
-      end
-
-      cmp = compare.call(@end, val_end)
-      return cmp >= 0 if @excl == val_excl
-      return cmp > 0 if @excl
-      return true if cmp >= 0
-
-      val_max = value.max
-      return !val_max.nil? && compare.call(val_max, @end) <= 0
-    end
-
-    return false if @begin && compare.call(@begin, value) > 0
-    return true if @end.nil?
-    end_cmp = compare.call(value, @end)
-    @excl ? end_cmp < 0 : end_cmp <= 0
   end
 
   def each(&block)
@@ -119,14 +131,19 @@ class ::Range
   end
 
   def eql?(other)
-    return false unless ::Range === other
+    %x{
+      if (!$is_a(other, #{::Range})) {
+        return false;
+      }
 
-    @excl === other.exclude_end? &&
-      @begin.eql?(other.begin) &&
-      @end.eql?(other.end)
+      return $eqeqeq(self.excl, other.excl) &&
+        self.begin['$eql?'](other.begin) &&
+        self.end['$eql?'](other.end);
+    }
   end
 
   def exclude_end?
+    # left in Ruby: it compiles to `return self.excl`, so a JS body is the same code
     @excl
   end
 
@@ -137,26 +154,57 @@ class ::Range
   end
 
   def include?(val)
-    if `self.begin.$$is_number || self.end.$$is_number` ||
-       @begin.is_a?(::Time) || @end.is_a?(::Time) ||
-       ::Integer.try_convert(@begin) || ::Integer.try_convert(@end)
-      return cover?(val)
-    end
+    %x{
+      let $begin = self.begin,
+          $end = self.end;
 
-    if `self.begin.$$is_string || self.end.$$is_string`
-      if `self.begin.$$is_string && self.end.$$is_string`
-        return @begin.upto(@end, @excl).any? { |s| s == val }
-      elsif @begin.nil?
-        cmp = val <=> @end
-        return !cmp.nil? && (@excl ? cmp < 0 : cmp <= 0)
-      elsif @end.nil?
-        cmp = @begin <=> val
-        return !cmp.nil? && cmp <= 0
-      end
-    end
+      // `Integer.try_convert` answers Ruby nil, which is a truthy JS object
+      if ($begin.$$is_number || $end.$$is_number ||
+          $is_a($begin, #{::Time}) || $is_a($end, #{::Time}) ||
+          #{::Integer.try_convert(@begin)} !== nil || #{::Integer.try_convert(@end)} !== nil) {
+        return self['$cover?'](val);
+      }
 
-    # invoke Enumerable#include?
-    super
+      if ($begin.$$is_string && $end.$$is_string) {
+        // walk the successor sequence, as String#upto does, but without the
+        // Enumerator and the Enumerable#any? on top of it
+        let $return = $thrower('return');
+
+        try {
+          $begin['$upto'].$$p = function $$include_str(s) {
+            if ($eqeq(s, val)) {
+              $return.$throw(true, false);
+            }
+          };
+
+          $begin['$upto']($end, self.excl);
+        } catch ($e) {
+          if ($e === $return) return $e.$v;
+          throw $e;
+        } finally {
+          $return.is_orphan = true;
+        }
+
+        return false;
+      }
+
+      if ($begin.$$is_string || $end.$$is_string) {
+        let cmp;
+
+        if ($begin === nil) {
+          cmp = val['$<=>']($end);
+          return cmp !== nil && ($truthy(self.excl) ? cmp < 0 : cmp <= 0);
+        }
+
+        if ($end === nil) {
+          cmp = $begin['$<=>'](val);
+          return cmp !== nil && cmp <= 0;
+        }
+      }
+
+      // super: Enumerable#include?
+      return $send2(self, $find_super(self, 'include?', self['$include?'], false, true), 'include?', [val], nil);
+    }
   end
 
   def last(n = undefined)
@@ -347,11 +395,25 @@ class ::Range
   end
 
   def to_s
-    "#{@begin || ''}#{@excl ? '...' : '..'}#{@end || ''}"
+    %x{
+      let $begin = self.begin,
+          $end = self.end;
+
+      return ($begin === nil ? '' : $begin['$to_s']()) +
+        ($truthy(self.excl) ? '...' : '..') +
+        ($end === nil ? '' : $end['$to_s']());
+    }
   end
 
   def inspect
-    "#{@begin && @begin.inspect}#{@excl ? '...' : '..'}#{@end && @end.inspect}"
+    %x{
+      let $begin = self.begin,
+          $end = self.end;
+
+      return ($begin === nil ? '' : $begin['$inspect']()) +
+        ($truthy(self.excl) ? '...' : '..') +
+        ($end === nil ? '' : $end['$inspect']());
+    }
   end
 
   def marshal_load(args)
@@ -361,6 +423,7 @@ class ::Range
   end
 
   def hash
+    # left in Ruby: a JS body measured the same, the cost is Array#hash
     [::Range, @begin, @end, @excl].hash
   end
 
