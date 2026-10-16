@@ -26,7 +26,7 @@ export default [
   {
     files: ["**/*.js"],
     languageOptions: {
-      ecmaVersion: 2021,
+      ecmaVersion: 2024,
       sourceType: "commonjs",
       globals: {
           ...globals.browser,
@@ -68,7 +68,7 @@ export default [
   // lint:compiler), so the rules they don't use are off here.
   {
     files: ["**/opal-parser.js", "**/opal-builder.js"],
-    languageOptions: { ecmaVersion: 2022 },
+    languageOptions: { ecmaVersion: 2024 },
     linterOptions: { reportUnusedDisableDirectives: "off" },
     rules: {
       "no-fallthrough": "off",
@@ -80,7 +80,7 @@ export default [
   {
     files: potchFiles,
     languageOptions: {
-      ecmaVersion: 2022,
+      ecmaVersion: 2024,
       sourceType: "module",
       globals: {
           ...globals.node,
@@ -96,7 +96,7 @@ export default [
   {
     files: compilerFiles,
     languageOptions: {
-      ecmaVersion: 2022,
+      ecmaVersion: 2024,
       sourceType: "module",
       globals: {
           ...globals.node,
