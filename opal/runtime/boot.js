@@ -15,11 +15,9 @@
   //   The way the code is digested before going through Yardoc is a secret kept
   //   in the docs repo (https://github.com/opal/docs/tree/master).
 
-  // Detect the global object
-  let global_object;
-  if (typeof(globalThis) !== 'undefined') { global_object = globalThis; }
-  else if (typeof(global) !== 'undefined') { global_object = global; }
-  else if (typeof(window) !== 'undefined') { global_object = window; }
+  // Detect the global object. globalThis is ES2020, part of the ES2024 target
+  // (Chrome, Firefox, Safari, Node.js 22), so no fallback chain is needed.
+  const global_object = globalThis;
 
   // Setup a dummy console object if missing
   if (global_object.console == null) {
@@ -75,7 +73,7 @@
   // Minify common function calls
   var $call      = Function.prototype.call;
   var $bind      = Function.prototype.bind;
-  var $has_own   = Object.hasOwn || $call.bind(Object.prototype.hasOwnProperty);
+  var $has_own   = Object.hasOwn;
   var $set_proto = Object.setPrototypeOf;
   var $slice     = $call.bind(Array.prototype.slice);
   var $splice    = $call.bind(Array.prototype.splice);
@@ -184,7 +182,7 @@
       if (value.$$base_module == null) value.$$base_module = cref;
     }
 
-    cref.$$const = (cref.$$const || { __proto__: null });
+    cref.$$const ??= { __proto__: null };
 
     if (name in cref.$$const || ("$$autoload" in cref && name in cref.$$autoload)) {
       new_const = false;
@@ -310,22 +308,17 @@
       if (singleton !== true) {
         // Let's not forbid GC from cleaning up our
         // subclasses.
-        if (typeof WeakRef !== 'undefined') {
-          // First, let's clean up our array from empty objects.
-          var i, subclass, rebuilt_subclasses = [];
-          for (i = 0; i < superclass.$$subclasses.length; i++) {
-            subclass = superclass.$$subclasses[i];
-            if (subclass.deref() !== undefined) {
-              rebuilt_subclasses.push(subclass);
-            }
+        // First, let's clean up our array from empty objects.
+        var i, subclass, rebuilt_subclasses = [];
+        for (i = 0; i < superclass.$$subclasses.length; i++) {
+          subclass = superclass.$$subclasses[i];
+          if (subclass.deref() !== undefined) {
+            rebuilt_subclasses.push(subclass);
           }
-          // Now, let's add our class.
-          rebuilt_subclasses.push(new WeakRef(klass));
-          superclass.$$subclasses = rebuilt_subclasses;
         }
-        else {
-          superclass.$$subclasses.push(klass);
-        }
+        // Now, let's add our class.
+        rebuilt_subclasses.push(new WeakRef(klass));
+        superclass.$$subclasses = rebuilt_subclasses;
       }
 
       if (superclass.$$meta) {
@@ -398,7 +391,7 @@
 
   function $prepend_ary(first, second) {
     if (!second.$$is_array) second = $slice(second);
-    return [first].concat(second);
+    return [first, ...second];
   }
   Opal.prepend_ary = $prepend_ary;
 
@@ -473,7 +466,7 @@
 
     if (module) {
       var retval = module(Opal);
-      if (typeof Promise !== 'undefined' && retval instanceof Promise) {
+      if (retval instanceof Promise) {
         // A special case of require having an async top:
         // We will need to await it.
         return retval.then($return_val(true));
@@ -524,6 +517,27 @@
   // Queue
   // -----
 
+  // Uncaught exception handling, shared by the synchronous and the queued
+  // path: SystemExit runs the at_exit blocks, a listener takes over if there
+  // is one, otherwise the message goes to stderr and execution aborts.
+  function $uncaught_exception(error) {
+    if (error instanceof Opal.SystemExit) {
+      // exit() raises SystemExit; run the at_exit blocks and exit with
+      // its status (as the former Ruby CLI did).
+      return Opal.run_end_procs_and_exit(error);
+    }
+    if (Opal.uncaught_exception_listener) {
+      return Opal.uncaught_exception_listener(error);
+    }
+    if (Opal.respond_to && Opal.respond_to(error, '$full_message')) {
+      error = error.$full_message();
+    }
+    console.error(error.toString());
+    // Abort further execution
+    Opal.promise_unhandled_exception = true;
+    Opal.platform.exit(1);
+  }
+
   // Run a block of code, but if it returns a Promise, don't run the next
   // one, but queue it.
   Opal.queue = function(proc) {
@@ -532,53 +546,19 @@
       // Promise(V2).
       Opal.last_promise = Opal.last_promise.then(function() {
         if (!Opal.promise_unhandled_exception) return proc(Opal);
-      })['catch'](function(error) {
-        if (error instanceof Opal.SystemExit) {
-          // exit() raises SystemExit; run the at_exit blocks and exit with
-          // its status (as the former Ruby CLI did).
-          return Opal.run_end_procs_and_exit(error);
-        }
-        if (Opal.uncaught_exception_listener) {
-          // Same handling as a synchronous uncaught exception (at_exit
-          // blocks, full_message on stderr, exit 1).
-          return Opal.uncaught_exception_listener(error);
-        }
-        if (Opal.respond_to && Opal.respond_to(error, '$full_message')) {
-          error = error.$full_message();
-        }
-        console.error(error.toString());
-        // Abort further execution
-        Opal.promise_unhandled_exception = true;
-        Opal.platform.exit(1);
-      });
+      }).catch($uncaught_exception);
       return Opal.last_promise;
     }
     else {
       try {
         var ret = proc(Opal);
-        if (typeof Promise === 'function' && typeof ret === 'object' && ret instanceof Promise) {
+        if (ret instanceof Promise) {
           Opal.last_promise = ret;
         }
         return ret;
       }
       catch (error) {
-        if (error instanceof Opal.SystemExit) {
-          // exit() raises SystemExit; run the at_exit blocks and exit with
-          // its status (as the former Ruby CLI did).
-          return Opal.run_end_procs_and_exit(error);
-        }
-        if (Opal.uncaught_exception_listener) {
-          // Same handling as an asynchronous uncaught exception (at_exit
-          // blocks, full_message on stderr, exit 1).
-          return Opal.uncaught_exception_listener(error);
-        }
-        if (Opal.respond_to && Opal.respond_to(error, '$full_message')) {
-          error = error.$full_message(); // eslint-disable-line no-ex-assign
-        }
-        console.error(error.toString());
-        // Abort further execution
-        Opal.promise_unhandled_exception = true;
-        Opal.platform.exit(1);
+        return $uncaught_exception(error);
       }
     }
   }
