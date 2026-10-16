@@ -43,9 +43,7 @@ module ::Opal
 
       // If the superclass is not an Opal-generated class then we're bridging a native JS class
       if (
-        superclass != null && (!superclass.hasOwnProperty || (
-          superclass.hasOwnProperty && !superclass.hasOwnProperty('$$is_class')
-        ))
+        superclass != null && (!superclass.hasOwnProperty || !superclass.hasOwnProperty('$$is_class'))
       ) {
         if (superclass.constructor && superclass.constructor.name == "Function") {
           bridged = superclass;
@@ -221,11 +219,11 @@ module ::Opal
           ret = body(klass);
         }
         else {
-          ret = body(klass, [klass].concat(parent_nesting));
+          ret = body(klass, [klass, ...parent_nesting]);
         }
 
         if (Opal.trace_end) {
-          if (typeof Promise !== 'undefined' && ret && typeof ret.then === 'function') {
+          if (ret && typeof ret.then === 'function') {
             return ret.then(function(value){ Opal.invoke_tracers_for('end', klass); return value; });
           } else {
             Opal.invoke_tracers_for('end', klass);

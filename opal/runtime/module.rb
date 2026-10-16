@@ -51,11 +51,11 @@ module ::Opal
           ret = body(module);
         }
         else {
-          ret = body(module, [module].concat(parent_nesting));
+          ret = body(module, [module, ...parent_nesting]);
         }
 
         if (Opal.trace_end) {
-          if (typeof Promise !== 'undefined' && ret && typeof ret.then === 'function') {
+          if (ret && typeof ret.then === 'function') {
             return ret.then(function(value){ Opal.invoke_tracers_for('end', module); return value; });
           } else {
             Opal.invoke_tracers_for('end', module);
