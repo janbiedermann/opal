@@ -136,7 +136,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   Ruby code but is a syntax error inside `%x{}`, so rename the parameter; a
   `def m(n = nil)` default is `Opal.nil`, a JS object, so a body guard
   `n == null` never matches it (a `n = undefined` default does) - test
-  `n === undefined || n === nil` like Enumerable#min does; `Opal.is_a(x, K)`
+  `n === undefined || n === nil` like Enumerable#min does; an absent `&block`
+  parameter is `nil` as well, so a guard `block === undefined` is never true and
+  sends every call down the block path (Array#count measured 12x slower that
+  way); `Opal.is_a(x, K)`
   bypasses an overridden `is_a?` (ruby/spec's `SetSpecs::SetLike` catches
   that) while `x['$is_a?'](K)` does not; and `Opal.Enumerable['$include?']`
   is `Module#include?`, not the instance method - the faithful `super` is
@@ -152,6 +155,11 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   of magnitude between runs; only compare runs of the same case, and re-measure
   those methods in plain node with `acc += result.length` (keeping the result
   alive in a variable makes the allocation cost the whole measurement).
+- Replacing an operator call with the generic comparison helper is not a speedup:
+  `Comparable#between?` written with the file's `cmp_or_fail` instead of `self <
+  min` went 174 -> 320 ns, because `Integer#<` is a specialized JavaScript
+  comparison while `cmp_or_fail` sends `<=>` and normalizes the result. Follow
+  the dispatch, do not shortcut it.
 - `node --cpu-prof` on `tmp/performance/asciidoctor_test.js` plus aggregating
   self time per function is the fastest way to pick what to optimize; the
   callers of a hot function come from walking `parent` links of the profile
