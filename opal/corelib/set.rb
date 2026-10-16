@@ -1,4 +1,4 @@
-# helpers: freeze
+# helpers: freeze, deny_frozen_access, hash_put, send, truthy, yield1, hash_get, hash_delete, thrower, eqeq
 # backtick_javascript: true
 # use_strict: true
 
@@ -41,18 +41,45 @@ class ::Set
   end
 
   def ==(other)
-    if equal?(other)
-      true
-    elsif other.instance_of?(self.class)
-      @hash == other.instance_variable_get(:@hash)
-    elsif other.is_a?(::Set) && size == other.size
-      other.all? { |o| @hash.include?(o) }
-    else
-      false
-    end
+    %x{
+      if (self === other) {
+        return true;
+      }
+
+      // other.instance_of?(self.class), and its own @hash instead of
+      // instance_variable_get(:@hash)
+      if ($truthy(other['$instance_of?'](self.$$class))) {
+        return $eqeq(self.hash, other.hash);
+      }
+
+      // is_a? goes through the method: a Set-like object may fake it
+      if ($truthy(other['$is_a?'](#{::Set})) && self.hash.size === other.$size()) {
+        // other.all? { |o| @hash.include?(o) }, with Hash#include? inlined
+        let $return = $thrower('return');
+
+        try {
+          $send(other, 'each', [], function $$set_eq(o) {
+            if ($hash_get(self.hash, o) === undefined) {
+              $return.$throw(false, false);
+            }
+          });
+        } catch ($e) {
+          if ($e === $return) return $e.$v;
+          throw $e;
+        } finally {
+          $return.is_orphan = true;
+        }
+
+        return true;
+      }
+
+      return false;
+    }
   end
 
   def add(o)
+    # left in Ruby: `@hash[o] = true` already compiles to one Hash call, and
+    # the JS body with $deny_frozen_access + $hash_put measured slower (97 -> 105 ns)
     @hash[o] = true
     self
   end
@@ -62,6 +89,8 @@ class ::Set
 
     result = ::Hash.new { |h, k| h[k] = self.class.new }
 
+    # left in Ruby: the JS body measured the same (1552 -> 1555 ns), the cost is
+    # the default-proc Hash#[] and Set#add
     each { |item| result[yield(item)].add item }
 
     result
@@ -69,6 +98,7 @@ class ::Set
 
   def collect!(&block)
     return enum_for(:collect!) unless block_given?
+    # left in Ruby: the JS body measured the same (1839 -> 1882 ns)
     result = self.class.new
     each { |item| result << yield(item) }
     replace result
@@ -99,12 +129,23 @@ class ::Set
     end
   end
 
-  def delete_if
+  def delete_if(&block)
     return enum_for(:delete_if) unless block_given?
     # @hash.delete_if should be faster, but using it breaks the order
     # of enumeration in subclasses.
-    select { |o| yield o }.each { |o| @hash.delete(o) }
-    self
+    %x{
+      let doomed = [];
+
+      $send(self, 'each', [], function $$delete_if(o) {
+        if ($truthy($yield1(block, o))) {
+          doomed.push(o);
+        }
+      });
+
+      delete_keys(self, doomed);
+
+      return self;
+    }
   end
 
   def freeze
@@ -114,10 +155,21 @@ class ::Set
     `$freeze(self)`
   end
 
-  def keep_if
+  def keep_if(&block)
     return enum_for(:keep_if) unless block_given?
-    reject { |o| yield o }.each { |o| @hash.delete(o) }
-    self
+    %x{
+      let doomed = [];
+
+      $send(self, 'each', [], function $$keep_if(o) {
+        if (!$truthy($yield1(block, o))) {
+          doomed.push(o);
+        }
+      });
+
+      delete_keys(self, doomed);
+
+      return self;
+    }
   end
 
   def reject!(&block)
@@ -149,11 +201,17 @@ class ::Set
   end
 
   def empty?
-    @hash.empty?
+    `self.hash.size === 0`
   end
 
   def eql?(other)
-    @hash.eql?(other.instance_eval { @hash })
+    # `other.instance_eval { @hash }` reads the same ivar; instance_eval is the
+    # cost. A missing ivar reads as nil, as `instance_eval` would give.
+    %x{
+      let other_hash = other.hash === undefined ? nil : other.hash;
+
+      return self.hash['$eql?'](other_hash);
+    }
   end
 
   def clear
@@ -162,12 +220,21 @@ class ::Set
   end
 
   def include?(o)
-    @hash.include?(o)
+    # Hash#include? is `$hash_get(self, key) !== undefined`
+    `$hash_get(self.hash, o) !== undefined`
   end
 
-  def merge(enum)
-    enum.each { |item| add item }
-    self
+  # the parameter is named `enumerable`, not `enum`: `enum` is a JavaScript
+  # reserved word, so a %x{} body cannot reference it
+  def merge(enumerable)
+    %x{
+      $send(enumerable, 'each', [], function $$merge(item) {
+        $deny_frozen_access(self.hash);
+        $hash_put(self.hash, item, true);
+      });
+
+      return self;
+    }
   end
 
   def replace(enum)
@@ -178,12 +245,20 @@ class ::Set
   end
 
   def size
-    @hash.size
+    # Hash#size is an alias of #length, whose body is `self.size`
+    `self.hash.size`
   end
 
-  def subtract(enum)
-    enum.each { |item| delete item }
-    self
+  # `enumerable`, not `enum`: `enum` is a JavaScript reserved word
+  def subtract(enumerable)
+    %x{
+      $send(enumerable, 'each', [], function $$subtract(item) {
+        $deny_frozen_access(self.hash);
+        $hash_delete(self.hash, item);
+      });
+
+      return self;
+    }
   end
 
   def |(enum)
@@ -197,34 +272,60 @@ class ::Set
     function is_set(set) {
       #{`set`.is_a?(::Set) || ::Kernel.raise(::ArgumentError, 'value must be a set')}
     }
+
+    // the keys `delete_if` and `keep_if` decided to drop
+    function delete_keys(set, keys) {
+      for (let i = 0, length = keys.length; i < length; i++) {
+        $hash_delete(set.hash, keys[i]);
+      }
+    }
+
+    // every element of `from` is in the Set `into`; the thrower stops the
+    // walk at the first miss, like the `all?` these methods used to call
+    function all_included(from, into) {
+      let $return = $thrower('return');
+
+      try {
+        $send(from, 'each', [], function $$all_included(o) {
+          if (!$truthy(into['$include?'](o))) {
+            $return.$throw(false, false);
+          }
+        });
+      } catch ($e) {
+        if ($e === $return) return $e.$v;
+        throw $e;
+      } finally {
+        $return.is_orphan = true;
+      }
+
+      return true;
+    }
   }
 
   def superset?(set)
     `is_set(set)`
-    return false if size < set.size
-    set.all? { |o| include?(o) }
+    `self.hash.size < set.$size() ? false : all_included(set, self)`
   end
 
   def proper_superset?(set)
     `is_set(set)`
-    return false if size <= set.size
-    set.all? { |o| include?(o) }
+    `self.hash.size <= set.$size() ? false : all_included(set, self)`
   end
 
   def subset?(set)
     `is_set(set)`
-    return false if set.size < size
-    all? { |o| set.include?(o) }
+    `set.$size() < self.hash.size ? false : all_included(self, set)`
   end
 
   def proper_subset?(set)
     `is_set(set)`
-    return false if set.size <= size
-    all? { |o| set.include?(o) }
+    `set.$size() <= self.hash.size ? false : all_included(self, set)`
   end
 
   def intersect?(set)
     `is_set(set)`
+    # left in Ruby: both branches stop at the first hit, so the thrower a JS
+    # body needs costs more than Enumerable#any? saves (2919 -> 3313 ns)
     if size < set.size
       any? { |o| set.include?(o) }
     else
