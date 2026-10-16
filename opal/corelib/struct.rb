@@ -1,5 +1,5 @@
 # backtick_javascript: true
-# helpers: coerce_to_or_raise
+# helpers: coerce_to_or_raise, yield1
 
 require 'corelib/enumerable'
 
@@ -97,17 +97,25 @@ class ::Struct
         ::Kernel.raise ::ArgumentError, "unknown keywords: #{extra.join(', ')}"
       end
 
-      self.class.members.each do |name|
-        self[name] = kwargs[name]
-      end
+      %x{
+        const members = self['$class']()['$members']();
+
+        for (let i = 0, length = members.length; i < length; i++) {
+          self.$$data[members[i]] = kwargs['$[]'](members[i]);
+        }
+      }
     else
       if args.length > self.class.members.length
         ::Kernel.raise ::ArgumentError, 'struct size differs'
       end
 
-      self.class.members.each_with_index do |name, index|
-        self[name] = args[index]
-      end
+      %x{
+        const members = self['$class']()['$members']();
+
+        for (let i = 0, length = members.length; i < length; i++) {
+          self.$$data[members[i]] = args[i] === undefined ? nil : args[i];
+        }
+      }
     end
   end
 
@@ -136,10 +144,14 @@ class ::Struct
 
   def [](name)
     if ::Integer === name
-      ::Kernel.raise ::IndexError, "offset #{name} too small for struct(size:#{self.class.members.size})" if name < -self.class.members.size
-      ::Kernel.raise ::IndexError, "offset #{name} too large for struct(size:#{self.class.members.size})" if name >= self.class.members.size
+      # the members and their count are asked three times over otherwise
+      members = self.class.members
+      size = members.size
 
-      name = self.class.members[name]
+      ::Kernel.raise ::IndexError, "offset #{name} too small for struct(size:#{size})" if name < -size
+      ::Kernel.raise ::IndexError, "offset #{name} too large for struct(size:#{size})" if name >= size
+
+      name = members[name]
     elsif ::String === name
       %x{
         if(!self.$$data.hasOwnProperty(name)) {
@@ -155,13 +167,17 @@ class ::Struct
   end
 
   def []=(name, value)
-    if ::Integer === name
-      ::Kernel.raise ::IndexError, "offset #{name} too small for struct(size:#{self.class.members.size})" if name < -self.class.members.size
-      ::Kernel.raise ::IndexError, "offset #{name} too large for struct(size:#{self.class.members.size})" if name >= self.class.members.size
+    members = self.class.members
 
-      name = self.class.members[name]
+    if ::Integer === name
+      size = members.size
+
+      ::Kernel.raise ::IndexError, "offset #{name} too small for struct(size:#{size})" if name < -size
+      ::Kernel.raise ::IndexError, "offset #{name} too large for struct(size:#{size})" if name >= size
+
+      name = members[name]
     elsif ::String === name
-      ::Kernel.raise ::NameError.new("no member '#{name}' in struct", name) unless self.class.members.include?(name.to_sym)
+      ::Kernel.raise ::NameError.new("no member '#{name}' in struct", name) unless members.include?(name.to_sym)
     else
       ::Kernel.raise ::TypeError, "no implicit conversion of #{name.class} into Integer"
     end
@@ -242,18 +258,32 @@ class ::Struct
     }
   end
 
-  def each
+  def each(&block)
     return enum_for(:each) { size } unless block_given?
 
-    self.class.members.each { |name| yield self[name] }
-    self
+    %x{
+      const members = self['$class']()['$members']();
+
+      for (let i = 0, length = members.length; i < length; i++) {
+        $yield1(block, self.$$data[members[i]]);
+      }
+
+      return self;
+    }
   end
 
-  def each_pair
+  def each_pair(&block)
     return enum_for(:each_pair) { size } unless block_given?
 
-    self.class.members.each { |name| yield [name, self[name]] }
-    self
+    %x{
+      const members = self['$class']()['$members']();
+
+      for (let i = 0, length = members.length; i < length; i++) {
+        $yield1(block, [members[i], self.$$data[members[i]]]);
+      }
+
+      return self;
+    }
   end
 
   def length
@@ -261,10 +291,34 @@ class ::Struct
   end
 
   def to_a
-    self.class.members.map { |name| self[name] }
+    %x{
+      const members = self['$class']()['$members'](),
+            result = new Array(members.length);
+
+      for (let i = 0, length = members.length; i < length; i++) {
+        result[i] = self.$$data[members[i]];
+      }
+
+      return result;
+    }
   end
 
   `var inspect_stack = []`
+
+  %x{
+    // The "name=value" pieces of Struct#inspect: reading $$data directly
+    // avoids a [] call per member, which is most of that method's time.
+    function inspect_pairs(struct) {
+      const members = struct['$class']()['$members'](),
+            out = [];
+
+      for (let i = 0, length = members.length; i < length; i++) {
+        out.push(members[i] + '=' + Opal.$inspect(struct.$$data[members[i]]));
+      }
+
+      return out;
+    }
+  }
 
   def inspect
     result = '#<struct '
@@ -279,9 +333,7 @@ class ::Struct
         result += "#{self.class} "
       end
 
-      result += each_pair.map do |name, value|
-        "#{name}=#{Opal.inspect(value)}"
-      end.join ', '
+      result += `inspect_pairs(self)`.join ', '
 
       result += '>'
 
@@ -294,7 +346,17 @@ class ::Struct
   def to_h(*args, &block)
     return map(&block).to_h(*args) if block_given?
 
-    self.class.members.each_with_object({}) { |name, h| h[name] = self[name] }
+    %x{
+      const members = self['$class']()['$members'](),
+            hash = new Map();
+
+      for (let i = 0, length = members.length; i < length; i++) {
+        // member names are plain strings, so this is what $hash_put does for them
+        hash.set(members[i], self.$$data[members[i]]);
+      }
+
+      return hash;
+    }
   end
 
   def values_at(*args)
