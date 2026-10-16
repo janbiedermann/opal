@@ -144,6 +144,20 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   that) while `x['$is_a?'](K)` does not; and `Opal.Enumerable['$include?']`
   is `Module#include?`, not the instance method - the faithful `super` is
   `$send2(self, $find_super(self, 'mid', self['$mid'], false, true), 'mid', [args], nil)`.
+- More `%x{}` traps from the corelib pass: `# helpers: X` binds `var $X = Opal.X`
+  at file top, so it is undefined when the file itself defines that constant
+  (math.rb's `Math`, number.rb's `Integer`/`Float`) - use `#{::Math}`, a cached
+  constant fetch; a method named `float!` has jsid `$float!`, only reachable as
+  `obj['$float!'](...)` (`$Math.$float!(x)` is a JS syntax error); inside `#{}`
+  in a `%x{}` body the code is Ruby, so `#{pattern.$class()}` parses `$class` as
+  a global variable and the compile dies; and a single-line `%x{}` body must not
+  end with `;` - the compiler strips it and warns "Removed semicolon ending
+  x-string expression".
+- `PATTERN=<glob>` in `tasks/test.mjs` must match files: a directory pattern
+  (`PATTERN=spec/ruby/core/time`) dies with MissingRequire on the directory.
+  Use `PATTERN='spec/ruby/core/time/*_spec.rb'`; under PATTERN the
+  `Time#_dump`/`Time._load` marshal specs fail (they are excluded by the normal
+  selection) - pre-existing, not a regression.
 - Files reached only through an `autoload` (like `corelib/set.rb` and
   `corelib/struct.rb`) are in none of the `tasks/codesize.mjs` bundles; measure
   their size with `node exe/opal --no-cache -c` on a script that requires or
