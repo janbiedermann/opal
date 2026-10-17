@@ -107,6 +107,16 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   is 3-6x slower than `s.replaceAll('lit', x)`. `Object.prototype` is untouched,
   so object spread keeps its speed. Bisect by loading one corelib file at a time
   into the same process, and measure with the `tmp/corelib-perf/*-probe.rb` files.
+- Do not run a before/after comparison with `git stash push <file>`: when that
+  file already matches HEAD the push is a no-op, both runs then measure the same
+  code, and the following `git stash pop` applies an unrelated older stash entry
+  (it left mode changes and two unmerged paths here once). Swap the file instead:
+  `git checkout <base> -- <file>`, measure, `git checkout HEAD -- <file>`.
+- The per-method ns harness does not work under `-R chrome`/`-R firefox`: both
+  browsers clamp `performance.now()`, so a 250 ns call reports `0.0` and a 1 ms
+  quantum is 333 ns per call at 3,000 iterations. Time 20k-30k calls per sample
+  and take the minimum over samples (`tmp/corelib-perf/hash-loop.rb`,
+  `sort-loop.rb`, `INNER=` raises the resolution).
 - Other tasks: `node tasks/dist.mjs` (build corelib/stdlib),
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
