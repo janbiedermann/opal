@@ -155,8 +155,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `chromium`, `chromium-freeworld`, `chromium-browser`; `firefox`,
   `firefox-esr`), so on this system `-R chrome` uses `chromium-browser` and
   `-R firefox` the packaged Firefox. `GOOGLE_CHROME_BINARY` /
-  `MOZILLA_FIREFOX_BINARY` only point them at another binary. As root, Chrome
-  needs `CHROME_OPTS=--no-sandbox`. The Firefox runner drives Firefox directly
+  `MOZILLA_FIREFOX_BINARY` only point them at another binary. As root the
+  Chrome runner adds `--no-sandbox` itself and warns; setting
+  `CHROME_OPTS=--no-sandbox` stays supported and silences the warning. The
+  Firefox runner drives Firefox directly
   over WebDriver BiDi (Firefox >= 112; Firefox 129+ dropped CDP, BiDi is
   its only remote protocol), the Chrome runner stays on CDP. A stray
   Firefox left on the runner port (9333) keeps an active BiDi session and
