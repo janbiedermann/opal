@@ -63,6 +63,13 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   with `rubocop` and `rubocop-performance` (optional).
 
 ## Notes
+- `tmp/` is gitignored scratch space. Some of it is created by the tasks:
+  `tmp/performance` (tasks/performance.mjs clones the Asciidoctor checkouts
+  and writes asciidoctor_test.rb and asciidoctor_test.js there),
+  `tmp/codesize` (tasks/codesize.mjs) and `tmp/compiler_performance/corpus`
+  (tasks/compiler-performance.mjs, via `node benchmark/potch/gen_corpus.mjs
+  <dir>`). Anything else under `tmp/` is a leftover of past sessions: don't
+  depend on it, recreate what you need.
 - The JavaScript target is ES2024: current and previous Chrome (including
   Android 14), Firefox, Safari (including iOS 18 and macOS) and Node.js 22.
   IE11 and other ES5-era engines are not supported, so generated code and the
@@ -81,24 +88,23 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   review the diff.
 - `tasks/performance.mjs` builds Asciidoctor from pinned checkouts it clones into
   `tmp/performance`: `asciidoctor/asciidoctor@869e8236` and the *fork*
-  `janbiedermann/asciidoctor.js@3bdf345` (branch `opal2_compat`, its
-  `backtick_javascript` comments are what let the x-strings of that code compile
-  under Opal 2; the upstream repo works only once asciidoctor.js PR#1753 is
-  merged). `ASCIIDOCTOR_REPO_BASE` and `ASCIIDOCTOR_JS_REPO_BASE` override the
+  `janbiedermann/asciidoctor.js@3bdf345` (branch `opal2_compat`).
+  `ASCIIDOCTOR_REPO_BASE` and `ASCIIDOCTOR_JS_REPO_BASE` override the
   remotes; with the upstream source the bundle builds but fails at run time
   (`sh: syntax error near unexpected token '('`).
   This is not an authoritative performance benchmark: it measures one
   application with a limited footprint, and the text that application handles is
-  ASCII-only, so it never reaches a UTF-16 surrogate pair. Its purpose is to show
-  that a change does not regress within that limited footprint; it must not be
-  used to choose what to optimize, the per-method measurements do that.
+  ASCII-only, so it never reaches a UTF-16 surrogate pair code. Its purpose is to
+  show that a change does not regress within that limited footprint; it must not be
+  used to choose what to optimize, use per-method measurements instead to do that.
 - JS indexes UTF-16 units while Ruby indexes characters, so an
   `indexOf`/`lastIndexOf` fast path answers in characters only when no surrogate
   pair precedes the match, and a test that proves it costs a scan of the whole
   string. A fast path guarded that way is 10-40% slower for text outside the BMP,
   which is the text most of the world writes. `benchmark/string-performance.rb`
-  uses `あ` (a BMP character) as its Japanese and cannot see that cost; measure
-  string changes with an astral character too (`𠀀`, U+20000).
+  covers this with its fourth case, ASCII strings ending in `𠀀` (U+20000, a
+  surrogate pair in JS; the `あ` case alone cannot see that cost); keep that
+  case when measuring string changes.
 - Measure a JavaScript construct *inside* the Opal runtime, not in a clean V8:
   corelib extends `Array.prototype` and `String.prototype`, and V8 then drops the
   fast path of several builtins (the comment at `opal/corelib/array.rb:14-22`
@@ -107,7 +113,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `a.slice(0).sort(cmp)` is 3x slower than `a.toSorted(cmp)`; `s.replace(/lit/g, x)`
   is 3-6x slower than `s.replaceAll('lit', x)`. `Object.prototype` is untouched,
   so object spread keeps its speed. Bisect by loading one corelib file at a time
-  into the same process, and measure with the `tmp/corelib-perf/*-probe.rb` files.
+  into the same process, and measure with small probe scripts: a Ruby file that
+  requires the corelib files under test and times the construct, run with
+  `node exe/opal <probe.rb>` (write them under tmp/, they are throwaway).
 - Do not run a before/after comparison with `git stash push <file>`: when that
   file already matches HEAD the push is a no-op, both runs then measure the same
   code, and the following `git stash pop` applies an unrelated older stash entry
@@ -116,8 +124,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 - The per-method ns harness does not work under `-R chrome`/`-R firefox`: both
   browsers clamp `performance.now()`, so a 250 ns call reports `0.0` and a 1 ms
   quantum is 333 ns per call at 3,000 iterations. Time 20k-30k calls per sample
-  and take the minimum over samples (`tmp/corelib-perf/hash-loop.rb`,
-  `sort-loop.rb`, `INNER=` raises the resolution).
+  and take the minimum over samples: write a loop harness (a Ruby file that
+  calls the method in a nested loop, an `INNER` multiplier raises the
+  resolution) and run it with `node exe/opal <harness.rb>`.
 - Other tasks: `node tasks/dist.mjs` (build corelib/stdlib),
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
@@ -126,8 +135,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   tasks/compiler-performance.mjs` (compiler speed on the potch corpus,
   compared with master; results in tmp/compiler_performance), `node
   tasks/string-performance.mjs` (ns per call of every `String` method on
-  ASCII, Japanese and ASCII-with-a-Japanese-last-character strings of 1, 5, 25
-  and 125 characters; the benchmark is
+  ASCII, Japanese, ASCII-with-a-Japanese-last-character and
+  ASCII-with-a-surrogate-pair-last-character (`𠀀`, U+20000) strings of 1,
+  5, 25 and 125 characters; the benchmark is
   `benchmark/string-performance.rb`, `--methods=`/`--lengths=` limit the run),
   `node tasks/release.mjs` (changelog, release preparation).
 - `node tasks/ruby.mjs` (`npm run build-ruby`) builds the `ruby` command
@@ -167,7 +177,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   the total, +-3% on parse), and swap the file in with `git show HEAD:<file>`
   instead of timing two runs of the same tree.
 - A refactor of the toolchain has a stronger check than timing: the emitted JS
-  must be byte-identical. Compile `tmp/compiler_performance/corpus/*.rb` plus a
+  must be byte-identical. Compile `tmp/compiler_performance/corpus/*.rb` (the
+  corpus `node tasks/compiler-performance.mjs` writes, or generate one into any
+  directory with `node benchmark/potch/gen_corpus.mjs <dir>`) plus a
   few corelib files and hash the output before and after.
 - `lib/opal/potch/convert.mjs` is generated by `node
   tasks/potch/gen_convert.mjs --config=<prism>/config.yml`, and unlike
@@ -248,7 +260,8 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   min` went 174 -> 320 ns, because `Integer#<` is a specialized JavaScript
   comparison while `cmp_or_fail` sends `<=>` and normalizes the result. Follow
   the dispatch, do not shortcut it.
-- `node --cpu-prof` on `tmp/performance/asciidoctor_test.js` plus aggregating
+- `node --cpu-prof` on `tmp/performance/asciidoctor_test.js` (the bundle
+  `node tasks/performance.mjs` builds) plus aggregating
   self time per function is the fastest way to pick what to optimize; the
   callers of a hot function come from walking `parent` links of the profile
   nodes. Beware: `bin/opal` on `master` is still a Ruby script, so building a
