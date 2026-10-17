@@ -435,4 +435,22 @@ describe("the DCE post-processor directives", () => {
   test("are absent, not placeholders, when DCE will not read them", () => {
     assert.deepEqual(directivesOf({}), []);
   });
+
+  // A directive emits no code, so turning DCE on or off must not change the
+  // output. This is what catches a guard placed around compileDefault() rather
+  // than around the pushes: the call being compiled disappears with it.
+  test("compiles the same with DCE on and off", () => {
+    const samples = [
+      "class Foo\n  attr_accessor :bar\nend\n",
+      "class Foo\n  def bar; end\n  alias_method :baz, :bar\nend\n",
+      "Array === []\n",
+      "autoload :Foo, 'foo'\n",
+      "class Foo\n  def bar; end\n  undef bar\nend\n",
+      "module M\n  X = 1\nend\n",
+      "class C < Object\nend\n",
+    ];
+    for (const src of samples) {
+      assert.equal(compiled(src, { dce: ["method", "const", "*"] }), compiled(src, {}), src);
+    }
+  });
 });
