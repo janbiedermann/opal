@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// potch: parse Ruby source with Opal's built-in parser and print a JSON envelope.
-// See lib/opal/potch/cli.mjs for usage.
+// exe/potch: parse Ruby source with Opal's built-in parser, print a JSON envelope.
+// See lib/opal/parser/cli.mjs for usage.
 // (Node's on-disk cache of compiled modules, as in exe/opal)
 process.getBuiltinModule?.("node:module").enableCompileCache?.();
 
-import("../lib/opal/potch/cli.mjs");
+import("../lib/opal/parser/cli.mjs");

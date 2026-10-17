@@ -6,7 +6,7 @@
     "test-chrome": "node tasks/test.mjs -R chrome",
     "test-firefox": "node tasks/test.mjs -R firefox",
     "test-safari": "node tasks/test.mjs -R safari",
-    "test-potch": "node tasks/test.mjs potch",
+    "test-parser": "node tasks/test.mjs parser",
     "test-compiler": "node tasks/test.mjs compiler",
     "test-mspec": "node tasks/test.mjs mspec",
     "test-mspec-opal": "node tasks/test.mjs mspec_opal",
@@ -22,7 +22,7 @@
     "update-fixtures": "node tasks/compiler/update_fixtures.mjs",
     "build-ruby": "node tasks/ruby.mjs",
     "build-ruby-exe": "node tasks/ruby_exe.mjs",
-    "potch:assemble": "node tasks/potch/assemble.mjs"
+    "parser:assemble": "node tasks/parser/assemble.mjs"
   },
   "dependencies": {
     "benchmark": "^2.1.4",

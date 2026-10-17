@@ -25,7 +25,7 @@ function compilerKey() {
       else if (path.endsWith(".mjs")) hash.update(readFileSync(path));
     }
   };
-  for (const dir of ["lib/opal/compiler", "lib/opal/potch"]) walk(join(ROOT, dir));
+  for (const dir of ["lib/opal/compiler", "lib/opal/parser"]) walk(join(ROOT, dir));
   return hash.digest("base64url").slice(0, 32);
 }
 

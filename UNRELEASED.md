@@ -19,4 +19,7 @@
 
 ### Internal
 
+- Rename the `potch` parser to the parser: `lib/opal/parser`, `spec/lib/parser`,
+  `tasks/parser`, `benchmark/parser` and the `parser` test suite (`exe/potch`
+  keeps its name)
 - Bump the ECMA version from 3 to 12 for ESLint (#2537)

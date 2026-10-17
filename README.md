@@ -161,7 +161,7 @@ What code is supposed to run where?
 
 ### lib/
 
-The `lib/opal` directory holds **potch**, Opal's Ruby parser (a JavaScript
+The `lib/opal` directory holds the **parser**, Opal's Ruby parser (a JavaScript
 port of [Prism](https://github.com/ruby/prism)), and the **compiler**, which
 compiles Ruby into JavaScript, with the **builder** and the `opal` **CLI**
 (`exe/opal`). The compiler is also built ready for the browser into

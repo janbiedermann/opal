@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Lints Opal's JavaScript with ESLint (Ruby code style: see HACKING.md):
-//   * potch (and that lib/opal/potch/potch.mjs matches its parts)
+//   * the parser (and that lib/opal/parser/parser.mjs matches its parts)
 //   * the JS compiler, builder, CLI and the Node.js tasks
 //   * corelib and stdlib as built by tasks/dist.mjs (in tmp/lint); errors
 //     there are mapped back to the Ruby sources by
@@ -15,8 +15,8 @@ const eslint = (...args) => run(process.execPath, [ESLINT, ...args]);
 async function main() {
   process.chdir(ROOT);
   const steps = [
-    ["potch:assemble --check", () => run(process.execPath, ["tasks/potch/assemble.mjs", "--check"])],
-    ["potch", () => eslint("lib/opal/potch", "spec/lib/potch", "tasks/potch", "benchmark/potch", "exe/potch")],
+    ["parser:assemble --check", () => run(process.execPath, ["tasks/parser/assemble.mjs", "--check"])],
+    ["parser", () => eslint("lib/opal/parser", "spec/lib/parser", "tasks/parser", "benchmark/parser", "exe/potch")],
     ["compiler", () => eslint("lib/opal/compiler", "spec/lib/compiler", "tasks/compiler", ...glob("tasks/*.mjs"), "tasks/testing")],
     ["corelib and stdlib", async () => {
       rmSync("tmp/lint", { recursive: true, force: true });

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Tracks compiler speed (run by CI or manually): compiles the potch benchmark
+// Tracks compiler speed (run by CI or manually): compiles the parser's benchmark
 // corpus with the current checkout and with a previous ref (GIT_BASE_REF or
 // master, like tasks/codesize.mjs) and compares the time of the compiler.
 //
@@ -7,10 +7,10 @@
 //   node tasks/compiler-performance.mjs --current
 //   GIT_BASE_REF=branch node tasks/compiler-performance.mjs
 //
-// The corpus is the one of benchmark/potch/gen_corpus.mjs (the BASELINE.md
+// The corpus is the one of benchmark/parser/gen_corpus.mjs (the BASELINE.md
 // samples plus the synthetic stress files); it is generated once and shared
-// by both measurements. benchmark/potch/bench_compiler.mjs runs in-process and
-// reports the median of its warm runs per file, split into parse (potch),
+// by both measurements. benchmark/parser/bench_compiler.mjs runs in-process and
+// reports the median of its warm runs per file, split into parse (the parser),
 // transform (the AST passes) and codegen.
 //
 // The previous ref is not checked out: its own lib/ and opal/ are unpacked
@@ -23,14 +23,14 @@
 // lines are marked FAIL. Only the total time over all the files fails the
 // run; the per-file and per-stage lines are marked "slower" for information.
 import { execSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT } from "./testing/common.mjs";
 
 const PERF = join(ROOT, "tmp", "compiler_performance");
 const CORPUS = join(PERF, "corpus");
-const BENCH = join(ROOT, "benchmark", "potch", "bench_compiler.mjs");
-const GEN_CORPUS = join(ROOT, "benchmark", "potch", "gen_corpus.mjs");
+const BENCH = join(ROOT, "benchmark", "parser", "bench_compiler.mjs");
+const GEN_CORPUS = join(ROOT, "benchmark", "parser", "gen_corpus.mjs");
 
 const THRESHOLD = 5;
 const STAGES = ["parse", "transform", "codegen", "total"];
@@ -69,10 +69,16 @@ function measure(label, bench) {
 function previousBench(ref) {
   const dir = join(PERF, "previous");
   rmSync(dir, { recursive: true, force: true });
-  mkdirSync(join(dir, "benchmark", "potch"), { recursive: true });
+  mkdirSync(join(dir, "benchmark", "parser"), { recursive: true });
   sh(`git archive ${ref} lib opal | tar -x -C ${dir}`);
-  const bench = join(dir, "benchmark", "potch", "bench_compiler.mjs");
+  const bench = join(dir, "benchmark", "parser", "bench_compiler.mjs");
   copyFileSync(BENCH, bench);
+  // Refs from before the rename keep the parser in lib/opal/potch, where the
+  // current bench script's imports don't find it: point them at the old
+  // directory instead.
+  if (!existsSync(join(dir, "lib", "opal", "parser")) && existsSync(join(dir, "lib", "opal", "potch"))) {
+    writeFileSync(bench, readFileSync(bench, "utf8").replaceAll("lib/opal/parser/", "lib/opal/potch/"));
+  }
   return bench;
 }
 

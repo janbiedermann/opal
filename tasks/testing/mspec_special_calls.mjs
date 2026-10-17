@@ -3,7 +3,7 @@
 // specs listed in spec/filters/{bugs,unsupported}.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { parseWithMetadata } from "../../lib/opal/potch/index.mjs";
+import { parseWithMetadata } from "../../lib/opal/parser/index.mjs";
 
 const FILTERS_DIR = new URL("../../spec/filters/", import.meta.url).pathname;
 

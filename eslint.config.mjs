@@ -1,14 +1,14 @@
 import globals from "globals";
 import js from "@eslint/js";
 
-// ES modules of the potch parser. The parts
-// in lib/opal/potch/parts/ are import-less fragments assembled into potch.mjs,
-// so only potch's own style rules apply there.
-const potchFiles = [
-  "lib/opal/potch/**/*.mjs",
-  "spec/lib/potch/**/*.mjs",
-  "tasks/potch/**/*.mjs",
-  "benchmark/potch/**/*.mjs",
+// ES modules of the parser. The parts in lib/opal/parser/parts/ are
+// import-less fragments assembled into parser.mjs, so only the parser's own
+// style rules apply there.
+const parserFiles = [
+  "lib/opal/parser/**/*.mjs",
+  "spec/lib/parser/**/*.mjs",
+  "tasks/parser/**/*.mjs",
+  "benchmark/parser/**/*.mjs",
   "exe/potch",
 ];
 
@@ -64,8 +64,8 @@ export default [
   },
   // Builds that embed the JS compiler (opal-parser, opal-builder) contain
   // its ES2022 code; everything else Opal generates stays ES2021. The
-  // compiler and potch sources are linted with their own rules (lint:potch,
-  // lint:compiler), so the rules they don't use are off here.
+  // compiler and parser sources are linted with their own rules (the parser
+  // and compiler lint steps), so the rules they don't use are off here.
   {
     files: ["**/opal-parser.js", "**/opal-builder.js"],
     languageOptions: { ecmaVersion: 2024 },
@@ -78,7 +78,7 @@ export default [
     },
   },
   {
-    files: potchFiles,
+    files: parserFiles,
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: "module",

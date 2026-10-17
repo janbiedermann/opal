@@ -18,9 +18,9 @@ The compiler can be broken down into 3 separate stages:
 
 ### Parser
 
-The [opal parser][parser], potch, is a JavaScript port of
+The [opal parser][parser] is a JavaScript port of
 [Prism](https://github.com/ruby/prism), the parser of CRuby. It returns
-Prism's syntax tree as plain objects (see [potch](potch.md));
+Prism's syntax tree as plain objects (see [the parser](parser.md));
 `opal --sexp -e '...'` prints it.
 
 ### Transforms
@@ -40,7 +40,7 @@ code as well as a reference back to the original node which is useful for
 generating source maps afterwards.
 
 
-[parser]: https://github.com/opal/opal/tree/master/lib/opal/potch
+[parser]: https://github.com/opal/opal/tree/master/lib/opal/parser
 [transforms]: https://github.com/opal/opal/tree/master/lib/opal/compiler/transforms
 [compiler]: https://github.com/opal/opal/tree/master/lib/opal/compiler/compiler.mjs
 [fragments]: https://github.com/opal/opal/tree/master/lib/opal/compiler/fragment.mjs
