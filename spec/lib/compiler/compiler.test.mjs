@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { basename, join, dirname } from "node:path";
 import { Compiler, OpalSyntaxError } from "../../../lib/opal/compiler/index.mjs";
+import { Directive } from "../../../lib/opal/compiler/fragment.mjs";
 
 const HERE = fileURLToPath(import.meta.url);
 
@@ -421,5 +422,17 @@ describe("require resolution", () => {
 
   test("ignores a dynamic require with severity ignore (the default)", () => {
     assert.deepEqual(compile("require self"), { requires: [], warnings: [] });
+  });
+});
+
+describe("the DCE post-processor directives", () => {
+  const directivesOf = (options) => compilerFor("class Foo\n  def bar; 1; end\nend\n", options).fragments.filter((f) => f instanceof Directive);
+
+  test("are emitted for a compile DCE will read", () => {
+    assert.ok(directivesOf({ dce: ["method"] }).some((d) => d.name === "dce_def_begin"));
+  });
+
+  test("are absent, not placeholders, when DCE will not read them", () => {
+    assert.deepEqual(directivesOf({}), []);
   });
 });

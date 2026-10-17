@@ -14,7 +14,7 @@ import { JsProcessor, RubyProcessor } from "../../../lib/opal/compiler/builder/p
 import { PathReader } from "../../../lib/opal/compiler/builder/path_reader.mjs";
 import { UnknownOpalfileDirective, evaluateOpalfile } from "../../../lib/opal/compiler/builder/project.mjs";
 import { link, LinkError } from "../../../lib/opal/compiler/builder/esm_linker.mjs";
-import { Fragment } from "../../../lib/opal/compiler/fragment.mjs";
+import { Fragment, Directive } from "../../../lib/opal/compiler/fragment.mjs";
 import { defaultPaths, OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
 
@@ -439,6 +439,25 @@ describe("post-processors", () => {
 
 describe("DCE", () => {
   const build = (code, dce) => newBuilder({ dce }).buildStr(code, "input.rb").toString();
+
+  test("passes dce to the compiler, which then emits the directives", () => {
+    const namedDirectives = (dce) => {
+      let found = 0;
+      // cache_fragments is what keeps the compiler on the processed file, so
+      // it is forced on both ways to keep dce the only variable.
+      const builder = newBuilder({ dce, compilerOptions: { cache_fragments: true }, postProcessors: [(processed) => {
+        for (const file of processed) {
+          if (!file.compiler) continue;
+          for (const frag of file.compiler.fragments) if (frag instanceof Directive) found++;
+        }
+        return processed;
+      }] });
+      builder.buildStr("class Foo\n  def bar; 1; end\nend\n", "input.rb").toString();
+      return found;
+    };
+    assert.equal(namedDirectives(false), 0);
+    assert.ok(namedDirectives(["method"]) > 0);
+  });
 
   test("strips methods that are never referenced", () => {
     const output = build("class Foo\n  def used; 1; end\n  def unused; 2; end\nend\n\nFoo.new.used\n", ["method"]);
