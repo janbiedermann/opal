@@ -223,6 +223,11 @@ encodings = [
   ['ascii', ASCII_WORDS, nil],
   ['japanese', JAPANESE_WORDS, nil],
   ['ascii with a japanese last character', ASCII_WORDS, 'あ'],
+  # 𠀀 (U+20000) is a surrogate pair in JavaScript, where indexes count
+  # UTF-16 units: the worst case for the methods that answer through
+  # indexOf/lastIndexOf and only pay for characters when a surrogate pair
+  # precedes the match.
+  ['ascii with a surrogate-pair last character', ASCII_WORDS, '𠀀'],
 ]
 
 names = methods || CASES.keys.sort
