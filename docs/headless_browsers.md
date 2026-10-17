@@ -56,7 +56,7 @@ You can change final exit code by using `Kernel#exit`, but make sure to require 
 1. When you call `console.log(one, two, three)` from your code headless chrome prints only the first passed object.
    The reason behind it is the format of the message that chrome sends to the runner.
    Opal intentionally uses a simplified method from Chrome API (`Console.messageAdded`) to catch `console.log` invocations.
-   (Check `lib/opal/cli_runners/chrome.js` do get more information)
+   (Check `lib/opal/compiler/cli/runners/browsers.mjs` to get more information)
 
 ## Internals
 
