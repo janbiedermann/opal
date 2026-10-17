@@ -137,14 +137,25 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   given script in its own runtime. It supports -e -c -I -r -w -W -v -d -n -p
   -0 -E - `--` -h --version; scripts' runtime requires are resolved through
   `Opal.platform.load_file` against $LOAD_PATH, the stdlib directory and the
-  cwd. Traps found building it: a file using `%x{}` needs the
+  cwd. It caches compiled JS at runtime (like the builder's FileCache, but
+  keyed by source+options and OPAL_COMPILER_KEY, a digest of the compiler
+  sources baked into the bundle by tasks/ruby/bundle.mjs; dir
+  ~/.cache/opal-ruby or OPAL_CACHE_DIR/opal-ruby, OPAL_CACHE_DISABLE turns
+  it off; the asciidoctor run went 1.5s -> 0.9s). The builder's own
+  ~/.cache/opal-js entries can't be shared: its key embeds the options
+  object and the compiler files' mtimes, which don't exist in the bundle.
+  Traps found building it: a file using `%x{}` needs the
   `# backtick_javascript: true` magic comment or x-strings compile to shell
   calls; `builder.build(path, { load: true })` is what puts a library in the
   bundle's boot index before the program (buildRequire alone doesn't);
   `Opal.normalize` drops the leading "/" of absolute require paths, which
   require_relative produces for absolute scripts; -n/-p wrap the source in
   an ARGF loop (line numbers shift by one) and Opal lacks CRuby's Kernel
-  `$_` helpers and mutable String methods (`gsub!`).
+  `$_` helpers and mutable String methods (`gsub!`); and Opal strings can be
+  boxed String objects (corelib's `$str(s, enc)`): JS `eval(x)` returns a
+  non-primitive argument *without evaluating it* (silent no-op) and node's
+  fs/crypto reject them, so wrap interpolated strings passed to those in
+  `String(...)`.
   `node tasks/ruby_exe.mjs` (`npm run build-ruby-exe`) builds exe/ruby.exe,
   a single-file executable (Node SEA, `--compile-to-exe node`): it re-runs
   itself under the nvm Node.js 26 because the system Node.js lacks the SEA

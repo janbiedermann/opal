@@ -172,9 +172,71 @@ module RubyCommand
     end
 
     def compile_feature(path, file)
-      source = File.read(file)
-      js = Opal::Compiler.new(source, file: path, requirable: true).compile
+      js = cached_compile(File.read(file), { file: path, requirable: true })
       `eval(js)`
+    end
+
+    # The compiled-JS cache, the runtime twin of the builder's FileCache
+    # (lib/opal/compiler/builder/cache.mjs): entries are keyed by the
+    # source, the compile options and the compiler baked into this
+    # executable (OPAL_COMPILER_KEY, set at build time by
+    # tasks/ruby/bundle.mjs, since the compiler's files aren't on disk
+    # here). OPAL_CACHE_DISABLE turns it off, OPAL_CACHE_DIR moves it.
+    # The builder's own entries can't be shared: its key embeds the
+    # options object and its files are named by a digest of the compiler
+    # sources' mtimes, which don't exist inside this bundle.
+    def cached_compile(source, options)
+      return Opal::Compiler.new(source, options).compile if ENV['OPAL_CACHE_DISABLE']
+      entry = cache_entry(source, options)
+      begin
+        # String(): File.read returns a boxed String object, and JS eval
+        # returns non-primitive arguments without evaluating them
+        cached = `String(#{File.read(entry)})`
+        return cached unless cached.empty?
+      rescue ::StandardError
+        # no entry for this source yet
+      end
+      js = Opal::Compiler.new(source, options).compile
+      begin
+        # String(): Opal strings carry an encoding and can be boxed String
+        # objects, which node's fs and crypto reject
+        `require("fs").mkdirSync(String(#{File.dirname(entry)}), { recursive: true })`
+        tmp = "#{entry}.#{`process.pid`}.tmp"
+        File.write(tmp, js)
+        File.rename(tmp, entry)
+        evict_cache(File.dirname(entry))
+      rescue ::StandardError
+        # a read-only or vanished cache dir: run without caching
+      end
+      js
+    end
+
+    def cache_entry(source, options)
+      dir = ENV['OPAL_CACHE_DIR'] ? File.join(ENV['OPAL_CACHE_DIR'], 'opal-ruby') : File.join(ENV['HOME'] || '', '.cache', 'opal-ruby')
+      kind = options[:requirable] ? 'requirable' : 'program'
+      key = `require("crypto").createHash("sha256").update(String(#{[source, options[:file].to_s, kind, compiler_key].join("\0")})).digest("base64url").slice(0, 32)`
+      File.join(dir, "#{key}.js")
+    end
+
+    def compiler_key
+      defined?(OPAL_COMPILER_KEY) ? OPAL_COMPILER_KEY : RUBY_ENGINE_VERSION
+    end
+
+    MAX_CACHE_BYTES = 32 * 1024 * 1024
+
+    # Keeps the cache under MAX_CACHE_BYTES, dropping the oldest entries.
+    def evict_cache(dir)
+      entries = Dir.glob(File.join(dir, '*.js')).map { |f| [File.mtime(f).to_f, File.size(f), f] }
+      total = entries.sum { |(_, size, _)| size }
+      return if total <= MAX_CACHE_BYTES
+      entries.sort!
+      entries.each do |(_, size, file)|
+        break if total <= MAX_CACHE_BYTES
+        File.delete(file)
+        total -= size
+      end
+    rescue ::StandardError
+      # racing writers: eviction is best effort
     end
 
     def check_syntax(source, file)
@@ -193,7 +255,7 @@ module RubyCommand
     def run_script(source, file)
       source = wrap_loop(source) if @loop_mode
       begin
-        js = Opal::Compiler.new(source, file: file).compile
+        js = cached_compile(source, { file: file })
       rescue Opal::SyntaxError => e
         $stderr.puts "#{file}: #{e.message}"
         exit 1

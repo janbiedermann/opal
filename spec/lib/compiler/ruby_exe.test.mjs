@@ -2,7 +2,7 @@
 // bundle once, then run scripts through it the way CRuby's ruby would.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -10,6 +10,8 @@ import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
 const RUBY = join(OPAL_ROOT, "exe", "ruby");
 const DIR = mkdtempSync(join(tmpdir(), "opal-ruby-exe-"));
+// keep the runs out of the developer's own ~/.cache/opal-ruby
+const CACHE = join(DIR, "cache");
 
 // Writes SCRIPT in the temporary directory, returns its path.
 function script(name, source) {
@@ -18,8 +20,19 @@ function script(name, source) {
 }
 
 function ruby(...args) {
-  const run = spawnSync(process.execPath, [RUBY, ...args], { encoding: "utf8", cwd: DIR });
+  return rubyEnv({}, ...args);
+}
+
+function rubyEnv(env, ...args) {
+  const run = spawnSync(process.execPath, [RUBY, ...args], {
+    encoding: "utf8", cwd: DIR, env: { ...process.env, OPAL_CACHE_DIR: CACHE, ...env },
+  });
   return { out: run.stdout, err: run.stderr, status: run.status };
+}
+
+function cacheEntries() {
+  const dir = join(CACHE, "opal-ruby");
+  return existsSync(dir) ? readdirSync(dir) : [];
 }
 
 describe("the ruby command", () => {
@@ -111,7 +124,7 @@ describe("the ruby command", () => {
   });
 
   test("reads the script from stdin when given -", () => {
-    const run = spawnSync(process.execPath, [RUBY, "-"], { encoding: "utf8", input: "puts :stdin\n" });
+    const run = spawnSync(process.execPath, [RUBY, "-"], { encoding: "utf8", input: "puts :stdin\n", env: { ...process.env, OPAL_CACHE_DIR: CACHE } });
     assert.equal(run.stdout, "stdin\n");
     assert.equal(run.status, 0);
   });
@@ -127,5 +140,32 @@ describe("the ruby command", () => {
     assert.equal(ruby("-W0", "-e", "puts $VERBOSE.inspect").out, "nil\n");
     assert.equal(ruby("-e", "puts $VERBOSE.inspect").out, "false\n");
     assert.match(ruby("-v", "-e", "nil").out, /^opal \d/);
+  });
+
+  describe("the compile cache", () => {
+    test("caches the compiled script and its requires", () => {
+      writeFileSync(join(DIR, "cached_lib.rb"), "CACHED = 'first'\n");
+      const file = script("use_cached.rb", "require 'cached_lib'\nputs CACHED\n");
+      assert.equal(ruby(file).out, "first\n");
+      const entries = cacheEntries();
+      assert.ok(entries.length >= 2, "the script and the required library are cached");
+      // the second run reuses the entries: same output, nothing rewritten
+      assert.equal(ruby(file).out, "first\n");
+      assert.deepEqual(cacheEntries().sort(), entries.sort());
+    });
+
+    test("entries are keyed by content: an edited file recompiles", () => {
+      writeFileSync(join(DIR, "cached_lib.rb"), "CACHED = 'second'\n");
+      const file = script("use_cached.rb", "require 'cached_lib'\nputs CACHED\n");
+      assert.equal(ruby(file).out, "second\n");
+    });
+
+    test("OPAL_CACHE_DISABLE skips reading and writing entries", () => {
+      const file = script("nocache.rb", "require 'cached_lib'\nputs CACHED\n");
+      const before = cacheEntries().length;
+      const r = rubyEnv({ OPAL_CACHE_DISABLE: "1" }, file);
+      assert.equal(r.out, "second\n");
+      assert.equal(cacheEntries().length, before);
+    });
   });
 });

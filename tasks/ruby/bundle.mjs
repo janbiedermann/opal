@@ -1,12 +1,33 @@
 // The JS bundle of the `ruby` command, shared by tasks/ruby.mjs (exe/ruby)
 // and tasks/ruby_exe.mjs (exe/ruby.exe): the full corelib (opal), the
 // parser and compiler (opal-parser), the OPAL_HOME constant (the load path
-// of the stdlib sources) and lib/opal/exe/ruby.rb, minified with terser.
-import { readFileSync } from "node:fs";
+// of the stdlib sources), the OPAL_COMPILER_KEY constant (the identity of
+// the compiler baked into the bundle, which keys its runtime compile cache)
+// and lib/opal/exe/ruby.rb, minified with terser.
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Builder } from "../../lib/opal/compiler/builder/builder.mjs";
 import { minifyJs } from "../../lib/opal/compiler/cli/minify.mjs";
 import { ROOT } from "../testing/common.mjs";
+
+// The compiler sources the bundle embeds, digested by content: unlike the
+// builder's runtimeKey (sizes and mtimes, see builder/cache.mjs) this
+// survives checkouts that don't change the compiler.
+function compilerKey() {
+  const hash = createHash("sha256");
+  const walk = (dir) => {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (path.endsWith(".mjs")) hash.update(readFileSync(path));
+    }
+  };
+  for (const dir of ["lib/opal/compiler", "lib/opal/potch"]) walk(join(ROOT, dir));
+  return hash.digest("base64url").slice(0, 32);
+}
 
 export async function buildRubyBundle() {
   // dynamic_require_severity: the script's `require lib` for -r is meant to
@@ -17,6 +38,7 @@ export async function buildRubyBundle() {
   builder.build("opal", { requirable: true, load: true });
   builder.build("opal-parser", { requirable: true, load: true });
   builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
+  builder.buildStr(`OPAL_COMPILER_KEY = ${JSON.stringify(compilerKey())}\n`, "(opal-compiler-key)", { no_export: true });
   builder.buildStr(readFileSync(join(ROOT, "lib", "opal", "exe", "ruby.rb"), "utf8"), "lib/opal/exe/ruby.rb");
   builder.buildStr("::Kernel.exit", "(exit)", { no_export: true });
 
