@@ -215,6 +215,39 @@ describe("CLI", () => {
     }
   });
 
+  test("--minify and --mangle compress the compiled javascript", async () => {
+    const evals = ["def greet(name)", "  puts \"hi #{name}\"", "end", "greet 'you'"];
+    const plain = await compile({ evals });
+    const min = await compile({ evals, minify: true, mangle: true });
+    assert.ok(min.output.includes(".$puts"), "the Opal method calls survive mangling");
+    assert.ok(min.output.length < plain.output.length / 2, "terser compressed the code");
+    assert.ok(min.output.split("\n").length < plain.output.split("\n").length);
+  });
+
+  test("the minified bundle runs", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-min-"));
+    try {
+      const out = join(dir, "out.js");
+      await outputOf({ runner: "compiler", evals: ["puts 42"], minify: true, mangle: true, output: out });
+      const run = spawnSync(process.execPath, [out], { encoding: "utf8" });
+      assert.equal(run.stdout, "42\n");
+      assert.equal(run.status, 0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("--minify with --directory fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-dir-min-"));
+    try {
+      const { status, errors } = await outputOf({ runner: "compiler", evals: ["puts 1"], directory: true, output: dir, minify: true, skip_opal_require: true });
+      assert.equal(status, 64);
+      assert.match(errors, /--minify and --mangle don't apply/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("builds a directory", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opal-dir-"));
     try {
@@ -325,6 +358,14 @@ describe("options", () => {
     assert.equal(options.runner, "node");
     assert.equal(options.runner_options.no_source_map, true);
     assert.equal(options.missing_require_severity, "warning");
+  });
+
+  test("parses --minify and --mangle, which --compile-to-exe enables", () => {
+    assert.equal(parse(["--minify", "--mangle", "x.rb"]).options.minify, true);
+    assert.equal(parse(["--minify", "--mangle", "x.rb"]).options.mangle, true);
+    const { options } = parse(["--compile-to-exe", "node", "x.rb"]);
+    assert.equal(options.minify, true);
+    assert.equal(options.mangle, true);
   });
 
   test("parses --dce with the default and a list", () => {

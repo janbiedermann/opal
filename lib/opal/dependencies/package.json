@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "chrome-remote-interface": "^0.33.3"
+    "chrome-remote-interface": "^0.33.3",
+    "terser": "^5.51.2"
   }
 }

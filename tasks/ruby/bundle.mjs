@@ -4,9 +4,8 @@
 // of the stdlib sources) and lib/opal/exe/ruby.rb, minified with terser.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { Builder } from "../../lib/opal/compiler/builder/builder.mjs";
-import { OPAL_ROOT } from "../../lib/opal/compiler/paths.mjs";
+import { minifyJs } from "../../lib/opal/compiler/cli/minify.mjs";
 import { ROOT } from "../testing/common.mjs";
 
 export async function buildRubyBundle() {
@@ -21,11 +20,6 @@ export async function buildRubyBundle() {
   builder.buildStr(readFileSync(join(ROOT, "lib", "opal", "exe", "ruby.rb"), "utf8"), "lib/opal/exe/ruby.rb");
   builder.buildStr("::Kernel.exit", "(exit)", { no_export: true });
 
-  // terser from node_modules, as tasks/dist.mjs does: the bundle's own code
-  // is compressed and mangled; the scripts compiled at runtime are eval'd
-  // strings, untouched by this pass.
-  const { minify } = await import(pathToFileURL(join(OPAL_ROOT, "node_modules", "terser", "main.js")).href);
-  const minified = await minify(`${builder}`, { compress: true, mangle: true });
-  if (minified.error) throw minified.error;
-  return minified.code;
+  // the same terser the CLI's --minify/--mangle use
+  return minifyJs(`${builder}`, { minify: true, mangle: true });
 }

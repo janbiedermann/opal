@@ -19,8 +19,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
     `transforms/`), the builder (`builder/`) and the CLI with its runners
     (`cli/runners/`: `nodejs.mjs`, `browsers.mjs` for Chrome and Firefox,
     `cdp_interface.mjs`, `bidi_interface.mjs`, ...). `exe/opal` runs the CLI.
-  - `lib/opal/cli_runners/` only holds support files (`node_modules` with
-    `chrome-remote-interface`, the source-map shims), not the runners.
+  - `lib/opal/dependencies/` only holds support files (`node_modules` with
+    `chrome-remote-interface` and `terser`, the source-map shims), not the
+    runners.
 - `opal/` provides the runtime and Ruby core library. Its layout is:
   - `corelib/` contains Ruby's built-ins implemented in Ruby.
   - `runtime/` holds JS helpers required at execution time.
