@@ -129,6 +129,25 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   and 125 characters; the benchmark is
   `benchmark/string-performance.rb`, `--methods=`/`--lengths=` limit the run),
   `node tasks/release.mjs` (changelog, release preparation).
+- `node tasks/ruby.mjs` (`npm run build-ruby`) builds the `ruby` command
+  (lib/opal/exe/ruby.rb) into exe/ruby (terser-minified, reproducible): a
+  standalone Node program bundling opal,
+  opal-parser and an OPAL_HOME constant, which loads, compiles and runs the
+  given script in its own runtime. It supports -e -c -I -r -w -W -v -d -n -p
+  -0 -E - `--` -h --version; scripts' runtime requires are resolved through
+  `Opal.platform.load_file` against $LOAD_PATH, the stdlib directory and the
+  cwd. Traps found building it: a file using `%x{}` needs the
+  `# backtick_javascript: true` magic comment or x-strings compile to shell
+  calls; `builder.build(path, { load: true })` is what puts a library in the
+  bundle's boot index before the program (buildRequire alone doesn't);
+  `Opal.normalize` drops the leading "/" of absolute require paths, which
+  require_relative produces for absolute scripts; -n/-p wrap the source in
+  an ARGF loop (line numbers shift by one) and Opal lacks CRuby's Kernel
+  `$_` helpers and mutable String methods (`gsub!`).
+  `node tasks/ruby_exe.mjs` (`npm run build-ruby-exe`) builds exe/ruby.exe,
+  a single-file executable (Node SEA, `--compile-to-exe node`): it re-runs
+  itself under the nvm Node.js 26 because the system Node.js lacks the SEA
+  fuse, and it embeds a copy of that Node.js (~150MB, too big to commit).
 - `tasks/compiler-performance.mjs` is noisy: run it with `GIT_BASE_REF` set to
   the current HEAD (a ref compared against itself) and it still reports
   +-3.4% on the total and up to 330% on one stage. For a before/after, compile
