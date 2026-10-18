@@ -15,7 +15,17 @@
 #   in-process locks are gone (see GEMS.md, decision D13). Cross-process
 #   locking, which separate gem commands do need, is in Gem.open_file_with_lock.
 
+# The constants the ported files read while they are being defined, so they
+# come before the requires.
+module Gem
+  # The version of the RubyGems behaviour implemented here, so a gemspec or a
+  # message can report one; the `.opal` suffix says which implementation ran.
+  VERSION = "4.1.0.opal"
+end
+
 require_relative "rubygems/exceptions"
+require_relative "rubygems/win_platform"
+require_relative "rubygems/user_interaction"
 require_relative "rubygems/defaults"
 require_relative "rubygems/path_support"
 require_relative "rubygems/config_file"
@@ -24,14 +34,19 @@ require_relative "rubygems/version"
 require_relative "rubygems/requirement"
 require_relative "rubygems/dependency"
 require_relative "rubygems/name_tuple"
+require_relative "rubygems/content_address"
 require_relative "rubygems/yaml_serializer"
 require_relative "rubygems/safe_yaml"
+require_relative "rubygems/text"
+require_relative "rubygems/basic_specification"
+require_relative "rubygems/stub_specification"
+require_relative "rubygems/specification_record"
+require_relative "rubygems/specification"
+require_relative "rubygems/specification_policy"
+require_relative "rubygems/security"
+require_relative "rubygems/package"
 
 module Gem
-  # The version of the RubyGems behaviour implemented here, so a gemspec or a
-  # message can report one; the `.opal` suffix says which implementation ran.
-  VERSION = "4.1.0.opal"
-
   ##
   # The default remote source URI.
 
@@ -167,5 +182,141 @@ module Gem
 
   def self.refresh
     Specification.reset
+  end
+
+  ##
+  # The hooks a gem may wrap around Specification.reset, as upstream does.
+
+  def self.pre_reset_hooks
+    @pre_reset_hooks ||= []
+  end
+
+  def self.post_reset_hooks
+    @post_reset_hooks ||= []
+  end
+
+  ##
+  # Opal has no default gems installed next to the runtime.
+
+  def self.register_default_spec(spec)
+    loaded_specs[spec.name] ||= spec
+  end
+
+  ##
+  # The suffixes a requirable file may have. There is no compiled extension
+  # here, so it is Ruby plus the JavaScript files the loader understands.
+
+  def self.suffixes
+    @suffixes ||= ["", ".rb", ".js"].uniq
+  end
+
+  def self.dynamic_library_suffixes
+    @dynamic_library_suffixes ||= []
+  end
+
+  def self.suffix_pattern
+    @suffix_pattern ||= Regexp.union suffixes
+  end
+
+  def self.plugin_suffix_pattern
+    @plugin_suffix_pattern ||= "_plugin#{suffix_pattern}"
+  end
+
+  ##
+  # Where a file was called from, for the warnings a gemspec gets.
+
+  def self.location_of_caller(depth = 1)
+    caller[depth] =~ /(.*?):(\d+).*?$/i
+    file = Regexp.last_match(1)
+    lineno = Regexp.last_match(2).to_i
+
+    [file, lineno]
+  end
+
+  ##
+  # Reproducible builds: the date a gem should claim, from SOURCE_DATE_EPOCH,
+  # and the epoch RubyGems falls back to.
+
+  DEFAULT_SOURCE_DATE_EPOCH = 946_713_600 # 2000-01-01 00:00:00 +0000
+
+  def self.source_date_epoch_string
+    specified_epoch = ENV["SOURCE_DATE_EPOCH"]
+
+    # If it's empty or just whitespace, treat it like it wasn't set at all.
+    specified_epoch = nil if !specified_epoch.nil? && specified_epoch.strip.empty?
+
+    epoch = specified_epoch || DEFAULT_SOURCE_DATE_EPOCH.to_s
+
+    epoch.strip
+  end
+
+  def self.source_date_epoch
+    require "time"
+    Time.at(source_date_epoch_string.to_i)
+  end
+
+  ##
+  # A requirement read from GEM_REQUIREMENT_NAME, which lets a deployment
+  # pin a gem without touching the Gemfile.
+
+  def self.env_requirement(gem_name)
+    @env_requirements_by_name ||= {}
+    @env_requirements_by_name[gem_name] ||= begin
+      req = ENV["GEM_REQUIREMENT_#{gem_name.upcase}"] || ">= 0"
+      Gem::Requirement.create req
+    end
+  end
+
+  ##
+  # The ABI a gem's binary extensions would need: there are none, so the
+  # version of the language is the only thing to say.
+
+  def self.ruby_abi
+    ruby_version.segments.first(2).join(".")
+  end
+
+  def self.ruby_api_version
+    ruby_version.segments.first(2).join(".")
+  end
+
+  def self.extension_api_version # :nodoc:
+    ruby_api_version
+  end
+
+  ##
+  # Opens a file the way the ported code asks, without the lock: two gem
+  # commands running at once are kept apart by Gem.open_file_with_lock.
+
+  def self.open_file(path, flags, &block)
+    File.open path, flags, &block
+  end
+
+  ##
+  # The YAML reader the ported code uses. It is loaded with rubygems itself,
+  # so this only answers the question upstream asks it.
+
+  def self.load_yaml
+    true
+  end
+
+  ##
+  # The paths of an activated gem go after -I and the load path of the run,
+  # which is where upstream puts them.
+
+  def self.add_to_load_path(*paths)
+    index = load_path_insert_index
+    if index
+      $LOAD_PATH.insert index, *paths
+    else
+      $LOAD_PATH.concat paths
+    end
+    paths
+  end
+
+  ##
+  # The spec a name resolves to among the loaded ones.
+
+  def self.activated_spec(name)
+    loaded_specs[name.to_s]
   end
 end

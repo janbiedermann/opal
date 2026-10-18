@@ -23,7 +23,8 @@ module Gem; end
 class Gem::ConfigFile
   attr_reader :update_sources, :backtrace, :verbose, :bulk_threshold,
     :config_file_name, :force, :silent, :ignore_default, :install_dir,
-    :concurrency, :default_sources, :args
+    :concurrency, :default_sources, :args,
+    :cert_expiration_length_days
 
   attr_accessor :args
 
@@ -40,6 +41,7 @@ class Gem::ConfigFile
     @default_sources = true
     @force = false
     @silent = false
+    @cert_expiration_length_days = nil
     @ignore_default = false
     @sources = nil
     @install_dir = ENV["GEM_HOME"]
@@ -88,6 +90,17 @@ class Gem::ConfigFile
 
   def verbose?
     @verbose && !@silent
+  end
+
+  ##
+  # Really verbose mode gives the commands extra output: it takes a verbosity
+  # beyond the on/off of --verbose, which is what -V counting gives.
+
+  def really_verbose
+    case @verbose
+    when true, false, nil then false
+    else true
+    end
   end
 
   def silent?
@@ -154,6 +167,10 @@ class Gem::ConfigFile
 
       opts.on("--[no-]verbose", "Level of logging") do |v|
         @verbose = v
+      end
+
+      opts.on("-V", "Verbose; give it more than once for the fullest output") do
+        @verbose = (@verbose.is_a?(Integer) ? @verbose : 1) + 1
       end
 
       opts.on("-q", "--quiet", "Enables quiet mode. Only warnings and errors") do |v|

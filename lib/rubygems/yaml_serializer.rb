@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+# A binary YAML scalar is base64, so reading one needs unpack1.
+require "corelib/string/unpack"
+
 # Skip reloading when an identical copy (e.g. the one shipped inside the Bundler
 # gem) was already required from a different path, to avoid redefinition warnings.
 return if defined?(Gem::YAMLSerializer)
