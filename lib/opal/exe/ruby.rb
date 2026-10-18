@@ -26,11 +26,17 @@ module RubyCommand
       @syntax_check = false
       @loop_mode = nil
 
-      # The stdlib sources join the load path so that scripts can require
-      # them at runtime; OPAL_HOME is set by tasks/ruby.mjs at build time.
+      # The stdlib sources and the Opal entry points join the load path so
+      # that scripts can require them at runtime; OPAL_HOME is set by
+      # tasks/ruby.mjs at build time. <home>/opal holds opal/full.rb and the
+      # corelib files the autoloads registered by the bundle point at, and
+      # <home> itself is what makes `require 'opal/full'` resolve.
       home = defined?(OPAL_HOME) ? OPAL_HOME : nil
-      stdlib = home && File.join(home, 'stdlib')
-      $LOAD_PATH << stdlib if stdlib && File.directory?(stdlib)
+      if home
+        [File.join(home, 'stdlib'), File.join(home, 'opal'), home].each do |dir|
+          $LOAD_PATH << dir if File.directory?(dir)
+        end
+      end
 
       install_loader
 
@@ -146,9 +152,9 @@ module RubyCommand
     end
 
     # The loader of uncompiled features: Opal.require calls it when a path
-    # isn't in the bundle. Search $LOAD_PATH for <path> or <path>.rb, then
-    # compile it as a requirable module under the require path, and let
-    # Opal.load_normalized run it.
+    # isn't in the bundle. Search $LOAD_PATH for <path>, <path>.rb or
+    # <path>.js, then compile it as a requirable module under the require
+    # path, and let Opal.load_normalized run it.
     def install_loader
       %x{
         var $orig_load_file = Opal.platform.load_file;
@@ -164,14 +170,25 @@ module RubyCommand
     # Search $LOAD_PATH, then the current directory. Opal.normalize drops
     # the leading "/" of absolute paths, which require_relative produces
     # when the script was given with an absolute path, so also try the
-    # path rooted at /.
+    # path rooted at /. A .js file is a feature compiled ahead of time (a
+    # precompiled gem, M7): it is loaded as it stands.
     def find_feature(path)
-      candidates = $LOAD_PATH.flat_map { |dir| [File.join(dir, path), "#{File.join(dir, path)}.rb"] }
-      candidates += [path, "#{path}.rb", "/#{path}", "/#{path}.rb"]
+      candidates = $LOAD_PATH.flat_map do |dir|
+        base = File.join(dir, path)
+        [base, "#{base}.rb", "#{base}.js"]
+      end
+      candidates += [path, "#{path}.rb", "#{path}.js", "/#{path}", "/#{path}.rb", "/#{path}.js"]
       candidates.find { |file| File.file?(file) }
     end
 
     def compile_feature(path, file)
+      if file.end_with?('.js')
+        # String() in JavaScript, not Kernel#String: File.read returns a
+        # boxed String object, and JS eval() returns a non-primitive
+        # argument without evaluating it, a silent no-op.
+        `eval(String(#{File.read(file)}))`
+        return
+      end
       js = cached_compile(File.read(file), { file: path, requirable: true })
       `eval(js)`
     end

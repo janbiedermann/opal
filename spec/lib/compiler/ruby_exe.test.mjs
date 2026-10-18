@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
+import { Compiler } from "../../../lib/opal/compiler/index.mjs";
 
 const RUBY = join(OPAL_ROOT, "exe", "ruby");
 const DIR = mkdtempSync(join(tmpdir(), "opal-ruby-exe-"));
@@ -102,6 +103,47 @@ describe("the ruby command", () => {
     const file = script("use_relative.rb", "require_relative 'helper2'\nputs HELPER2\n");
     const r = ruby(file);
     assert.equal(r.out, "ok\n");
+  });
+
+  describe("the corelib the bundle carries", () => {
+    // opal/full is built into the bundle, so a script gets these with no -I
+    // and no require of their own.
+    test("FileTest, Marshal and pack/unpack are there", () => {
+      const file = script("corelib_features.rb", "print FileTest.exist?(__FILE__), Marshal.load(Marshal.dump([1, :a])), [1, 2].pack('C*'), 'ab'.unpack1('C')\n");
+      const r = ruby(file);
+      assert.equal(r.out, "true[1, \"a\"]\u0001\u000297", r.err);
+    });
+
+    // The frames are JavaScript ones: exe/ruby runs the script through eval,
+    // so a script frame reports the bundle, not the .rb file. What matters
+    // here is that caller_locations works at all, which needs the
+    // Thread::Backtrace::Location class stdlib/thread.rb defines.
+    test("caller_locations works (stdlib/thread.rb is loaded)", () => {
+      const file = script("locs.rb", "loc = caller_locations.first\nputs [loc.class, loc.path.class, loc.lineno > 0, !loc.label.empty?].inspect\n");
+      const r = ruby(file);
+      assert.equal(r.out, "[Thread::Backtrace::Location, String, true, true]\n", r.err);
+    });
+
+    test("corelib files resolve through OPAL_HOME at runtime", () => {
+      const r = ruby("-e", "require 'corelib/file_test'; require 'opal/full'; puts ObjectSpace.is_a?(Module), Set[1, 2].size")
+      assert.equal(r.out, "true\n2\n", r.err);
+    });
+  });
+
+  test("a precompiled .js feature is loaded as it stands", () => {
+    // what a precompiled gem will put in its compiled/ tree (GEMS.md D7)
+    const js = new Compiler("PRECOMP = 'from js'\n", { requirable: true, file: "precomp" }).compile();
+    assert.match(js, /^Opal\.modules\["precomp"\]/);
+    writeFileSync(join(DIR, "precomp.js"), js);
+    const r = ruby("-I", DIR, "-e", "require 'precomp'; puts PRECOMP");
+    assert.equal(r.out, "from js\n", r.err);
+  });
+
+  test("a .rb feature wins over a .js one of the same name", () => {
+    writeFileSync(join(DIR, "both.rb"), "BOTH = 'rb'\n");
+    writeFileSync(join(DIR, "both.js"), "Opal.modules['both'] = function (Opal) { Opal.const_set(Opal.top, 'BOTH', 'js'); };");
+    const r = ruby("-I", DIR, "-e", "require 'both'; puts BOTH");
+    assert.equal(r.out, "rb\n", r.err);
   });
 
   test("the script's exit status propagates", () => {

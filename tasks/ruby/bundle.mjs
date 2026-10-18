@@ -36,6 +36,17 @@ export async function buildRubyBundle() {
   // load: true puts them in the bundle's boot index, as the CLI does for
   // its requires, so they run before the program.
   builder.build("opal", { requirable: true, load: true });
+  // opal/full pulls in corelib/file_test, corelib/string/unpack and
+  // corelib/array/pack and registers the Marshal/ObjectSpace/Struct/Set/
+  // Dir/ENV/Random/PatternMatching/TracePoint autoloads, which the builder
+  // compiles here (they are found at build time, so they need no runtime
+  // lookup). +406 KB over opal alone, and it is what lets a script use
+  // them with no -I and no require.
+  builder.build("opal/full", { requirable: true, load: true });
+  // stdlib/thread.rb is the only home of Thread::Backtrace::Location, which
+  // Kernel#caller_locations needs, and of Thread.current thread-locals.
+  // It is a single-threaded shim: no Thread.new (GEMS.md D13).
+  builder.build("thread", { requirable: true, load: true });
   builder.build("opal-parser", { requirable: true, load: true });
   builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
   builder.buildStr(`OPAL_COMPILER_KEY = ${JSON.stringify(compilerKey())}\n`, "(opal-compiler-key)", { no_export: true });
