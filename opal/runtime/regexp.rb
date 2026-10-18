@@ -41,6 +41,14 @@ module ::Opal
     `Opal.esm['runtime/regexp_transpiler'].transformRegexp(regexp, flags, function(msg) { Opal.Kernel.$warn(msg); })`
   end
 
+  # Removes the whitespace and comments of an extended (x) regular expression.
+  # A multi-line pattern needs it before its newlines are escaped: the
+  # stripper drops the whitespace characters, and once they read "\n" they are
+  # an escaped newline that the pattern must match.
+  def self.strip_extended(regexp)
+    `Opal.esm['runtime/regexp_transpiler'].stripExtended(regexp)`
+  end
+
   # Combine multiple regexp parts together
   def self.regexp(parts, flags)
     %x{
@@ -66,12 +74,24 @@ module ::Opal
       }
 
       parts = parts.join('');
-      parts = Opal.escape_metacharacters(parts);
+      // Ruby shows a pattern with the newlines it was written with, so an
+      // extended pattern keeps its source as given, and the stripper has to
+      // run first: once escape_metacharacters turns a newline into "\n" that
+      // reads as an escaped newline the pattern must match. A pattern without
+      // x shows its control characters as escapes, so there the escaping comes
+      // before the annotation, as it always did.
+      var source, engine;
+      if (flags.includes('x')) {
+        source = parts;
+        engine = Opal.escape_metacharacters(Opal.strip_extended(parts));
+      } else {
+        source = engine = Opal.escape_metacharacters(parts);
+      }
 
-      var output = Opal.transform_regexp(parts, flags);
+      var output = Opal.transform_regexp(engine, flags);
 
       var regexp = new RegExp(output[0], output[1]);
-      if (parts != output[0]) regexp.$$source = parts
+      if (source != output[0]) regexp.$$source = source
       if (flags != output[1]) regexp.$$options = flags;
       return regexp;
     }

@@ -1,33 +1,29 @@
-describe "An extended (x) Regexp" do
-  it "ignores whitespace and comments" do
-    (/a b/x =~ "ab").should == 0
-    (/a b # c
-     d/x =~ "abd").should == 0
-    (/(?<n> \d+ )  /x.match("12")[:n]).should == "12"
-    "a b c".gsub(/ b \s/x, "-").should == "a -c"
+require 'spec_helper'
+
+describe 'A multi-line extended (/x) regular expression' do
+  it "ignores the whitespace and newlines of the pattern" do
+    pattern = /\A
+      (\d{4})-(\d{2})-(\d{2})   # the date
+      \Z/x
+    (pattern =~ "2000-01-01").should == 0
+    Regexp.last_match(1).should == "2000"
   end
 
-  it "keeps whitespace in character classes and escapes" do
-    (/[a b]+/x =~ " ").should == 0
+  it "keeps the source it was written with, as Regexp#source shows it" do
+    pattern = /\A
+      x
+      \Z/x
+    pattern.source.should == "\\A\n      x\n      \\Z"
+  end
+
+  it "keeps the whitespace an escape stands for" do
     (/a\ b/x =~ "a b").should == 0
-    (/a\#b/x =~ "a#b").should == 0
-    (/a [#] b/x =~ "a#b").should == 0
+    (/a\nb/x =~ "a\nb").should == 0
+    (/a\nb/x =~ "ab").should == nil
   end
 
-  it "applies to interpolated parts" do
-    x = "b c"
-    (/a #{x}/x =~ "abc").should == 0
-  end
-
-  it "is created by Regexp.new with EXTENDED or 'x'" do
-    (Regexp.new("a b # c\nd", Regexp::EXTENDED) =~ "abd").should == 0
-    (Regexp.new("a b", "x") =~ "ab").should == 0
-    (Regexp.new("a b", Regexp::EXTENDED | Regexp::IGNORECASE) =~ "AB").should == 0
-  end
-
-  it "keeps its source and options" do
-    /a b/x.source.should == "a b"
-    /a b/x.options.should == Regexp::EXTENDED
-    /a b/x.should == Regexp.new("a b", Regexp::EXTENDED)
+  it "ignores a comment to the end of the line" do
+    (/a # a comment
+       b/x =~ "ab").should == 0
   end
 end
