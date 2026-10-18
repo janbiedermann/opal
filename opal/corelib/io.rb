@@ -332,10 +332,14 @@ class ::IO
               int_enc = parts[1] ?? nil;
             }
             if (ext_enc.includes('|')) ext_enc = ext_enc.split('|')[1];
-            ext_enc = Opal.Encoding.$find(ext_enc);
+            // A '-' names no encoding: skip it rather than fail to find it.
+            if (String(ext_enc) === '-') ext_enc = nil;
+            else ext_enc = Opal.Encoding.$find(ext_enc);
           }
           if (truthy(int_enc) && !int_enc['$is_a?'](Opal.Encoding)) {
-            int_enc = Opal.Encoding.$find($coerce_to_or_raise(int_enc, Opal.String, "to_str"));
+            int_enc = $coerce_to_or_raise(int_enc, Opal.String, "to_str");
+            if (String(int_enc) === '-') int_enc = nil;
+            else int_enc = Opal.Encoding.$find(int_enc);
           }
 
           if (is_nil(ext_enc)) ext_enc = #{::Encoding.default_external};
@@ -601,7 +605,14 @@ class ::IO
           use_bom = true;
           ext_enc = ext_enc.split('|')[1];
         }
-        ext_enc = Opal.Encoding.$find(ext_enc);
+        if (String(ext_enc) === '-') {
+          // A '-' in a mode like "r:UTF-8:-" asks for no encoding of its
+          // own; CRuby warns that the encoding is unsupported and ignores it.
+          $gvars['stderr'].$puts('warning: Unsupported encoding - ignored');
+          ext_enc = nil;
+        } else {
+          ext_enc = Opal.Encoding.$find(ext_enc);
+        }
       }
 
       if (opts['$key?']('internal_encoding')) {
@@ -620,7 +631,11 @@ class ::IO
 
       if (!is_nil(int_enc) && !int_enc['$is_a?'](Opal.Encoding)) {
         int_enc = $coerce_to_or_raise(int_enc, Opal.String, "to_str");
-        if (int_enc !== '-') int_enc = Opal.Encoding.$find(int_enc);
+        // The dash of a "r:UTF-8:-" mode asks for no transcoding, and it can
+        // arrive as a boxed String (String#split boxes), so the comparison
+        // goes by value and the dash becomes no internal encoding at all.
+        if (String(int_enc) === '-') int_enc = nil;
+        else int_enc = Opal.Encoding.$find(int_enc);
       }
       self.int_enc = (!is_nil(int_enc) && (int_enc === '-' || int_enc === self.ext_enc)) ? nil
         : !is_nil(int_enc) ? int_enc
@@ -1637,7 +1652,8 @@ class ::IO
           ext_enc = parts[0];
           int_enc = parts[1] ?? nil;
         }
-        self.ext_enc = Opal.Encoding.$find(ext_enc);
+        // A '-' names no encoding: leave the external one as it stands.
+        self.ext_enc = String(ext_enc) === '-' ? nil : Opal.Encoding.$find(ext_enc);
       }
 
       if (is_nil(int_enc) && (is_nil(enc_def_int) || is_stdio)) {
@@ -1647,7 +1663,9 @@ class ::IO
       } else if (int_enc['$is_a?'](Opal.Encoding)) {
         // keep int_enc
       } else {
-        int_enc = Opal.Encoding.$find($coerce_to_or_raise(int_enc, Opal.String, "to_str"));
+        int_enc = $coerce_to_or_raise(int_enc, Opal.String, "to_str");
+        // The '-' of a "r:UTF-8:-" style mode means no transcoding.
+        int_enc = String(int_enc) === '-' ? nil : Opal.Encoding.$find(int_enc);
       }
       self.int_enc = int_enc === self.ext_enc ? nil : int_enc;
       return self;
