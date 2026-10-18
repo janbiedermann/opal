@@ -399,6 +399,12 @@ describe("options", () => {
     assert.deepEqual(parse(["-e", "1", "--", "-c"]).argv, ["-c"]);
   });
 
+  test("--enable accepts the features Opal already has and rejects the rest", () => {
+    assert.deepEqual(parse(["--enable=frozen-string-literal", "x.rb"]).options, {});
+    assert.deepEqual(parse(["--enable", "frozen_string_literal", "x.rb"]).options, {});
+    assert.throws(() => parse(["--enable=shared"]), InvalidOption);
+  });
+
   test("rejects invalid options and values", () => {
     assert.throws(() => parse(["-x"]), InvalidOption);
     assert.throws(() => parse(["--runner", "nope"]), InvalidOption);
