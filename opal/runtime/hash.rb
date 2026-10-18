@@ -338,6 +338,17 @@ module ::Opal
 
   def self.opal32_init = 0x4f70616c
 
+  # The chain of structures being hashed by #hash, shared by Array, Hash and
+  # Struct so that a cycle is seen whichever type closes it. Empty between
+  # calls; corelib binds it with `# helpers: hash_ids`.
+  %x{
+    Opal.hash_ids = [];
+    // The hash of a structure that contains a cycle, shared so that a cyclic
+    // array and a cyclic hash holding it agree. A property, not a method:
+    // corelib binds it with `# helpers: cyclic_hash`.
+    Opal.cyclic_hash = 0x01010101;
+  }
+
   %x{
     function $opal32_ror(n, d) {
       return (n << d)|(n >>> (32 - d));

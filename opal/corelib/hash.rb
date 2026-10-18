@@ -1,4 +1,4 @@
-# helpers: yield1, hash_clone, hash_delete, hash_get, hash_put, deny_frozen_access, freeze, opal32_init, opal32_add, coerce_to_or_nil, coerce_to_or_raise, send
+# helpers: yield1, hash_clone, hash_delete, hash_get, hash_put, deny_frozen_access, freeze, opal32_init, opal32_add, hash_ids, cyclic_hash, coerce_to_or_nil, coerce_to_or_raise, send
 # backtick_javascript: true
 # use_strict: true
 
@@ -552,37 +552,24 @@ class ::Hash < `Map`
     }
   end
 
-  `var $hash_ids`
-
   def hash
     %x{
-      let top = ($hash_ids === undefined),
-          hash_id = self.$object_id(),
+      // the chain of structures being hashed, shared with Array#hash and
+      // Struct#hash; $cyclic_hash propagates up: see Array#hash.
+      let hash_id = self.$object_id(),
           result = $opal32_init(),
-          key, item, i, values, entry,
+          i, h,
           size = self.size, ary = new Int32Array(size);
+
+      for (i = 0; i < $hash_ids.length; i++) {
+        if ($hash_ids[i] === hash_id) return $cyclic_hash;
+      }
 
       result = $opal32_add(result, 0x4);
       result = $opal32_add(result, size);
 
-      if (top) {
-        $hash_ids = new Map();
-      }
-      else if ($hash_ids.has(hash_id)) {
-        return $opal32_add(result, 0x01010101);
-      }
-
       try {
-        if (!top) {
-          values = $hash_ids.values();
-          for (item of values) {
-            if (#{eql?(`item`)}) {
-              return $opal32_add(result, 0x01010101);
-            }
-          }
-        }
-
-        $hash_ids.set(hash_id, self);
+        $hash_ids.push(hash_id);
         i = 0;
 
         for (let entry of self) {
@@ -591,8 +578,12 @@ class ::Hash < `Map`
           pair = $opal32_add(pair, 0xA);
           pair = $opal32_add(pair, 3);
           pair = $opal32_add(pair, 0x70414952);
-          pair = $opal32_add(pair, entry[0].$hash());
-          pair = $opal32_add(pair, entry[1].$hash());
+          h = entry[0].$hash();
+          if (h === $cyclic_hash) return $cyclic_hash;
+          pair = $opal32_add(pair, h);
+          h = entry[1].$hash();
+          if (h === $cyclic_hash) return $cyclic_hash;
+          pair = $opal32_add(pair, h);
           ary[i] = pair;
           i++;
         }
@@ -605,9 +596,7 @@ class ::Hash < `Map`
 
         return result;
       } finally {
-        if (top) {
-          $hash_ids = undefined;
-        }
+        $hash_ids.pop();
       }
     }
   end

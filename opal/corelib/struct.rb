@@ -1,5 +1,5 @@
 # backtick_javascript: true
-# helpers: coerce_to_or_raise, yield1
+# helpers: coerce_to_or_raise, yield1, hash_ids, cyclic_hash
 
 require 'corelib/enumerable'
 
@@ -139,7 +139,25 @@ class ::Struct
   end
 
   def hash
-    [self.class, to_a].hash
+    %x{
+      // Struct#hash builds a fresh array on every call, so no array repeats
+      // and Array#hash alone cannot see a cycle closed by a Struct: the
+      // Struct itself has to join the chain Array#hash and Hash#hash use.
+      let i, h, hash_id = self.$object_id();
+
+      for (i = 0; i < $hash_ids.length; i++) {
+        if ($hash_ids[i] === hash_id) return $cyclic_hash;
+      }
+
+      $hash_ids.push(hash_id);
+
+      try {
+        h = [self.$$class, self.$to_a()].$hash();
+        return h === $cyclic_hash ? $cyclic_hash : h;
+      } finally {
+        $hash_ids.pop();
+      }
+    }
   end
 
   def [](name)

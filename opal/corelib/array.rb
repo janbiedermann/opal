@@ -1,4 +1,4 @@
-# helpers: truthy, falsy, yield1, hash_get, hash_put, hash_delete, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, deny_frozen_access, freeze, opal32_init, opal32_add, has_own, eqeq, find_super, send2
+# helpers: truthy, falsy, yield1, hash_get, hash_put, hash_delete, coerce_to, coerce_to_or_nil, coerce_to_or_raise, respond_to, deny_frozen_access, freeze, opal32_init, opal32_add, hash_ids, cyclic_hash, has_own, eqeq, find_super, send2
 # backtick_javascript: true
 
 require 'corelib/enumerable'
@@ -1273,48 +1273,39 @@ class ::Array < `Array`
     `$freeze(self)`
   end
 
-  `var $hash_ids`
-
   def hash
     %x{
-      let top = ($hash_ids === undefined),
-          result = $opal32_init(),
+      // $hash_ids is the chain of structures being hashed (push/pop), shared
+      // with Hash#hash and Struct#hash. A structure that contains a cycle
+      // hashes to $cyclic_hash, and that value propagates up: it is what
+      // keeps eql? structures hashing equal (rec.hash == [[rec]].hash)
+      // without ever calling eql?, so hashing a cyclic structure never
+      // sends eql? to an unrelated type. CRuby collapses cyclic
+      // structures the same way.
+      let result = $opal32_init(),
           hash_id = self.$object_id(),
-          item, i, key, values;
+          item, i, h;
+
+      for (i = 0; i < $hash_ids.length; i++) {
+        if ($hash_ids[i] === hash_id) return $cyclic_hash;
+      }
 
       result = $opal32_add(result, 0xA);
       result = $opal32_add(result, self.length);
 
-      if (top) {
-        $hash_ids = new Map();
-      }
-      // return early for recursive structures
-      else if ($hash_ids.has(hash_id)) {
-        return $opal32_add(result, 0x01010101);
-      }
-
       try {
-        if (!top) {
-          values = $hash_ids.values();
-          for (item of values) {
-            if (#{eql?(`item`)}) {
-              return $opal32_add(result, 0x01010101);
-            }
-          }
-        }
-
-        $hash_ids.set(hash_id, self);
+        $hash_ids.push(hash_id);
 
         for (i = 0; i < self.length; i++) {
           item = self[i];
-          result = $opal32_add(result, item.$hash());
+          h = item.$hash();
+          if (h === $cyclic_hash) return $cyclic_hash;
+          result = $opal32_add(result, h);
         }
 
         return result;
       } finally {
-        if (top) {
-          $hash_ids = undefined;
-        }
+        $hash_ids.pop();
       }
     }
   end
