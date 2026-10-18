@@ -9,11 +9,27 @@ import { spawnSync } from "node:child_process";
 import { erbToRuby, renderErb } from "../../../lib/opal/compiler/erb.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { NullCache } from "../../../lib/opal/compiler/builder/cache.mjs";
-import { nodeErbRunner } from "../../../lib/opal/compiler/builder/erb_runner.mjs";
+import { nodeErbRunner, workerExecArgv } from "../../../lib/opal/compiler/builder/erb_runner.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
 const run = nodeErbRunner(Builder);
 const render = (source, file = "/tmp/t.erb") => renderErb(source, { file, run });
+
+describe("workerExecArgv", () => {
+  test("keeps the options that change how the worker runs", () => {
+    assert.deepEqual(
+      workerExecArgv(["--enable-source-maps", "--require", "./preload.js", "--no-deprecation"]),
+      ["--enable-source-maps", "--require", "./preload.js", "--no-deprecation"]
+    );
+  });
+
+  test("drops the options a Worker refuses, all of which Node.js 26's test runner passes", () => {
+    assert.deepEqual(
+      workerExecArgv(["--test-concurrency=0", "--input-type=module", "--v8-pool-size=4", "--stack-trace-limit=10", "--node-snapshot", "-e", "1"]),
+      []
+    );
+  });
+});
 
 describe("erbToRuby", () => {
   test("translates text, output, code and comments", () => {
