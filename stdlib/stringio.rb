@@ -41,7 +41,21 @@ class StringIO
 
     function get_string(io, enc) {
       if (!io.string_is_valid) {
-        io.string = io.buffer.$get_raw_string(0, nil, enc, false);
+        var buffer = io.buffer;
+        if (enc === nil || enc == null) {
+          io.string = buffer.$get_raw_string(0, nil, #{::Encoding::BINARY}, false);
+        } else {
+          // Decode the bytes with the external encoding, but when they aren't
+          // valid in it keep them as they are: a StringIO that received binary
+          // data must not lose the bytes a decoder can't read, and CRuby only
+          // tags the bytes with that encoding without checking them.
+          try {
+            io.string = enc['$decode!'](buffer);
+          } catch (error) {
+            io.string = buffer.$get_raw_string(0, nil, #{::Encoding::BINARY}, false);
+            Opal.set_encoding(io.string, enc.$name());
+          }
+        }
         io.string_is_valid = true;
       }
       return io.string;

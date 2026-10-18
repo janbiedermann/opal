@@ -12,6 +12,7 @@ if (Opal.platform.name == "node") {
     const path = require("node:path");
     const process = Opal.global.process;
     const url = require("node:url");
+    const zlib = require("node:zlib");
 
     // we need to pass the 'node_modules' path to spawning processes, so lets detect it:
     let node_modules_path;
@@ -20,7 +21,7 @@ if (Opal.platform.name == "node") {
 
     // allow access to modules from stdlib, this is node specific and used by
     // open-uri and digest
-    platform.modules = { child_process, crypto, fs, os, path, url };
+    platform.modules = { child_process, crypto, fs, os, path, url, zlib };
 
     // Helpers
 

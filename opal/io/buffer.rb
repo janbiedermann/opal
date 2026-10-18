@@ -118,6 +118,33 @@ class ::IO
         if (uint8_a[0] === 0x11) return 8; // BIG_ENDIAN
         return nil;
       }
+
+      // Decodes the buffer, but when its bytes aren't valid in the encoding,
+      // keeps them as they are and only labels them with that encoding: a
+      // decoder that replaces what it can't read would lose binary data, and
+      // CRuby's IO and StringIO hand back the bytes they were given.
+      function decode_buffer(buffer, encoding) {
+        try {
+          return encoding['$decode!'](buffer);
+        } catch (error) {
+          // A slice can stop in the middle of a multi-byte character, which a
+          // fatal decoder reads as invalid: drop that tail, at most three
+          // bytes, and decode what is complete.
+          let size = buffer.$size();
+          for (let drop = 1; drop <= 3 && drop < size; drop++) {
+            try {
+              return encoding['$decode!'](buffer.$slice(0, size - drop));
+            } catch (truncated) {
+              // the tail isn't the problem, keep looking
+            }
+          }
+          // The bytes aren't in that encoding at all, so keep them and only
+          // label them, as CRuby's IO and StringIO do with binary data.
+          let string = #{::Encoding::BINARY}.$decode(buffer);
+          Opal.set_encoding(string, encoding.$name());
+          return string;
+        }
+      }
     }
 
     LITTLE_ENDIAN = 4
@@ -398,7 +425,7 @@ class ::IO
         if (offset > s || (offset + length) > s) $raise(Opal.ArgumentError, 'Offset + length is bigger than the buffer size');
         if (offset < 0) $raise(Opal.ArgumentError, "Offset can't be negative");
         if (encoding === nil) encoding = #{::Encoding::BINARY};
-        if (offset === 0 && length === s) return encoding.$decode(self);
+        if (offset === 0 && length === s) return decode_buffer(self, encoding);
         if (ensure_valid !== nil && ensure_valid !== false) {
           // Ensure the return of a valid last char when byte slicing the buffer with
           // a maximum of 16 tries, meaning to slice up to 16 bytes above limit.
@@ -419,11 +446,11 @@ class ::IO
           }
           if (res === nil) {
             // unable to read anything valid from the buffer
-            return encoding.$decode(self.$slice(offset, length));
+            return decode_buffer(self.$slice(offset, length), encoding);
           }
           return res;
         } else {
-          return encoding.$decode(self.$slice(offset, length));
+          return decode_buffer(self.$slice(offset, length), encoding);
         }
       }
     end
