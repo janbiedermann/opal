@@ -80,6 +80,18 @@ module ::Process
       @status.JS[:signal] if signaled?
     end
 
+    def to_i
+      # The wait status word, as waitpid() reports it: the exit status in the
+      # high byte and the signal that ended the process in the low one.
+      ((@status.JS[:status] || 0) << 8) | (termsig || 0)
+    end
+
+    def >>(digits)
+      # Shifts the status word right by digits bits, to pull out the signal
+      # number (status >> 8) or the exit status (status >> 16).
+      to_i >> digits.to_i
+    end
+
     def to_s
       "pid #{@pid} exit #{exitstatus}"
     end

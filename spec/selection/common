@@ -163,6 +163,7 @@ ruby/language
 !ruby/language/execution_spec
 !ruby/language/safe_spec
 
+ruby/library/English
 ruby/library/base64
 ruby/library/bigdecimal
 !ruby/library/bigdecimal/util_spec

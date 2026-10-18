@@ -411,3 +411,6 @@
 
   alias_method :write, :__not_implemented__
 end.new(ARGV)
+
+# The default input of gets/ARGV reading.
+$< = ::ARGF

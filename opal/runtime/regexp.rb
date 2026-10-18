@@ -90,6 +90,19 @@ module ::Opal
   def self.empty_regexp(flags)
     `Opal.annotate_regexp(new RegExp(/(?:)/, flags), '')`
   end
+
+  # $+: the text matched by the rightmost group that matched. It isn't the
+  # last group when that one didn't participate: /a(b)?(c)/ =~ 'ac' gives 'c'
+  # and /(a)(b)?/ =~ 'a' gives 'a', not nil.
+  def self.last_match_ref(match_data)
+    %x{
+      var captures = match_data.$captures();
+      for (var i = captures.length - 1; i >= 0; i--) {
+        if (captures[i] !== nil) return captures[i];
+      }
+      return nil;
+    }
+  end
 end
 
 ::Opal

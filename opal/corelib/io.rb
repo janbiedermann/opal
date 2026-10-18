@@ -1769,3 +1769,6 @@ require 'corelib/file/constants'
 ::STDIN = $stdin = ::IO.new(0, 'r').set_encoding(nil, nil)
 ::STDOUT = $stdout = ::IO.new(1, 'w').set_encoding(nil, nil)
 ::STDERR = $stderr = ::IO.new(2, 'w').set_encoding(nil, nil)
+
+# The default output of print/puts without an explicit IO, and of IO.copy_stream.
+$> = $stdout
