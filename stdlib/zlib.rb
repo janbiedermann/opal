@@ -361,6 +361,28 @@ module Zlib
 
   # The gzip header fields a reader and a writer share.
   class GzipFile
+    # CRuby raises these from the gzip reader; RubyGems rescues Error when it
+    # reads the gzip members of a .gem file.
+    class Error < ::Zlib::Error
+    end
+
+    class NoUserHeader < Error
+    end
+
+    # CRuby's .wrap builds the gzip IO, hands it to the block and answers with
+    # what the block returned, closing the stream afterwards. RubyGems reads a
+    # .gem file through it and expects that value back.
+    def self.wrap(*args, **kwargs, &block)
+      gzip = new(*args, **kwargs)
+      return gzip unless block
+
+      begin
+        yield gzip
+      ensure
+        gzip.close unless gzip.closed?
+      end
+    end
+
     def mtime
       @mtime
     end
@@ -412,10 +434,6 @@ module Zlib
       return nil if bytes.length < 8
       seconds = bytes[4] | (bytes[5] << 8) | (bytes[6] << 16) | (bytes[7] << 24)
       ::Time.at(seconds)
-    end
-
-    def self.wrap(io)
-      new(io)
     end
 
     def size

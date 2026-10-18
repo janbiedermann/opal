@@ -31,9 +31,11 @@ module Digest
     // An Opal string is a JS string: a binary one holds one byte per unit and
     // must reach the hash as latin1, text as utf8.
     function $hash_feed(hash, str) {
-      str = String(str);
-      var encoding = str.$encoding().$to_s();
-      hash.update(Buffer.from(str, encoding === 'ASCII-8BIT' ? 'latin1' : 'utf8'));
+      // #bytes gives the bytes the string's own encoding holds: the UTF-8
+      // bytes of a text string, and one byte per character of a binary one.
+      // Asking the encoding after String() would unbox the string first and
+      // lose the tag a binary string carries.
+      hash.update(Buffer.from(str.$bytes()));
     }
   }
 
