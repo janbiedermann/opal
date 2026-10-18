@@ -126,7 +126,7 @@ class ::IO
       function decode_buffer(buffer, encoding) {
         try {
           return encoding['$decode!'](buffer);
-        } catch (error) {
+        } catch {
           // A slice can stop in the middle of a multi-byte character, which a
           // fatal decoder reads as invalid: drop that tail, at most three
           // bytes, and decode what is complete.
@@ -134,7 +134,7 @@ class ::IO
           for (let drop = 1; drop <= 3 && drop < size; drop++) {
             try {
               return encoding['$decode!'](buffer.$slice(0, size - drop));
-            } catch (truncated) {
+            } catch {
               // the tail isn't the problem, keep looking
             }
           }

@@ -51,7 +51,7 @@ class StringIO
           // tags the bytes with that encoding without checking them.
           try {
             io.string = enc['$decode!'](buffer);
-          } catch (error) {
+          } catch {
             io.string = buffer.$get_raw_string(0, nil, #{::Encoding::BINARY}, false);
             Opal.set_encoding(io.string, enc.$name());
           }

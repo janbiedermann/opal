@@ -131,7 +131,7 @@ module Zlib
     function $inflate_try(buffers) {
       try {
         return $zlib().inflateSync(Buffer.concat(buffers));
-      } catch (e) {
+      } catch {
         return null;
       }
     }
