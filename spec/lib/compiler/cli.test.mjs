@@ -16,7 +16,7 @@ import { isIncomplete } from "../../../lib/opal/compiler/cli/repl.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
-import { seaConfig, seaUnsupported } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
+import { seaConfig, seaUnsupported, seaBuildSupported } from "../../../lib/opal/compiler/cli/exe_compiler.mjs";
 import { npmRequires, bundleNpmPackages } from "../../../lib/opal/compiler/cli/npm_bundler.mjs";
 
 const FIXTURES = resolve(OPAL_ROOT, "spec", "lib", "fixtures");
@@ -95,6 +95,27 @@ describe("CLI", () => {
         assert.match(errors, /--compile-to-exe node needs a Node\.js that supports single executable applications/);
         assert.equal(existsSync(join(dir, "app")), false);
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("--build-sea builds the whole executable in one step (Node.js 26+)", () => {
+    assert.equal(seaBuildSupported("26.0.0"), true);
+    assert.equal(seaBuildSupported("25.9.9"), false);
+    assert.equal(seaBuildSupported("22.23.2"), false);
+    // with --build-sea the config's output is the executable, not a blob
+    assert.deepEqual(seaConfig("main.js", { snapshot: true, output: "app" }), { main: "main.js", output: "app", disableExperimentalSEAWarning: true, useSnapshot: true });
+
+    if (!seaBuildSupported()) return; // below 26 the multi-step path runs
+    const dir = mkdtempSync(join(tmpdir(), "opal-build-sea-"));
+    try {
+      const app = join(dir, "app");
+      const build = spawnSync(process.execPath, [EXE, "--compile-to-exe", "node", "-o", app, "-e", 'puts "sea ok"'], { encoding: "utf8", timeout: 180000 });
+      assert.equal(build.status, 0, build.stderr);
+      assert.match(build.stdout, /Creating .*:\nGenerated single executable|Done\.\n/);
+      const run = spawnSync(app, [], { encoding: "utf8", timeout: 60000 });
+      assert.match(run.stdout, /sea ok\n/, run.stderr);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
