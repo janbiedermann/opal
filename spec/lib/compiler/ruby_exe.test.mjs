@@ -125,7 +125,7 @@ describe("the ruby command", () => {
     });
 
     test("corelib files resolve through OPAL_HOME at runtime", () => {
-      const r = ruby("-e", "require 'corelib/file_test'; require 'opal/full'; puts ObjectSpace.is_a?(Module), Set[1, 2].size")
+      const r = ruby("-e", "require 'corelib/file_test'; require 'opal/full'; puts ObjectSpace.is_a?(Module), Set[1, 2].size");
       assert.equal(r.out, "true\n2\n", r.err);
     });
   });
