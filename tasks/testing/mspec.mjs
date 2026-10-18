@@ -14,7 +14,6 @@ export const STUBS = [
   "a_file",
   "lib/spec_helper",
   "mspec/commands/mspec-run",
-  "rubygems",
 ];
 
 const isDirectory = (path) => existsSync(path) && statSync(path).isDirectory();
