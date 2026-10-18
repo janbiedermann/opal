@@ -165,7 +165,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   boxed String objects (corelib's `$str(s, enc)`): JS `eval(x)` returns a
   non-primitive argument *without evaluating it* (silent no-op) and node's
   fs/crypto reject them, so wrap interpolated strings passed to those in
-  `String(...)`.
+  `String(...)`. That `String(...)` has to sit inside the JavaScript: in Ruby
+  it parses as a method call and changes nothing, so
+  `eval(String(File.read(f)))` keeps the conversion in the backtick body.
   `node tasks/ruby_exe.mjs` (`npm run build-ruby-exe`) builds exe/ruby.exe,
   a single-file executable (Node SEA, `--compile-to-exe node`): it re-runs
   itself under the nvm Node.js 26 because the system Node.js lacks the SEA
@@ -274,6 +276,25 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   another Node.js binary and `NODE_OPTS` adds its arguments.
 - `node --test` on Node 22 does not accept a directory; pass the files
   (`node --test spec/lib/parser/*.test.mjs`).
+- `Array#hash`, `Hash#hash` and `Struct#hash` share the chain of structures
+  being hashed (`Opal.hash_ids`, bound with `# helpers: hash_ids`) and collapse
+  any structure containing a cycle to `Opal.cyclic_hash`; that value propagates
+  up, which is what makes `rec.hash == [[rec]].hash` hold without comparing
+  anything. A `hash` must not call `eql?`: the map of every previously hashed
+  object these methods used to keep sent `eql?` to unrelated types and raised
+  inside PubGrub's failure reporting.
+- `exe/ruby` builds `opal/full` and `stdlib/thread.rb` into its bundle, so
+  `FileTest`, `Marshal`, `pack`/`unpack`, `ObjectSpace`, `Set` and
+  `caller_locations` work with no `-I` and no require; `$LOAD_PATH` also gets
+  `$OPAL_HOME`, `$OPAL_HOME/opal` and `$OPAL_HOME/stdlib`, and `find_feature`
+  loads a `<path>.js` as it stands. Its `caller_locations` frames are
+  JavaScript ones: the script runs through `eval`, so a script frame names the
+  bundle, not the `.rb` file.
+- `--compile-to-exe node` runs `node --build-sea=config.json` on Node.js 26 or
+  newer: one step, no postject/npx/codesign, and the config's `output` names
+  the executable instead of a blob. Below 26 the old
+  `--experimental-sea-config` + postject path runs, and it needs a build with
+  the SEA fuse, which the system `node-22` lacks.
 - If an agent discovers information that required significant setup time, condense
   the result into a short bullet in this file so later agents can skip the same
   work.
