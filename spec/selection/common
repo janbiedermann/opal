@@ -168,6 +168,7 @@ ruby/library/base64
 ruby/library/bigdecimal
 !ruby/library/bigdecimal/util_spec
 ruby/library/cgi
+ruby/library/digest
 ruby/library/date
 ruby/library/datetime
 ruby/library/delegate/delegate_class
@@ -176,6 +177,7 @@ ruby/library/erb/util/h_spec
 ruby/library/erb/util/html_escape_spec
 ruby/library/etc
 !ruby/library/etc/struct_group_spec
+ruby/library/timeout
 
 !ruby/library/logger/device/close_spec
 !ruby/library/logger/device/new_spec

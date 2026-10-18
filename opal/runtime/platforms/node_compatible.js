@@ -6,6 +6,7 @@ if (Opal.platform.name == "node") {
     // imports
     const child_process = require("node:child_process");
     const cluster = require("node:cluster");
+    const crypto = require("node:crypto");
     const fs = require("node:fs");
     const os = require("node:os");
     const path = require("node:path");
@@ -17,8 +18,9 @@ if (Opal.platform.name == "node") {
     if (fs.existsSync(path.join(process.cwd(), "node_modules")))
       node_modules_path = path.resolve(path.join(process.cwd(), "node_modules"));
 
-    // allow access to modules from stdlib, this is node specific and only used by open-uri
-    platform.modules = { child_process, fs, os, path, url };
+    // allow access to modules from stdlib, this is node specific and used by
+    // open-uri and digest
+    platform.modules = { child_process, crypto, fs, os, path, url };
 
     // Helpers
 
