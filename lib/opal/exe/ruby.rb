@@ -157,14 +157,20 @@ module RubyCommand
     # path, and let Opal.load_normalized run it.
     def install_loader
       %x{
-        var $orig_load_file = Opal.platform.load_file;
         Opal.platform.load_file = function (path) {
           if (Opal.modules[path]) return;
           var file = #{find_feature(`path`)};
-          if (file === nil) return $orig_load_file(path);
+          if (file === nil) { #{feature_not_found(`path`)}; return; }
           #{compile_feature(`path`, `file`)}
         };
       }
+    end
+
+    # Ruby promises a feature it cannot find is a LoadError, which is what a
+    # caller rescues - and what tells a require to try a gem. The platform's
+    # own loader only reads the path, so it fails with ENOENT instead.
+    def feature_not_found(path)
+      raise LoadError, "cannot load such file -- #{path}"
     end
 
     # Search $LOAD_PATH, then the current directory. Opal.normalize drops
@@ -172,13 +178,26 @@ module RubyCommand
     # when the script was given with an absolute path, so also try the
     # path rooted at /. A .js file is a feature compiled ahead of time (a
     # precompiled gem, M7): it is loaded as it stands.
-    def find_feature(path)
+    def search_load_path(path)
       candidates = $LOAD_PATH.flat_map do |dir|
         base = File.join(dir, path)
         [base, "#{base}.rb", "#{base}.js"]
       end
       candidates += [path, "#{path}.rb", "#{path}.js", "/#{path}", "/#{path}.rb", "/#{path}.js"]
       candidates.find { |file| File.file?(file) }
+    end
+
+    # A feature that isn't on the load path may belong to an installed gem.
+    # Activating the gem that owns it pushes its lib directories onto
+    # $LOAD_PATH, which is where the search looks again. CRuby's RubyGems
+    # hooks this in Kernel#require; here the loader above is the one place a
+    # require can be intercepted, since Opal compiles `require` to a call of
+    # the runtime rather than of Kernel#require.
+    def find_feature(path)
+      file = search_load_path(path)
+      return file if file
+      return nil unless defined?(Gem) && Gem.try_activate(path)
+      search_load_path(path)
     end
 
     def compile_feature(path, file)

@@ -1,6 +1,7 @@
 // The JS bundle of the `ruby` command, shared by tasks/ruby.mjs (exe/ruby)
 // and tasks/ruby_exe.mjs (exe/ruby.exe): the full corelib (opal), the
-// parser and compiler (opal-parser), the OPAL_HOME constant (the load path
+// parser and compiler (opal-parser), RubyGems (lib/rubygems.rb, so an
+// installed gem is requirable), the OPAL_HOME constant (the load path
 // of the stdlib sources), the OPAL_COMPILER_KEY constant (the identity of
 // the compiler baked into the bundle, which keys its runtime compile cache)
 // and lib/opal/exe/ruby.rb, minified with terser.
@@ -47,6 +48,11 @@ export async function buildRubyBundle() {
   // Kernel#caller_locations needs, and of Thread.current thread-locals.
   // It is a single-threaded shim: no Thread.new (GEMS.md D13).
   builder.build("thread", { requirable: true, load: true });
+  // lib/rubygems.rb, loaded at boot: it is what lets a script `require` a
+  // file an installed gem owns, with no -I and no require of its own (M4).
+  // The loader below calls Gem.try_activate when a path is not on the load
+  // path, and the activated gem's lib directories land on $LOAD_PATH.
+  builder.build("rubygems", { requirable: true, load: true });
   builder.build("opal-parser", { requirable: true, load: true });
   builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
   builder.buildStr(`OPAL_COMPILER_KEY = ${JSON.stringify(compilerKey())}\n`, "(opal-compiler-key)", { no_export: true });

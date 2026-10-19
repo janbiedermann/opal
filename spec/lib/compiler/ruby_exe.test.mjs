@@ -2,7 +2,7 @@
 // bundle once, then run scripts through it the way CRuby's ruby would.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync, readdirSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -127,6 +127,64 @@ describe("the ruby command", () => {
     test("corelib files resolve through OPAL_HOME at runtime", () => {
       const r = ruby("-e", "require 'corelib/file_test'; require 'opal/full'; puts ObjectSpace.is_a?(Module), Set[1, 2].size");
       assert.equal(r.out, "true\n2\n", r.err);
+    });
+  });
+
+  describe("installed gems", () => {
+    // lib/rubygems.rb is built into the bundle, so a script needs no -I and
+    // no require of its own to use a gem installed in GEM_HOME (GEMS.md M4).
+    const GEM_HOME = join(DIR, "gem_home");
+    const GEM_SRC = join(DIR, "gem_src");
+
+    before(() => {
+      mkdirSync(join(GEM_SRC, "lib"), { recursive: true });
+      mkdirSync(join(GEM_SRC, "bin"), { recursive: true });
+      writeFileSync(join(GEM_SRC, "lib", "tiny.rb"), "module Tiny\n  VERSION = '0.1.0'\nend\n");
+      writeFileSync(join(GEM_SRC, "bin", "tiny"), "#!/usr/bin/env ruby\nrequire 'tiny'\nputs Tiny::VERSION\n");
+
+      const build = script("build_tiny.rb", `
+        Dir.chdir ARGV[0] do
+          spec = Gem::Specification.new do |s|
+            s.name = "tiny"
+            s.version = "0.1.0"
+            s.summary = "A tiny gem."
+            s.authors = ["Opal"]
+            s.license = "MIT"
+            s.files = ["lib/tiny.rb", "bin/tiny"]
+            s.executables = ["tiny"]
+            s.require_paths = ["lib"]
+          end
+          Gem::Installer.at(Gem::Package.build(spec), install_dir: ENV["GEM_HOME"], wrappers: true).install
+        end
+      `);
+      const r = rubyEnv({ GEM_HOME }, build, GEM_SRC);
+      assert.equal(r.status, 0, r.err);
+    });
+
+    test("require finds a file an installed gem owns", () => {
+      const r = rubyEnv({ GEM_HOME }, "-e", "require 'tiny'; puts Tiny::VERSION");
+      assert.equal(r.out, "0.1.0\n", r.err);
+    });
+
+    test("the gem's own paths stay out of the load path until it is required", () => {
+      const r = rubyEnv({ GEM_HOME }, "-e", "puts $LOAD_PATH.grep(/tiny/).size; require 'tiny'; puts $LOAD_PATH.grep(/tiny/).size");
+      assert.equal(r.out, "0\n1\n", r.err);
+    });
+
+    test("the wrapper the installer wrote runs the gem's executable", () => {
+      const r = rubyEnv({ GEM_HOME }, join(GEM_HOME, "bin", "tiny"));
+      assert.equal(r.out, "0.1.0\n", r.err);
+    });
+
+    test("a feature no gem owns still fails to load", () => {
+      const r = rubyEnv({ GEM_HOME }, "-e", "require 'not_there'");
+      assert.equal(r.status, 1);
+      assert.match(r.err, /cannot load such file -- not_there/);
+    });
+
+    test("the installed spec is found by name, with its version", () => {
+      const r = rubyEnv({ GEM_HOME }, "-e", "puts Gem::Specification.find_by_name('tiny').full_name");
+      assert.equal(r.out, "tiny-0.1.0\n", r.err);
     });
   });
 
