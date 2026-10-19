@@ -15,6 +15,87 @@ runtime floor for generated code.
 
 ---
 
+## Status
+
+Sections 1–9 are the survey and the plan as they were written, and stay as a
+record of them. Progress against §8 is marked on each milestone heading and
+summarised here — this section is the one to keep current.
+
+**M0–M4 are done, except the one line of M4's exit test that needs a `gem`
+command** (`exe/gem install ./hello-1.0.0.gem`); the install itself works
+through the API, and the command is the first thing M6's CLI plumbing brings.
+M5, M6 and M8 have not been started; M7 is half in, its `exe/ruby` side came
+with M0 and M4.
+
+What runs now, with no `-I` and no network:
+
+* the M1 exit test — `Digest::SHA256.hexdigest("a")`,
+  `Zlib.gunzip(Zlib.gzip("a"))`, `URI.parse("https://x/y").request_uri`,
+  `TSort` on a small graph — and the §4 version/requirement/dependency probe,
+  now against `lib/rubygems` rather than the probe's own copies;
+* `Gem::Package.build(spec)` writing a `.gem` that our own reader round-trips
+  (members, sizes, checksums), and a `.gem` built by real rubygems verifying,
+  parsing and extracting correctly through that same reader (M3);
+* install → activate → require: `Gem::Installer.at(path).install` into a
+  `GEM_HOME`, then `exe/ruby -e "require 'gem_name'"` with no `-I`, the
+  wrapper in `<gem_home>/bin` running the gem's executable, and
+  `Gem::Uninstaller` taking all of it away again (M4).
+
+Where it is tested: the port's own specs are under `spec/opal/gems/`, the
+ruby command's gem behaviour sits with the rest of its cases in
+`spec/lib/compiler/ruby_exe.test.mjs`, and the URI/digest/zlib parts of
+ruby/spec run inside the usual `node tasks/test.mjs` (the URI files are in
+`spec/selection/common`, its exceptions in `spec/filters/bugs/uri.rb`).
+
+Things the port did differently than planned, each one inherited by the
+milestones after it:
+
+* **`lib/rubygems.rb` requires its files, no `autoload`.** A gem command is
+  shipped as one compiled bundle, where a require decided at run time would
+  have nothing to load. Cost: everything loads with `require "rubygems"`.
+* **`exe/ruby` carries RubyGems** (`tasks/ruby/bundle.mjs` builds
+  `lib/rubygems.rb` into the bundle, 1.4MB → 1.9MB), because finding an
+  installed gem is a property of `require`, not of a library a script opts
+  into.
+* **The activation hook is in the loader, not in `Kernel#require`.** Opal
+  compiles `require` to a runtime call, so upstream's
+  `core_ext/kernel_require.rb` has no Ruby-level method to wrap;
+  `find_feature` calls `Gem.try_activate` for a path that is not on
+  `$LOAD_PATH` and searches again. That also closed a gap that predated the
+  port: a feature nothing could find now raises `LoadError` rather than the
+  `ENOENT` the platform loader used to raise.
+* **No `flock`, so `Gem.open_file_with_lock` creates `<path>.lock`
+  exclusively** and steals a lock older than `Gem::LOCK_TIMEOUT`. This is the
+  one lock GEMS.md D13 keeps; the in-process ones stay dropped.
+* **A binstub's `#!` names the `ruby` of the PATH** (`$RUBY` overrides it),
+  not the absolute path of the running interpreter: there is no RbConfig to
+  read that from, and the program installing a gem is not necessarily the one
+  that should run it.
+* **M1's tests went into ruby/spec's selection rather than new
+  `test/opal/test_{digest,zlib,uri}.rb`**, since upstream already had specs
+  for those libraries and most of them pass; only the deliberate gaps
+  (unported schemes, the RFC 2396 parser) are filtered out.
+
+What is still open, in the order that unblocks the rest:
+
+1. **A small correction first**: upstream hangs `MissingSpecError` and friends
+   off `Gem::LoadError < ::LoadError` (`errors.rb`); the port folded them under
+   `Gem::Exception` and never defined `Gem::LoadError`, which its own
+   `specification.rb` constructs on an activation conflict — so that path
+   raises `NameError` today.
+2. **M5, resolution**: `Gem::Resolver` and its sets, `DependencyInstaller`,
+   `Source::AggregateSource`, the vendored PubGrub. The local sets
+   (Installed/Local/SpecificFile) can be tested offline, so they come first;
+   the compact index and the HTTP transport (§6.3) come second.
+3. **M6, `exe/gem`**: `GemRunner`/`CommandManager`/`Command` and the option
+   classes, plus `tasks/gem.mjs`, starting from `install` — which closes M4's
+   exit test.
+4. **M7**: the builder consulting the gem directories (`--gem`, `Opalfile`'s
+   `add_gem_dependency`) and the precompiled `compiled/` tree.
+5. **M8, Bundler.**
+
+---
+
 ## 1. Scope
 
 Minimal but functional:
@@ -538,7 +619,14 @@ lines of new/ported code.
 
 *Exit test:* `exe/ruby -e "p FileTest; p Marshal.load(Marshal.dump([1,'a'])); p [1,2].pack('C*'); p caller_locations.first.path"` works with **no `-I`** and no explicit `require 'thread'`; `node tasks/test.mjs` green.
 
-### M1 — stdlib pieces (~1300 lines)
+**Status: done**, all six items. Item 5 landed in
+`docs/unsupported_features.md` rather than `HACKING.md` — that file is where
+the regexp, immutable-string and `flock` limitations now stand — and item 6's
+fast path is the `--build-sea` branch of
+`lib/opal/compiler/cli/exe_compiler.mjs`, which `tasks/ruby_exe.mjs` already
+shares. Item 4's `.js` lookup is what let M1 skip a yaml shim.
+
+### M1 — stdlib pieces (~1300 lines) — **done**
 
 `stdlib/digest.rb`, `stdlib/zlib.rb`, `stdlib/uri.rb` (full, trimmed port of
 the vendored `uri`), `stdlib/tsort.rb`, `stdlib/english.rb`,
@@ -553,7 +641,19 @@ which already exists in the suite.
 *Exit test:* `Digest::SHA256.hexdigest("a")`, `Zlib.gunzip(Zlib.gzip("a"))`,
 `URI.parse("https://x/y").request_uri`, `TSort` on a small graph.
 
-### M2 — `Gem` core, no I/O (~2600 lines)
+**Status: done**, the exit test passes. `digest.rb`, `zlib.rb`, `uri/`,
+`tsort.rb`, `English.rb` and `timeout.rb` are in `stdlib/`; the yaml item
+needed no `js-yaml-3-6-1.rb` shim, because M0's fourth item — `find_feature`
+trying `.js`, landed as d5ada5a88 — lets `stdlib/yaml.rb` require that plain
+`.js` file, and `Gem::SafeYAML` reads a real `metadata.gz` through it. Tests
+came out of ruby/spec rather than new `test/opal/test_{digest,zlib,uri}.rb`:
+`library/uri`, `library/digest`, `library/zlib` and `library/timeout` are in
+`spec/selection/common`, and the deliberate gaps — the RFC 2396 parser,
+`URI::Parser`, the schemes nobody uses — sit in `spec/filters/bugs/uri.rb`.
+One gap surfaced later and closed in M4: `URI::Generic.build2` still asked
+RFC2396_PARSER for an escape, so `URI::Util.escape` does that job now.
+
+### M2 — `Gem` core, no I/O (~2600 lines) — **done**
 
 Port: `errors.rb`, `exceptions.rb`, `deprecate.rb`, `text.rb`, `version.rb`,
 `requirement.rb`, `platform.rb`, `dependency.rb`, `name_tuple.rb`,
@@ -572,7 +672,23 @@ in this repo) where they run.
 *Exit test:* the §4 version/requirement/dependency probe runs unpatched except
 for the two documented rewrites.
 
-### M3 — `Gem::Specification` and the gemspec round-trip (~1200 lines)
+**Status: done**, against the ported tree rather than the probe's own copies.
+Three changes of shape: `lib/opal/gems/node_platform.rb` never appeared, the
+Opal answers sit in `lib/rubygems/defaults.rb` (no system directory,
+`default_dir` is `user_dir`, no vendor or extension directory,
+`local_platform` is plain `ruby`); `errors.rb` is not a file of its own, its
+exception classes were folded into `exceptions.rb`; and the files are
+`require`d eagerly by `lib/rubygems.rb` instead of autoloaded, so that a
+compiled bundle carries them. Two files arrived later than the plan assumed,
+with the milestones that first needed them: `text.rb` and `deprecate.rb`.
+
+One hole left by that folding, still open: upstream hangs `MissingSpecError`
+and its relatives off `Gem::LoadError < ::LoadError`, the port has them off
+`Gem::Exception` and never defines `Gem::LoadError` — which its own
+`specification.rb` constructs when an activation conflicts. Worth closing
+before M5 starts rescuing it.
+
+### M3 — `Gem::Specification` and the gemspec round-trip (~1200 lines) — **done**
 
 A trimmed `Gem::Specification` + `BasicSpecification` + `SpecificationPolicy`
 (≈1400 lines instead of 4593) keeping: attributes and defaults, `to_ruby`,
@@ -592,7 +708,21 @@ Plus `gem build` (gemspec → `.gem`): `package.rb` (trimmed),
 CRuby-installed gemspec works. (`tar tvf` is a handy development cross-check
 only — the test asserts with our reader, per D12.)
 
-### M4 — installed-gem store, activation and `require` (~900 lines)
+**Status: done as an API**, in `spec/opal/gems/{specification,package}_spec.rb`
+and through `Gem::Package.build(spec)` / `Gem::Package.open`: the `.gem` our
+writer produces is read back by our own reader with matching members, sizes
+and checksums; `cruby-tiny-0.1.0.gem` — a package built by real rubygems,
+committed under `spec/opal/gems/fixtures/` — verifies, parses and extracts
+through it; and `to_ruby`/`Gem::Specification.load` round-trip a gemspec.
+What the exit test calls `exe/gem build` and `exe/gem spec` is the M6 command
+wrapped around that same call. Two files on the list were not ported as such:
+`validator.rb` became `Gem::Package#verify`, and
+`errors.rb`/`installer_uninstaller_utils.rb` need no counterpart — the first
+folds into `exceptions.rb`, the second only carried plugin bookkeeping.
+`matches_name?` is not missing: RubyGems 4.1 has no such method, the work is
+done by `contains_requirable_file?` and `find_inactive_by_path`.
+
+### M4 — installed-gem store, activation and `require` (~900 lines) — **done**, bar `exe/gem install`
 
 `Gem::Source`, `SourceList`, `Source::Installed`, `Source::Local`,
 `Source::SpecificFile`, `Gem::Specification` scanning, `Gem::Installer`
@@ -616,7 +746,28 @@ In the port itself: drop the `@load_cache_mutex`, `DEBUG_MUTEX` and
 `exe/ruby -e "require 'hello'; puts Hello.hi"` with **no `-I`**, and
 `exe/opal -e "require 'hello'"` compiling it.
 
-### M5 — remote metadata and resolution (~2600 lines)
+**Status: done, except how the first line is spelled.** There is no `gem`
+command yet, so the install goes through `Gem::Installer.at(path).install`;
+everything after it is what the specs check — `exe/ruby -e "require 'hello'"`
+with no `-I`, the wrapper in `<gem_home>/bin` running the gem's executable,
+and `Gem::Uninstaller` taking all of it away (see the Status section at the
+top for where that is tested). The last line, `exe/opal` compiling an
+installed gem, is the builder's half and waits for M7. Three deviations:
+
+* no ported `core_ext/kernel_require.rb`: Opal compiles `require` to a
+  runtime call, so the hook lives in `exe/ruby`'s `find_feature`, which asks
+  `Gem.try_activate` for a path that is not on `$LOAD_PATH` and searches
+  again. That also closed a hole that predated the port — a feature nobody
+  could find raised the platform loader's `ENOENT`, now a `LoadError`, which
+  is what a require hook can rescue;
+* no `index.json` to write: RubyGems 4.1 keeps one gemspec per gem and
+  rescans the directory through `Gem::SpecificationRecord`, and the port
+  copies that, so M7's `gem_paths.mjs` reads `specifications/*.gemspec`;
+* a gem that declares `extensions` is refused by `verify_buildable` instead
+  of being half-built (§1), and no plugin or Windows stub wrappers are
+  generated — hence no `installer_uninstaller_utils.rb`.
+
+### M5 — remote metadata and resolution (~2600 lines) — **not started**
 
 `lib/opal/gems/http.mjs` (persistent fetch worker, §6.3) + `http.rb`
 binding + `Gem::RemoteFetcher`,
@@ -628,7 +779,16 @@ binding + `Gem::RemoteFetcher`,
 `exe/gem install <gem>` where the resolver must backtrack, and a
 `SolveFailure` case whose message renders.
 
-### M6 — the `gem` CLI (~1500 lines)
+**Status: not started.** The remote methods of `Gem::Source` — `load_specs`,
+`fetch_spec`, `download` — raise `Gem::Exception "remote sources are not
+available yet"`, and that raise marks the seam. The offline half can land
+first and be tested without network: `Source::Installed`, `Source::Local` and
+`Source::SpecificFile` came with M4, so the resolver's sets,
+`Source::AggregateSource` and `DependencyInstaller` already have something
+real to sit on. Close M2's `Gem::LoadError` hole first — the resolver's
+failure path is exactly what callers rescue.
+
+### M6 — the `gem` CLI (~1500 lines) — **not started**
 
 `lib/opal/exe/gem.rb`, `Gem::GemRunner`, `Gem::CommandManager`,
 `Gem::Command`, `user_interaction.rb` (trimmed), `version_option.rb`,
@@ -647,10 +807,19 @@ Build tasks: `tasks/gem.mjs`, `tasks/gem/bundle.mjs`, `tasks/gem_exe.mjs`
 Tests: `spec/lib/gems/cli.test.mjs` — spawn `exe/gem` against a local
 `Source::Local` fixture directory (no network) plus one network-marked test.
 
-### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines)
+**Status: not started.** The parts it wraps all exist and are tested at the
+API level — `Gem::Installer`, `Gem::Uninstaller`, `Gem::Package.build`,
+`Gem::Specification`, `SourceList` — so what is left is the runner, the
+option-parser classes and `tasks/gem.mjs`. Doing `install` first closes M4's
+exit test and makes an end-to-end CLI test possible with the offline
+build → install → require path already used in `spec/lib/compiler/ruby_exe.test.mjs`.
 
-* `lib/opal/compiler/builder/gem_paths.mjs`: read `<gem_dir>/specifications/index.json`,
-  append `<gem_dir>/gems/<full>/<require_path>` (and `compiled/<full>` first)
+### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **partly done**
+
+* `lib/opal/compiler/builder/gem_paths.mjs`: read the gemspec stubs of
+  `<gem_home>/specifications` — RubyGems 4.1 has no `index.json` and rescans
+  the directory, as M4 notes — and append
+  `<gem_dir>/gems/<full>/<require_path>` (and `compiled/<full>` first)
   to the builder's paths.
 * `--gem NAME` / `-g` implemented (drop the "not available in Node.js" warning);
   `Opalfile`'s `add_gem_dependency` implemented.
@@ -661,7 +830,15 @@ Tests: `spec/lib/gems/cli.test.mjs` — spawn `exe/gem` against a local
 `exe/ruby -e "require 'rake'"` measurably faster with the compiled tree
 (`benchmark/`-style measurement, not a gate).
 
-### M8 — Bundler (~3500 lines)
+**Status: partly done.** The third bullet's `exe/ruby` is finished — its
+loader is gem-aware (M4) and it loads a plain `.js` feature that registers no
+Opal module (M0). The other three have not started: `cli.mjs` and `options.mjs`
+still say `--gem` is "not available in Node.js" and ignore it, the builder's
+`Opalfile` reader warns that `add_gem_dependency` is ignored
+(`lib/opal/compiler/builder/project.mjs`), and nothing writes a `compiled/`
+tree.
+
+### M8 — Bundler (~3500 lines) — **not started**
 
 `lib/opal/exe/bundler.rb`, `lib/bundler/`: `bundler.rb` (root, `root`,
 `bundle_path`, `load`, `setup`, `require`, `ui`), `dsl.rb` (Gemfile: `source`,
@@ -693,6 +870,11 @@ to drop, the second already works.
 *Exit test:* a small app with a `Gemfile` + `Gemfile.lock`:
 `exe/bundler install`, `exe/bundler exec ruby -e "require '…'"`,
 `exe/bundler update --conservative`, `exe/bundler list`, lockfile round-trip.
+
+**Status: not started**, nothing of `lib/bundler` is ported. It inherits both
+M5's resolver and transport and M6's option-parsing classes; its `Gemfile` and
+lockfile parsing is the part that can be tested offline first, against a
+resolver sitting on a local source.
 
 ### Suggested ordering rationale
 
@@ -747,14 +929,27 @@ M8 is the largest and depends on all of the above.
 
 ## 10. Immediate next steps
 
-1. Land M0 (the Opal fixes, including the `--build-sea` fast path on Node 26)
-   — they are small, independently useful, and each is already reproduced by a
-   probe.
-2. Land M1 + M2 and re-run the §4 probes against the real `lib/rubygems` tree
-   instead of `tmp/gems_probe` copies.
-3. Add a `tasks/gems-fixtures.mjs` that vendors a handful of `.gem` files
-   (rake, a gem with deps, a gem with a `java` platform variant) under
-   `spec/fixtures/gems` so M4–M6 tests run offline.
+1. Close the hole M2 left: define `Gem::LoadError < ::LoadError` as upstream's
+   `errors.rb` does and hang `MissingSpecError` and its relatives off it. The
+   ported `specification.rb` already constructs it on an activation conflict,
+   so today that path raises `NameError` — and M5's resolver is what rescues
+   it.
+2. M5's offline half: `Gem::Resolver` + `resolver/*` (sets, specifications,
+   requests), `Source::AggregateSource`, `Gem::DependencyInstaller`, and the
+   vendored PubGrub from `lib/rubygems/vendor/pub_grub`. `Source::Installed`,
+   `Source::Local` and `Source::SpecificFile` already exist, so all of this is
+   testable without a network.
+3. Fixtures for it: a few real `.gem` files (one plain, one with dependencies,
+   one with a `java` platform variant) committed where the offline resolver and
+   CLI tests can read them — `spec/opal/gems/fixtures/` already starts that,
+   and `tasks/gems-fixtures.mjs` would vendor the rest from rubygems.org once,
+   offline thereafter.
+4. M5's remote half: `lib/opal/gems/http.mjs` plus `Gem::RemoteFetcher` and
+   `Gem::CompactIndexClient`, replacing the "remote sources are not available
+   yet" raise in `lib/rubygems/source.rb`.
+5. M6's `install` command — `GemRunner`, `CommandManager`, the option classes,
+   `exe/gem`, `tasks/gem.mjs` — which retires the `Gem::Installer.at(...)`
+   spelling in M4's exit test and gives M5's end-to-end test its command.
 
 ---
 
