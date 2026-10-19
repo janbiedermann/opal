@@ -76,6 +76,10 @@ require_relative "rubygems/resolver"
 require_relative "rubygems/available_set"
 require_relative "rubygems/request_set"
 require_relative "rubygems/dependency_installer"
+# Opal: last of the requires, because Visitors::ToRuby names Gem::Specification
+# in a constant at load time (SAFE_USER_DEFINED_CLASSES), and upstream's lazy
+# Gem.load_safe_marshal only ran once the library was fully up.
+require_relative "rubygems/safe_marshal"
 
 module Gem
   ##
@@ -382,6 +386,16 @@ module Gem
   # so this only answers the question upstream asks it.
 
   def self.load_yaml
+    true
+  end
+
+  ##
+  # The marshal reader the ported code reads a spec and the marshalled indexes
+  # with, Gem::SafeMarshal. Upstream requires it here on first use; this port
+  # requires it with the rest of rubygems, so a compiled bundle carries it and
+  # this only answers the question upstream asks it.
+
+  def self.load_safe_marshal
     true
   end
 
