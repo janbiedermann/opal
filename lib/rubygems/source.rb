@@ -72,6 +72,15 @@ class Gem::Source
 
   alias_method :eql?, :== # :nodoc:
 
+  ##
+  # Returns a Set that can fetch specifications from this source.
+  #
+  # The set will optionally fetch prereleases if requested.
+
+  def dependency_resolver_set(prerelease = false)
+    new_dependency_resolver_set.tap {|set| set.prerelease = prerelease }
+  end
+
   def hash # :nodoc:
     @uri.hash
   end
@@ -119,6 +128,24 @@ class Gem::Source
 
   def fetch_spec(name_tuple)
     remote_not_available
+  end
+
+  ##
+  # Which resolver set reads this source: a directory of the old marshal
+  # indexes for a file:// source, otherwise the compact index when the server
+  # publishes one and the marshal index when it does not.
+  #
+  # Opal: that choice is one HTTP request - a fetch of <compact index>/versions,
+  # falling back on a fetch error - so it belongs to the transport of M5's
+  # second half, and a remote source answers the same raise as its other remote
+  # methods. A file:// source already has its index on disk, so it gets the
+  # marshal-index set, whose reader (Gem::SafeMarshal) is the other thing that
+  # half brings.
+
+  def new_dependency_resolver_set
+    return Gem::Resolver::IndexSet.new self if uri.scheme == "file"
+
+    remote_not_available # M5
   end
 
   private

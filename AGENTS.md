@@ -308,6 +308,16 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   is redirected to the user directory. Node has no `flock`, so
   `Gem.open_file_with_lock` is an exclusive-create `<path>.lock` file, stolen
   once older than `Gem::LOCK_TIMEOUT`.
+- `Gem::Resolver` *is* the PubGrub source object: it feeds `VersionSolver`
+  (`source: self`) and turns decisions into `ActivationRequest`s. A failed
+  resolution is `Gem::DependencyResolutionError` whose message is PubGrub's
+  explanation; a root dependency nothing provides is the pre-check's
+  `Gem::UnsatisfiableDependencyError.new(dep_request, platform_mismatch)` —
+  upstream 4.1's shape, which takes a `DependencyRequest` and answers
+  `#dependency` and `#errors` rather than an `original` exception. Install the
+  resolved set in `Gem::DependencyList#dependency_order.reverse`: that method
+  returns dependents first, and `Gem::Installer` refuses a gem whose
+  dependencies are not in place.
 - MSpec in `spec/opal`: expect `-> { }.should raise_error(X)` (space, not
   `.should.raise`); `start_with` and `be_truthy` matchers do not exist there;
   a predicate that answers an object (`Gem::SourceList#include?` finds and

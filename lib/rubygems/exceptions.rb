@@ -27,6 +27,28 @@ class Gem::DependencyError < Gem::Exception; end
 
 class Gem::DependencyRemovalException < Gem::Exception; end
 
+##
+# Raised by Gem::Resolver when dependency resolution fails.
+
+class Gem::DependencyResolutionError < Gem::DependencyError
+  def initialize(conflict)
+    @explanation = conflict.explanation
+    super @explanation
+  end
+
+  def explanation
+    @explanation
+  end
+
+  def conflict
+    nil
+  end
+
+  def conflicting_dependencies
+    []
+  end
+end
+
 class Gem::GemNotInHomeException < Gem::Exception
   attr_accessor :spec
 
@@ -119,29 +141,34 @@ class Gem::SystemExitException < SystemExit
 end
 
 class Gem::UnsatisfiableDependencyError < Gem::DependencyError
-  attr_reader :original
+  ##
+  # The unsatisfiable dependency.  This is a
+  # Gem::Resolver::DependencyRequest, not a Gem::Dependency
 
-  def initialize(dependency, original = nil)
-    search = nil
-    if dependency.type == :development
-      search = " (all user-installed gems, plus development dependencies of those gems)"
-    elsif dependency.type == :runtime
-      search = " (only runtime dependencies)"
-    end
+  attr_reader :dependency
 
-    msg = "Error installing gem #{dependency}#{search}: "
+  ##
+  # Errors encountered which may have contributed to this exception
 
-    msg += if original
-      "original error: #{original.message}"
+  attr_accessor :errors
+
+  ##
+  # Creates a new UnsatisfiableDependencyError for the unsatisfiable
+  # Gem::Resolver::DependencyRequest +dep+
+
+  def initialize(dep, platform_mismatch = nil)
+    if platform_mismatch && !platform_mismatch.empty?
+      plats = platform_mismatch.map {|x| x.platform.to_s }.sort.uniq
+      super "Unable to resolve dependency: No match for '#{dep}' on this platform. Found: #{plats.join(", ")}"
     else
-      "no matching gem"
+      if dep.explicit?
+        super "Unable to resolve dependency: user requested '#{dep}'"
+      else
+        super "Unable to resolve dependency: '#{dep.request_context}' requires '#{dep}'"
+      end
     end
 
-    super msg
-    @original = original
-  end
-
-  def dependency
-    @dependency
+    @dependency = dep
+    @errors     = []
   end
 end

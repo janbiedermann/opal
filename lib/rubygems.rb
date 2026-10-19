@@ -71,6 +71,8 @@ require_relative "rubygems/source_list"
 require_relative "rubygems/dependency_list"
 require_relative "rubygems/installer"
 require_relative "rubygems/uninstaller"
+require_relative "rubygems/spec_fetcher"
+require_relative "rubygems/resolver"
 
 module Gem
   ##
