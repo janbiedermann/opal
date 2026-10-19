@@ -53,7 +53,13 @@ What runs now, with no `-I` and no network:
   `Gem::RequestSet` over a `Gem::Resolver::InstallerSet` — does all of that,
   picks the version the requirement allows rather than the newest, and it works
   inside `exe/ruby` with no `-I`, after which `require 'helper'` activates the
-  gem and what it pulled in (M5's offline half).
+  gem and what it pulled in (M5's offline half);
+* a marshalled stream: `Gem::SafeMarshal.safe_load` reads the
+  `[name, version, platform]` triples of a `specs.4.8` index, written by real
+  CRuby, with their classes and their UTF-8 strings intact, and refuses what it
+  should — an unpermitted class, symbol or ivar, and a Time, which is what a
+  marshalled full spec carries as its date and which Opal's `Marshal` cannot
+  read (M5).
 
 Where it is tested: the port's own specs are under `spec/opal/gems/`, the
 ruby command's gem behaviour sits with the rest of its cases in
@@ -68,10 +74,10 @@ milestones after it:
   shipped as one compiled bundle, where a require decided at run time would
   have nothing to load. Cost: everything loads with `require "rubygems"`.
 * **`exe/ruby` carries RubyGems** (`tasks/ruby/bundle.mjs` builds
-  `lib/rubygems.rb` into the bundle: 1.4MB, 1.9MB with the M4 store, 2.06MB now
-  that the resolver and the install driver are required eagerly too), because
-  finding an installed gem is a property of `require`, not of a library a script
-  opts into.
+  `lib/rubygems.rb` into the bundle: 1.4MB, 1.9MB with the M4 store, 2.09MB now
+  that the resolver, the install driver and the marshal reader are required
+  eagerly too), because finding an installed gem is a property of `require`, not
+  of a library a script opts into.
 * **The activation hook is in the loader, not in `Kernel#require`.** Opal
   compiles `require` to a runtime call, so upstream's
   `core_ext/kernel_require.rb` has no Ruby-level method to wrap;
@@ -98,14 +104,17 @@ every one reached through a failing gem path — are listed with their commits i
 What is still open, in the order that unblocks the rest:
 
 1. **M5, the half that needs the network**: the resolver, its sets,
-   `Gem::SpecFetcher` and the install driver (`Gem::RequestSet`,
-   `Gem::DependencyInstaller`) are ported and spec'd against a local repository
-   and the installed gems, and they are what `exe/gem install ./x.gem` will run.
-   What is missing is the marshal reader `Gem::SafeMarshal` (525 upstream lines,
-   and the `Gem.load_safe_marshal` `Specification._load` already calls),
-   `http.mjs` + `Gem::RemoteFetcher` + `Gem::CompactIndexClient` (§6.3), then
+   `Gem::SpecFetcher`, the install driver (`Gem::RequestSet`,
+   `Gem::DependencyInstaller`) and the marshal reader `Gem::SafeMarshal` are
+   ported and spec'd against a local repository, the installed gems and
+   CRuby-written marshal streams, and they are what `exe/gem install ./x.gem`
+   will run. What is missing is the transport: `http.mjs` +
+   `Gem::RemoteFetcher` + `Gem::CompactIndexClient` (§6.3), then
    `resolver/api_set*` and `resolver/source_set` to replace the "remote sources
-   are not available yet" raise of `Gem::Source`.
+   are not available yet" raise of `Gem::Source`. Reading a marshalled *full
+   spec* is also still out — a marshalled spec carries its date as a Time and
+   Opal's `Marshal` has no Time support (see M5's status below) — but the
+   compact index the plan follows answers full specs as YAML.
 2. **M6, `exe/gem`**: `GemRunner`/`CommandManager`/`Command` and the option
    classes, plus `tasks/gem.mjs`, starting from `install` — which closes M4's
    exit test.
@@ -831,7 +840,7 @@ transport or a feature §1 drops:
   with the probe replaced: choosing compact index over marshal index is one HTTP
   fetch, so a remote source answers the same "remote sources are not available
   yet" as its other remote methods, and a `file://` source gets the
-  marshal-index set, whose reader is the missing `Gem::SafeMarshal`.
+  marshal-index set, whose reader `Gem::SafeMarshal` came in below.
 * `Gem::SpecFetcher`: its three `Gem::RemoteFetcher::FetchError` rescues read
   for `Gem::Exception` (upstream's `FetchError` is a subclass of it, and every
   remote read currently raises that), and its `@fetcher`, which this file never
@@ -885,11 +894,45 @@ driver rides in the compiled bundle — one run resolves `helper (~> 0.1.0)` to
 `tiny-0.1.0` rather than the `0.2.0` next to it and installs the pair, and
 `require 'helper'` with no `-I` then activates the gem and what it pulls in.
 
+The marshal reader is in as well: `Gem::SafeMarshal` — all 1051 upstream lines
+of `safe_marshal.rb`, `safe_marshal/elements.rb`, `safe_marshal/reader.rb` and
+`safe_marshal/visitors/{visitor,to_ruby,stream_printer}.rb` — required with the
+rest of rubygems, which closes the `Gem.load_safe_marshal` hole that
+`Specification._load` was calling into. It reads a `specs.4.8` index written by
+real CRuby — the `[name, version, platform]` triples, with their `Gem::Version`
+and `Gem::Platform` objects — and it refuses what `safe_load` refuses. Three
+deviations, all of them places where the format and Opal's strings or `Marshal`
+part company:
+
+* `Symbol#name` was missing: `resolve_ivar` and `resolve_symbol_name` ask a
+  symbol link for its name. `opal/corelib/string.rb` answers it now, frozen and
+  the same String per symbol as CRuby does, and
+  `spec/ruby/core/symbol/name_spec.rb` is in the selection and green.
+* an Opal String holds characters while the stream holds bytes, and
+  `force_encoding` only retags them, so a stream string tagged UTF-8 is decoded
+  with `TextDecoder` as its `:E` ivar is read (`#decode_utf8`). A string tagged
+  US-ASCII or BINARY keeps its bytes, which is what keeps `"\xff"` one byte
+  rather than a replacement character.
+* the Time branch is out. Upstream rebuilds a marshal stream and hands it back
+  to `Marshal.load`, because a Time's ivars are its internal representation;
+  `Marshal` here has no Time support at all — it reads CRuby's user-defined
+  body as a `time_t` and answers 1970, which is why every `Marshal.load for a
+  Time` example is filtered in `spec/filters/bugs/marshal.rb`. RubyGems
+  normalizes `Specification#date` to a Time, so *every* marshalled full spec
+  carries one: rather than answer a wrong `#date`, the port raises
+  `UnsupportedError` naming the gap. The compact index answers full specs as
+  YAML, so what that closes off is the legacy `.gemspec.rz` path.
+
+`spec/opal/gems/safe_marshal_spec.rb` (10 examples) reads fixtures under
+`spec/opal/gems/fixtures/safe_marshal/`: streams written by CRuby 3.3, kept as
+data because Opal's `Marshal` writes an object with ivars where CRuby writes a
+user-defined one. They cover the index triples with their classes, the
+symbols the gem format uses, the UTF-8 strings, the three permission refusals, a
+stream that is not marshal 4.8, the Time refusal, and that
+`Specification._load` reaches this reader.
+
 What is still missing is the half that reads indexes and `.gem` files over
-HTTP: `Gem::SafeMarshal` (525 upstream lines — upstream's `Source#load_specs`
-and `fetch_spec` read the marshalled indexes through it, and
-`Specification._load` already calls a `Gem.load_safe_marshal` the port does not
-have), `lib/opal/gems/http.mjs` + `Gem::RemoteFetcher` +
+HTTP: `lib/opal/gems/http.mjs` + `Gem::RemoteFetcher` +
 `Gem::CompactIndexClient` (§6.3), and then `api_set` and `source_set`.
 
 ### M6 — the `gem` CLI (~1500 lines) — **not started**
@@ -1033,12 +1076,10 @@ M8 is the largest and depends on all of the above.
 
 ## 10. Immediate next steps
 
-1. `Gem::SafeMarshal` (`safe_marshal.rb` plus `safe_marshal/{elements,reader}.rb`,
-   525 lines): the marshal reader the compact index and the marshalled spec
-   indexes are parsed with. `Specification._load` calls it already, through a
-   `Gem.load_safe_marshal` that `lib/rubygems.rb` still lacks. It is the first
-   piece of the transport: with it, a `file://` source's marshalled index and a
-   fetched `.gemspec` become readable.
+1. M5's remote half: `lib/opal/gems/http.mjs` plus `Gem::RemoteFetcher` and
+   `Gem::CompactIndexClient`, replacing the "remote sources are not available
+   yet" raise in `lib/rubygems/source.rb`, and then `resolver/api_set*` and
+   `resolver/source_set` so `BestSet` has something to pick.
 2. Fixtures for the CLI: a few real `.gem` files (one plain, one with
    dependencies, one with a `java` platform variant) committed where the
    resolver and CLI tests can read them — `spec/opal/gems/fixtures/` already
@@ -1046,10 +1087,7 @@ M8 is the largest and depends on all of the above.
    rubygems.org once, offline thereafter. The resolver and installer specs
    build their gems with `Gem::Package.build` in a temporary directory instead,
    which keeps them hermetic.
-3. M5's remote half: `lib/opal/gems/http.mjs` plus `Gem::RemoteFetcher` and
-   `Gem::CompactIndexClient`, replacing the "remote sources are not available
-   yet" raise in `lib/rubygems/source.rb`.
-4. M6's `install` command — `GemRunner`, `CommandManager`, the option classes,
+3. M6's `install` command — `GemRunner`, `CommandManager`, the option classes,
    `exe/gem`, `tasks/gem.mjs` — which retires the `Gem::Installer.at(...)`
    spelling in M4's exit test and gives M5's end-to-end test its command.
    `Gem::DependencyInstaller` is what it calls, and it needs `Gem::Cooldown`
@@ -1061,7 +1099,7 @@ M8 is the largest and depends on all of the above.
 
 The port itself is plain Ruby and lives outside the core trees (`lib/rubygems/`,
 its specs under `spec/opal/gems/`, the bundling in `tasks/ruby/bundle.mjs`).
-What it did change inside `opal/` and `lib/opal/` is 15 files, +302/−93 lines
+What it did change inside `opal/` and `lib/opal/` is 16 files, +323/−93 lines
 since the branch base `6b22c1080`. Every one of them was reached by running gem
 code — reading a `.gem`, a gemspec, a binstub — or by running ruby/spec over
 the stdlib pieces the port needs, and each comes with a test: a case under
@@ -1087,6 +1125,7 @@ Only the lint-only catch bindings came with none.
 | `opal/io/buffer.rb` | 3e5d6a8eb | optional catch bindings — the form lint accepts in code the corelib and stdlint check. |
 | `opal/runtime/platforms/node_compatible.js` | 13232bad5 | exports `node:crypto` beside `fs` and `os`, which `stdlib/digest.rb` needs. |
 | `opal/runtime/platforms/node_compatible.js` | a9007b0bd | exports `node:zlib`, which `stdlib/zlib.rb` needs. |
+| `opal/corelib/string.rb` | bfbd0acbb | M5. `Symbol#name`, which `Gem::SafeMarshal` asks a symbol link of a marshal stream for (`#resolve_ivar`, `#resolve_symbol_name`) and Opal did not have: a frozen String, kept in a Map keyed by the symbol so `:x.name.equal?(:x.name)` holds as it does in CRuby. It sits on String, where this implementation keeps the Symbol methods (`Symbol = String` at the end of that file). `spec/ruby/core/symbol/name_spec` joined `spec/selection/common` with it and its three examples pass. |
 
 ### `lib/opal/` — the toolchain
 
