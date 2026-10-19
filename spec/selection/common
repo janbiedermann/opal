@@ -224,4 +224,27 @@ ruby/library/stringscanner
 
 ruby/library/time
 
+ruby/library/uri/decode_www_form_component_spec
+ruby/library/uri/decode_www_form_spec
+ruby/library/uri/encode_www_form_component_spec
+ruby/library/uri/encode_www_form_spec
+ruby/library/uri/eql_spec
+ruby/library/uri/equality_spec
+ruby/library/uri/escape
+ruby/library/uri/generic
+ruby/library/uri/http
+ruby/library/uri/join_spec
+ruby/library/uri/normalize_spec
+ruby/library/uri/parse_spec
+ruby/library/uri/parser
+!ruby/library/uri/parser/extract_spec
+ruby/library/uri/plus_spec
+ruby/library/uri/route_from_spec
+ruby/library/uri/route_to_spec
+ruby/library/uri/select_spec
+ruby/library/uri/set_component_spec
+ruby/library/uri/split_spec
+ruby/library/uri/uri_spec
+ruby/library/uri/util
+
 ruby/library/optionparser

@@ -1,0 +1,887 @@
+# backtick_javascript: true
+# frozen_string_literal: true
+#--
+# = uri/common.rb
+#
+# Ported from RubyGems' vendored uri (lib/rubygems/vendor/uri), with the
+# name back from Gem::URI to URI. The changes are marked "Opal:" where they
+# are made:
+#
+# * the RFC 2396 parser and its obsolete constant machinery are left out:
+#   only the RFC 3986 parser is ported, which is what the default parser
+#   of Ruby >= 3.2 and of RubyGems is.
+# * the mutation of strings by the www-form-urlencoded helpers is written
+#   as rebinding, Opal strings being immutable (§6.1 of GEMS.md).
+# * the encode/decode helpers work on characters, not bytes, since an
+#   Opal string is a sequence of UTF-16 units: the percent-escaping of a
+#   non-ASCII character encodes its UTF-8 bytes, as CRuby's does after
+#   forcing the string to ASCII-8BIT.
+#
+# Author:: Akira Yamada <akira@ruby-lang.org>
+# License::
+#   You can redistribute it and/or modify it under the same term as Ruby.
+#
+# See URI for general documentation
+#
+
+require_relative "rfc3986_parser"
+
+module URI
+  # The default parser instance for RFC 3986.
+  RFC3986_PARSER = RFC3986_Parser.new
+  Ractor.make_shareable(RFC3986_PARSER) if defined?(Ractor)
+
+  # The default parser instance.
+  DEFAULT_PARSER = RFC3986_PARSER
+  Ractor.make_shareable(DEFAULT_PARSER) if defined?(Ractor)
+
+  # Set the default parser instance.
+  #
+  # Opal: the RFC 2396 branch is out, so only the Parser/PARSER constants
+  # and the parser's named patterns are (re)defined.
+  def self.parser=(parser = RFC3986_PARSER)
+    remove_const(:Parser) if defined?(::URI::Parser)
+    const_set("Parser", parser.class)
+
+    remove_const(:PARSER) if defined?(::URI::PARSER)
+    const_set("PARSER", parser)
+
+    Parser.new.regexp.each_pair do |sym, str|
+      remove_const(sym) if const_defined?(sym, false)
+      const_set(sym, str)
+    end
+  end
+  self.parser = RFC3986_PARSER
+
+  module Util # :nodoc:
+    # The percent-escapes of the UTF-8 bytes of one character (Opal strings
+    # hold characters, not bytes: CRuby reaches the same escapes by forcing
+    # the whole string to ASCII-8BIT before a byte-wise table gsub). The
+    # parameter is not named char: Opal rewrites that name in JavaScript.
+    def percent_encode_utf8(character)
+      %x{
+        var bytes = new TextEncoder().encode(character), out = '', byte;
+        for (var i = 0; i < bytes.length; i++) {
+          out += '%' + bytes[i].toString(16).toUpperCase().padStart(2, '0');
+        }
+        return out;
+      }
+    end
+    module_function :percent_encode_utf8
+
+    # The character a run of percent-escaped bytes stands for: the run is
+    # decoded as UTF-8 (a partial sequence becomes the replacement
+    # character, as Ruby's String#scrub leaves it). A '+' becomes a space
+    # when +plus+; %XX escapes of '+' are not touched.
+    def percent_decode(str, plus)
+      str.gsub(plus ? /\++|%\h\h(?:%\h\h)*/ : /%\h\h(?:%\h\h)*/) do |run|
+        if run.start_with?('%')
+          # Opal renames some Ruby local names in JavaScript (AGENTS.md),
+          # so the %x{} body uses a name it leaves alone.
+          escapes = run.scan(/%\h\h/).map! { |escape| escape[1..-1].hex }
+          # An Opal Array is a JavaScript array, so Uint8Array reads it.
+          %x{ new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(escapes)) }
+        else
+          ' ' * run.length
+        end
+      end
+    end
+    module_function :percent_decode
+
+    def make_components_hash(klass, array_hash)
+      tmp = {}
+      if array_hash.kind_of?(Array) &&
+          array_hash.size == klass.component.size - 1
+        klass.component[1..-1].each_index do |i|
+          begin
+            tmp[klass.component[i + 1]] = array_hash[i].clone
+          rescue TypeError
+            tmp[klass.component[i + 1]] = array_hash[i]
+          end
+        end
+
+      elsif array_hash.kind_of?(Hash)
+        array_hash.each do |key, value|
+          begin
+            tmp[key] = value.clone
+          rescue TypeError
+            tmp[key] = value
+          end
+        end
+      else
+        raise ArgumentError,
+          "expected Array of or Hash of components of #{klass} (#{klass.component[1..-1].join(', ')})"
+      end
+      tmp[:scheme] = klass.to_s.sub(/\A.*::/, '').downcase
+
+      return tmp
+    end
+    module_function :make_components_hash
+  end
+
+  module Schemes # :nodoc:
+    class << self
+      ReservedChars = ".+-"
+      EscapedChars = "\u01C0\u01C1\u01C2"
+      # Use Lo category chars as escaped chars for TruffleRuby, which
+      # does not allow Symbol categories as identifiers.
+
+      def escape(name)
+        unless name and name.ascii_only?
+          return nil
+        end
+        name.upcase.tr(ReservedChars, EscapedChars)
+      end
+
+      def unescape(name)
+        name.tr(EscapedChars, ReservedChars).encode(Encoding::US_ASCII).upcase
+      end
+
+      def find(name)
+        const_get(name, false) if name and const_defined?(name, false)
+      end
+
+      def register(name, klass)
+        unless scheme = escape(name)
+          raise ArgumentError, "invalid character as scheme - #{name}"
+        end
+        const_set(scheme, klass)
+      end
+
+      def list
+        constants.map { |name|
+          [unescape(name.to_s), const_get(name)]
+        }.to_h
+      end
+    end
+  end
+  private_constant :Schemes
+
+  # Registers the given +klass+ as the class to be instantiated
+  # when parsing a \URI with the given +scheme+:
+  #
+  #   URI.register_scheme('MS_SEARCH', URI::Generic) # => URI::Generic
+  #   URI.scheme_list['MS_SEARCH']                   # => URI::Generic
+  #
+  # Note that after calling String#upcase on +scheme+, it must be a valid
+  # constant name.
+  def self.register_scheme(scheme, klass)
+    Schemes.register(scheme, klass)
+  end
+
+  # Returns a hash of the defined schemes:
+  #
+  #   URI.scheme_list
+  #   # =>
+  #   {"MAILTO"=>URI::MailTo,
+  #    "LDAPS"=>URI::LDAPS,
+  #    "WS"=>URI::WS,
+  #    "HTTP"=>URI::HTTP,
+  #    "HTTPS"=>URI::HTTPS,
+  #    "LDAP"=>URI::LDAP,
+  #    "FILE"=>URI::File,
+  #    "FTP"=>URI::FTP}
+  #
+  # Related: URI.register_scheme.
+  def self.scheme_list
+    Schemes.list
+  end
+
+  # :stopdoc:
+  INITIAL_SCHEMES = scheme_list
+  private_constant :INITIAL_SCHEMES
+  Ractor.make_shareable(INITIAL_SCHEMES) if defined?(Ractor)
+  # :startdoc:
+
+  # Returns a new object constructed from the given +scheme+, +arguments+,
+  # and +default+:
+  #
+  # - The new object is an instance of <tt>URI.scheme_list[scheme.upcase]</tt>.
+  # - The object is initialized by calling the class initializer
+  #   using +scheme+ and +arguments+.
+  #   See URI::Generic.new.
+  #
+  # Examples:
+  #
+  #   values = ['john.doe', 'www.example.com', '123', nil, '/forum/questions/', nil, 'tag=networking&order=newest', 'top']
+  #   URI.for('https', *values)
+  #   # => #<URI::HTTPS https://john.doe@www.example.com:123/forum/questions/?tag=networking&order=newest#top>
+  #   URI.for('foo', *values, default: URI::HTTP)
+  #   # => #<URI::HTTP foo://john.doe@www.example.com:123/forum/questions/?tag=networking&order=newest#top>
+  #
+  def self.for(scheme, *arguments, default: Generic)
+    const_name = Schemes.escape(scheme)
+
+    uri_class = INITIAL_SCHEMES[const_name]
+    uri_class ||= Schemes.find(const_name)
+    uri_class ||= default
+
+    return uri_class.new(scheme, *arguments)
+  end
+
+  #
+  # Base class for all URI exceptions.
+  #
+  class Error < StandardError; end
+  #
+  # Not a URI.
+  #
+  class InvalidURIError < Error; end
+  #
+  # Not a URI component.
+  #
+  class InvalidComponentError < Error; end
+  #
+  # URI is valid, bad usage is not.
+  #
+  class BadURIError < Error; end
+
+  # Returns a 9-element array representing the parts of the \URI
+  # formed from the string +uri+;
+  # each array element is a string or +nil+:
+  #
+  #   names = %w[scheme userinfo host port registry path opaque query fragment]
+  #   values = URI.split('https://john.doe@www.example.com:123/forum/questions/?tag=networking&order=newest#top')
+  #   names.zip(values)
+  #   # =>
+  #   [["scheme", "https"],
+  #    ["userinfo", "john.doe"],
+  #    ["host", "www.example.com"],
+  #    ["port", "123"],
+  #    ["registry", nil],
+  #    ["path", "/forum/questions/"],
+  #    ["opaque", nil],
+  #    ["query", "tag=networking&order=newest"],
+  #    ["fragment", "top"]]
+  #
+  def self.split(uri)
+    PARSER.split(uri)
+  end
+
+  # Returns a new \URI object constructed from the given string +uri+:
+  #
+  #   URI.parse('https://john.doe@www.example.com:123/forum/questions/?tag=networking&order=newest#top')
+  #   # => #<URI::HTTPS https://john.doe@www.example.com:123/forum/questions/?tag=networking&order=newest#top>
+  #   URI.parse('http://john.doe@www.example.com:123/forum/questions/?tag=networking&order=newest#top')
+  #   # => #<URI::HTTP http://john.doe@www.example.com:123/forum/questions/?tag=networking&order=newest#top>
+  #
+  # It's recommended to first URI::RFC2396_PARSER.escape string +uri+
+  # if it may contain invalid URI characters.
+  #
+  def self.parse(uri)
+    PARSER.parse(uri)
+  end
+
+  # Merges the given URI strings +str+
+  # per {RFC 2396}[https://www.rfc-editor.org/rfc/rfc2396.html].
+  #
+  # Each string in +str+ is converted to an
+  # {RFC3986 URI}[https://www.rfc-editor.org/rfc/rfc3986.html] before being merged.
+  #
+  # Examples:
+  #
+  #   URI.join("http://example.com/","main.rbx")
+  #   # => #<URI::HTTP http://example.com/main.rbx>
+  #
+  #   URI.join('http://example.com', 'foo')
+  #   # => #<URI::HTTP http://example.com/foo>
+  #
+  #   URI.join('http://example.com', '/foo', '/bar')
+  #   # => #<URI::HTTP http://example.com/bar>
+  #
+  #   URI.join('http://example.com', '/foo', 'bar')
+  #   # => #<URI::HTTP http://example.com/bar>
+  #
+  #   URI.join('http://example.com', '/foo/', 'bar')
+  #   # => #<URI::HTTP http://example.com/foo/bar>
+  #
+  def self.join(*str)
+    PARSER.join(*str)
+  end
+
+  # Opal: URI.extract and URI.regexp are left out. They belong to the
+  # RFC 2396 parser upstream, which is not ported; nothing in RubyGems or
+  # Bundler uses them.
+
+  TBLENCWWWCOMP_ = {} # :nodoc:
+  256.times do |i|
+    TBLENCWWWCOMP_[-i.chr] = -('%%%02X' % i)
+  end
+  TBLENCURICOMP_ = TBLENCWWWCOMP_.dup.freeze # :nodoc:
+  TBLENCWWWCOMP_[' '] = '+'
+  TBLENCWWWCOMP_.freeze
+  TBLDECWWWCOMP_ = {} # :nodoc:
+  256.times do |i|
+    h, l = i>>4, i&15
+    TBLDECWWWCOMP_[-('%%%X%X' % [h, l])] = -i.chr
+    TBLDECWWWCOMP_[-('%%%x%X' % [h, l])] = -i.chr
+    TBLDECWWWCOMP_[-('%%%X%x' % [h, l])] = -i.chr
+    TBLDECWWWCOMP_[-('%%%x%x' % [h, l])] = -i.chr
+  end
+  TBLDECWWWCOMP_['+'] = ' '
+  TBLDECWWWCOMP_.freeze
+
+  # Returns a URL-encoded string derived from the given string +str+.
+  #
+  # The returned string:
+  #
+  # - Preserves:
+  #
+  #   - Characters <tt>'*'</tt>, <tt>'.'</tt>, <tt>'-'</tt>, and <tt>'_'</tt>.
+  #   - Character in ranges <tt>'a'..'z'</tt>, <tt>'A'..'Z'</tt>,
+  #     and <tt>'0'..'9'</tt>.
+  #
+  #   Example:
+  #
+  #     URI.encode_www_form_component('*.-_azAZ09')
+  #     # => "*.-_azAZ09"
+  #
+  # - Converts:
+  #
+  #   - Character <tt>' '</tt> to character <tt>'+'</tt>.
+  #   - Any other character to "percent notation";
+  #     the percent notation for character <i>c</i> is <tt>'%%%X' % c.ord</tt>.
+  #
+  #   Example:
+  #
+  #     URI.encode_www_form_component('Here are some punctuation characters: ,;?:')
+  #     # => "Here+are+some+punctuation+characters%3A+%2C%3B%3F%3A"
+  #
+  # Encoding:
+  #
+  # - If +str+ has encoding Encoding::ASCII_8BIT, argument +enc+ is ignored.
+  # - Otherwise +str+ is converted first to Encoding::UTF_8
+  #   (with suitable character replacements),
+  #   and then to encoding +enc+.
+  #
+  # In either case, the returned string has forced encoding Encoding::US_ASCII.
+  #
+  # Related: URI.encode_uri_component (encodes <tt>' '</tt> as <tt>'%20'</tt>).
+  def self.encode_www_form_component(str, enc=nil)
+    _encode_uri_component(/[^*\-.0-9A-Z_a-z]/, TBLENCWWWCOMP_, str, enc)
+  end
+
+  # Returns a string decoded from the given \URL-encoded string +str+.
+  #
+  # The given string is first encoded as Encoding::ASCII-8BIT (using String#b),
+  # then decoded (as below), and finally force-encoded to the given encoding +enc+.
+  #
+  # The returned string:
+  #
+  # - Preserves:
+  #
+  #   - Characters <tt>'*'</tt>, <tt>'.'</tt>, <tt>'-'</tt>, and <tt>'_'</tt>.
+  #   - Character in ranges <tt>'a'..'z'</tt>, <tt>'A'..'Z'</tt>,
+  #     and <tt>'0'..'9'</tt>.
+  #
+  #   Example:
+  #
+  #     URI.decode_www_form_component('*.-_azAZ09')
+  #     # => "*.-_azAZ09"
+  #
+  # - Converts:
+  #
+  #   - Character <tt>'+'</tt> to character <tt>' '</tt>.
+  #   - Each "percent notation" to an ASCII character.
+  #
+  #   Example:
+  #
+  #     URI.decode_www_form_component('Here+are+some+punctuation+characters%3A+%2C%3B%3F%3A')
+  #     # => "Here are some punctuation characters: ,;?:"
+  #
+  # Related: URI.decode_uri_component (preserves <tt>'+'</tt>).
+  def self.decode_www_form_component(str, enc=Encoding::UTF_8)
+    _decode_uri_component(str, true)
+  end
+
+  # Like URI.encode_www_form_component, except that <tt>' '</tt> (space)
+  # is encoded as <tt>'%20'</tt> (instead of <tt>'+'</tt>).
+  def self.encode_uri_component(str, enc=nil)
+    _encode_uri_component(/[^*\-.0-9A-Z_a-z]/, TBLENCURICOMP_, str, enc)
+  end
+
+  # Like URI.decode_www_form_component, except that <tt>'+'</tt> is preserved.
+  def self.decode_uri_component(str, enc=Encoding::UTF_8)
+    _decode_uri_component(/%\h\h/, str, enc)
+  end
+
+  # Returns a string derived from the given string +str+ with
+  # URI-encoded characters matching +regexp+ according to +table+.
+  #
+  # Opal: CRuby forces +str+ to bytes before the table lookup; an Opal
+  # string holds characters, so the block takes over for the characters
+  # the ASCII table has no entry for and percent-encodes their UTF-8
+  # bytes. The +enc+ argument would ask for a transcode Opal cannot do.
+  def self._encode_uri_component(regexp, table, str, enc)
+    str = str.to_s
+    # The table holds one entry per byte; in character semantics only the
+    # ASCII half applies, the rest is covered by percent_encode_utf8.
+    str.gsub(regexp) { |c| c.ascii_only? ? table[c] : Util.percent_encode_utf8(c) }
+  end
+  private_class_method :_encode_uri_component
+
+  # Returns a string decoding characters matching +regexp+ from the
+  # given \URL-encoded string +str+.
+  #
+  # Opal: the decoding works on UTF-8 instead of bytes (Util.percent_decode):
+  # the enc argument and the table gsub it implies, an Opal string has no
+  # bytes to force.
+  def self._decode_uri_component(str, plus)
+    raise ArgumentError, "invalid %-encoding (#{str})" if /%(?!\h\h)/.match?(str)
+    Util.percent_decode(str, plus)
+  end
+  private_class_method :_decode_uri_component
+
+  # Returns a URL-encoded string derived from the given
+  # {Enumerable}[https://docs.ruby-lang.org/en/master/Enumerable.html#module-Enumerable-label-Enumerable+in+Ruby+Classes]
+  # +enum+.
+  #
+  # The result is suitable for use as form data
+  # for an \HTTP request whose <tt>Content-Type</tt> is
+  # <tt>'application/x-www-form-urlencoded'</tt>.
+  #
+  # The returned string consists of the elements of +enum+,
+  # each converted to one or more URL-encoded strings,
+  # and all joined with character <tt>'&'</tt>.
+  #
+  # Simple examples:
+  #
+  #   URI.encode_www_form([['foo', 0], ['bar', 1], ['baz', 2]])
+  #   # => "foo=0&bar=1&baz=2"
+  #   URI.encode_www_form({foo: 0, bar: 1, baz: 2})
+  #   # => "foo=0&bar=1&baz=2"
+  #
+  # The returned string is formed using method URI.encode_www_form_component,
+  # which converts certain characters:
+  #
+  #   URI.encode_www_form('f#o': '/', 'b-r': '$', 'b z': '@')
+  #   # => "f%23o=%2F&b-r=%24&b+z=%40"
+  #
+  # When +enum+ is Array-like, each element +ele+ is converted to a field:
+  #
+  # - If +ele+ is an array of two or more elements,
+  #   the field is formed from its first two elements
+  #   (and any additional elements are ignored):
+  #
+  #     name = URI.encode_www_form_component(ele[0], enc)
+  #     value = URI.encode_www_form_component(ele[1], enc)
+  #     "#{name}=#{value}"
+  #
+  #   Examples:
+  #
+  #     URI.encode_www_form([%w[foo bar], %w[baz bat bah]])
+  #     # => "foo=bar&baz=bat"
+  #     URI.encode_www_form([['foo', 0], ['bar', :baz, 'bat']])
+  #     # => "foo=0&bar=baz"
+  #
+  # - If +ele+ is an array of one element,
+  #   the field is formed from <tt>ele[0]</tt>:
+  #
+  #     URI.encode_www_form_component(ele[0])
+  #
+  #   Example:
+  #
+  #     URI.encode_www_form([['foo'], [:bar], [0]])
+  #     # => "foo&bar&0"
+  #
+  # - Otherwise the field is formed from +ele+:
+  #
+  #     URI.encode_www_form_component(ele)
+  #
+  #   Example:
+  #
+  #     URI.encode_www_form(['foo', :bar, 0])
+  #     # => "foo&bar&0"
+  #
+  # The elements of an Array-like +enum+ may be mixture:
+  #
+  #   URI.encode_www_form([['foo', 0], ['bar', 1, 2], ['baz'], :bat])
+  #   # => "foo=0&bar=1&baz&bat"
+  #
+  # When +enum+ is Hash-like,
+  # each +key+/+value+ pair is converted to one or more fields:
+  #
+  # - If +value+ is
+  #   {Array-convertible}[https://docs.ruby-lang.org/en/master/implicit_conversion_rdoc.html#label-Array-Convertible+Objects],
+  #   each element +ele+ in +value+ is paired with +key+ to form a field:
+  #
+  #     name = URI.encode_www_form_component(key, enc)
+  #     value = URI.encode_www_form_component(ele, enc)
+  #     "#{name}=#{value}"
+  #
+  #   Example:
+  #
+  #     URI.encode_www_form({foo: [:bar, 1], baz: [:bat, :bam, 2]})
+  #     # => "foo=bar&foo=1&baz=bat&baz=bam&baz=2"
+  #
+  # - Otherwise, +key+ and +value+ are paired to form a field:
+  #
+  #     name = URI.encode_www_form_component(key, enc)
+  #     value = URI.encode_www_form_component(value, enc)
+  #     "#{name}=#{value}"
+  #
+  #   Example:
+  #
+  #     URI.encode_www_form({foo: 0, bar: 1, baz: 2})
+  #     # => "foo=0&bar=1&baz=2"
+  #
+  # The elements of a Hash-like +enum+ may be mixture:
+  #
+  #   URI.encode_www_form({foo: [0, 1], bar: 2})
+  #   # => "foo=0&foo=1&bar=2"
+  #
+  def self.encode_www_form(enum, enc=nil)
+    enum.map do |k,v|
+      if v.nil?
+        encode_www_form_component(k, enc)
+      elsif v.respond_to?(:to_ary)
+        v.to_ary.map do |w|
+          str = encode_www_form_component(k, enc)
+          # Opal: String#<< mutates, so the appends become rebinding.
+          unless w.nil?
+            str += '=' + encode_www_form_component(w, enc)
+          end
+        end.join('&')
+      else
+        str = encode_www_form_component(k, enc)
+        str += '=' + encode_www_form_component(v, enc)
+      end
+    end.join('&')
+  end
+
+  # Returns name/value pairs derived from the given string +str+,
+  # which must be an ASCII string.
+  #
+  # The method may be used to decode the body of Net::HTTPResponse object +res+
+  # for which <tt>res['Content-Type']</tt> is <tt>'application/x-www-form-urlencoded'</tt>.
+  #
+  # The returned data is an array of 2-element subarrays;
+  # each subarray is a name/value pair (both are strings).
+  # Each returned string has encoding +enc+,
+  # and has had invalid characters removed via
+  # {String#scrub}[https://docs.ruby-lang.org/en/master/String.html#method-i-scrub].
+  #
+  # A simple example:
+  #
+  #   URI.decode_www_form('foo=0&bar=1&baz')
+  #   # => [["foo", "0"], ["bar", "1"], ["baz", ""]]
+  #
+  # The returned strings have certain conversions,
+  # similar to those performed in URI.decode_www_form_component:
+  #
+  #   URI.decode_www_form('f%23o=%2F&b-r=%24&b+z=%40')
+  #   # => [["f#o", "/"], ["b-r", "$"], ["b z", "@"]]
+  #
+  # The given string may contain consecutive separators:
+  #
+  #   URI.decode_www_form('foo=0&&bar=1&&baz=2')
+  #   # => [["foo", "0"], ["", ""], ["bar", "1"], ["", ""], ["baz", "2"]]
+  #
+  # A different separator may be specified:
+  #
+  #   URI.decode_www_form('foo=0--bar=1--baz', separator: '--')
+  #   # => [["foo", "0"], ["bar", "1"], ["baz", ""]]
+  #
+  def self.decode_www_form(str, enc=Encoding::UTF_8, separator: '&', use__charset_: false, isindex: false)
+    raise ArgumentError, "the input of #{self.name}.#{__method__} must be ASCII only string" unless str.ascii_only?
+    ary = []
+    return ary if str.empty?
+    enc = Encoding.find(enc)
+    str.b.each_line(separator) do |string|
+      # Opal: chomp!/gsub! become rebinding, strings being immutable.
+      string = string.chomp(separator)
+      key, sep, val = string.partition('=')
+      if isindex
+        if sep.empty?
+          val = key
+          key = +''
+        end
+        isindex = false
+      end
+
+      if use__charset_ and key == '_charset_' and e = get_encoding(val)
+        enc = e
+        use__charset_ = false
+      end
+
+      key = Util.percent_decode(key, true)
+      if val
+        val = Util.percent_decode(val, true)
+      else
+        val = +''
+      end
+
+      ary << [key, val]
+    end
+    # Opal: force_encoding returns the string instead of changing it, so
+    # the pairs are rebuilt; scrub drops the bytes a partial %-escape left.
+    ary.map! do |k, v|
+      [k.force_encoding(enc).scrub, v.force_encoding(enc).scrub]
+    end
+    ary
+  end
+
+  private
+=begin command for WEB_ENCODINGS_
+  curl https://encoding.spec.whatwg.org/encodings.json|
+  ruby -rjson -e 'H={}
+  h={
+    "shift_jis"=>"Windows-31J",
+    "euc-jp"=>"cp51932",
+    "iso-2022-jp"=>"cp50221",
+    "x-mac-cyrillic"=>"macCyrillic",
+  }
+  JSON($<.read).map{|x|x["encodings"]}.flatten.each{|x|
+    Encoding.find(n=h.fetch(n=x["name"].downcase,n))rescue next
+    x["labels"].each{|y|H[y]=n}
+  }
+  puts "{"
+  H.each{|k,v|puts %[  #{k.dump}=>#{v.dump},]}
+  puts "}"
+'
+=end
+  WEB_ENCODINGS_ = {
+    "unicode-1-1-utf-8"=>"utf-8",
+    "utf-8"=>"utf-8",
+    "utf8"=>"utf-8",
+    "866"=>"ibm866",
+    "cp866"=>"ibm866",
+    "csibm866"=>"ibm866",
+    "ibm866"=>"ibm866",
+    "csisolatin2"=>"iso-8859-2",
+    "iso-8859-2"=>"iso-8859-2",
+    "iso-ir-101"=>"iso-8859-2",
+    "iso8859-2"=>"iso-8859-2",
+    "iso88592"=>"iso-8859-2",
+    "iso_8859-2"=>"iso-8859-2",
+    "iso_8859-2:1987"=>"iso-8859-2",
+    "l2"=>"iso-8859-2",
+    "latin2"=>"iso-8859-2",
+    "csisolatin3"=>"iso-8859-3",
+    "iso-8859-3"=>"iso-8859-3",
+    "iso-ir-109"=>"iso-8859-3",
+    "iso8859-3"=>"iso-8859-3",
+    "iso88593"=>"iso-8859-3",
+    "iso_8859-3"=>"iso-8859-3",
+    "iso_8859-3:1988"=>"iso-8859-3",
+    "l3"=>"iso-8859-3",
+    "latin3"=>"iso-8859-3",
+    "csisolatin4"=>"iso-8859-4",
+    "iso-8859-4"=>"iso-8859-4",
+    "iso-ir-110"=>"iso-8859-4",
+    "iso8859-4"=>"iso-8859-4",
+    "iso88594"=>"iso-8859-4",
+    "iso_8859-4"=>"iso-8859-4",
+    "iso_8859-4:1988"=>"iso-8859-4",
+    "l4"=>"iso-8859-4",
+    "latin4"=>"iso-8859-4",
+    "csisolatincyrillic"=>"iso-8859-5",
+    "cyrillic"=>"iso-8859-5",
+    "iso-8859-5"=>"iso-8859-5",
+    "iso-ir-144"=>"iso-8859-5",
+    "iso8859-5"=>"iso-8859-5",
+    "iso88595"=>"iso-8859-5",
+    "iso_8859-5"=>"iso-8859-5",
+    "iso_8859-5:1988"=>"iso-8859-5",
+    "arabic"=>"iso-8859-6",
+    "asmo-708"=>"iso-8859-6",
+    "csiso88596e"=>"iso-8859-6",
+    "csiso88596i"=>"iso-8859-6",
+    "csisolatinarabic"=>"iso-8859-6",
+    "ecma-114"=>"iso-8859-6",
+    "iso-8859-6"=>"iso-8859-6",
+    "iso-8859-6-e"=>"iso-8859-6",
+    "iso-8859-6-i"=>"iso-8859-6",
+    "iso-ir-127"=>"iso-8859-6",
+    "iso8859-6"=>"iso-8859-6",
+    "iso88596"=>"iso-8859-6",
+    "iso_8859-6"=>"iso-8859-6",
+    "iso_8859-6:1987"=>"iso-8859-6",
+    "csisolatingreek"=>"iso-8859-7",
+    "ecma-118"=>"iso-8859-7",
+    "elot_928"=>"iso-8859-7",
+    "greek"=>"iso-8859-7",
+    "greek8"=>"iso-8859-7",
+    "iso-8859-7"=>"iso-8859-7",
+    "iso-ir-126"=>"iso-8859-7",
+    "iso8859-7"=>"iso-8859-7",
+    "iso88597"=>"iso-8859-7",
+    "iso_8859-7"=>"iso-8859-7",
+    "iso_8859-7:1987"=>"iso-8859-7",
+    "sun_eu_greek"=>"iso-8859-7",
+    "csiso88598e"=>"iso-8859-8",
+    "csisolatinhebrew"=>"iso-8859-8",
+    "hebrew"=>"iso-8859-8",
+    "iso-8859-8"=>"iso-8859-8",
+    "iso-8859-8-e"=>"iso-8859-8",
+    "iso-ir-138"=>"iso-8859-8",
+    "iso8859-8"=>"iso-8859-8",
+    "iso88598"=>"iso-8859-8",
+    "iso_8859-8"=>"iso-8859-8",
+    "iso_8859-8:1988"=>"iso-8859-8",
+    "visual"=>"iso-8859-8",
+    "csisolatin6"=>"iso-8859-10",
+    "iso-8859-10"=>"iso-8859-10",
+    "iso-ir-157"=>"iso-8859-10",
+    "iso8859-10"=>"iso-8859-10",
+    "iso885910"=>"iso-8859-10",
+    "l6"=>"iso-8859-10",
+    "latin6"=>"iso-8859-10",
+    "iso-8859-13"=>"iso-8859-13",
+    "iso8859-13"=>"iso-8859-13",
+    "iso885913"=>"iso-8859-13",
+    "iso-8859-14"=>"iso-8859-14",
+    "iso8859-14"=>"iso-8859-14",
+    "iso885914"=>"iso-8859-14",
+    "csisolatin9"=>"iso-8859-15",
+    "iso-8859-15"=>"iso-8859-15",
+    "iso8859-15"=>"iso-8859-15",
+    "iso885915"=>"iso-8859-15",
+    "iso_8859-15"=>"iso-8859-15",
+    "l9"=>"iso-8859-15",
+    "iso-8859-16"=>"iso-8859-16",
+    "cskoi8r"=>"koi8-r",
+    "koi"=>"koi8-r",
+    "koi8"=>"koi8-r",
+    "koi8-r"=>"koi8-r",
+    "koi8_r"=>"koi8-r",
+    "koi8-ru"=>"koi8-u",
+    "koi8-u"=>"koi8-u",
+    "dos-874"=>"windows-874",
+    "iso-8859-11"=>"windows-874",
+    "iso8859-11"=>"windows-874",
+    "iso885911"=>"windows-874",
+    "tis-620"=>"windows-874",
+    "windows-874"=>"windows-874",
+    "cp1250"=>"windows-1250",
+    "windows-1250"=>"windows-1250",
+    "x-cp1250"=>"windows-1250",
+    "cp1251"=>"windows-1251",
+    "windows-1251"=>"windows-1251",
+    "x-cp1251"=>"windows-1251",
+    "ansi_x3.4-1968"=>"windows-1252",
+    "ascii"=>"windows-1252",
+    "cp1252"=>"windows-1252",
+    "cp819"=>"windows-1252",
+    "csisolatin1"=>"windows-1252",
+    "ibm819"=>"windows-1252",
+    "iso-8859-1"=>"windows-1252",
+    "iso-ir-100"=>"windows-1252",
+    "iso8859-1"=>"windows-1252",
+    "iso88591"=>"windows-1252",
+    "iso_8859-1"=>"windows-1252",
+    "iso_8859-1:1987"=>"windows-1252",
+    "l1"=>"windows-1252",
+    "latin1"=>"windows-1252",
+    "us-ascii"=>"windows-1252",
+    "windows-1252"=>"windows-1252",
+    "x-cp1252"=>"windows-1252",
+    "cp1253"=>"windows-1253",
+    "windows-1253"=>"windows-1253",
+    "x-cp1253"=>"windows-1253",
+    "cp1254"=>"windows-1254",
+    "csisolatin5"=>"windows-1254",
+    "iso-8859-9"=>"windows-1254",
+    "iso-ir-148"=>"windows-1254",
+    "iso8859-9"=>"windows-1254",
+    "iso88599"=>"windows-1254",
+    "iso_8859-9"=>"windows-1254",
+    "iso_8859-9:1989"=>"windows-1254",
+    "l5"=>"windows-1254",
+    "latin5"=>"windows-1254",
+    "windows-1254"=>"windows-1254",
+    "x-cp1254"=>"windows-1254",
+    "cp1255"=>"windows-1255",
+    "windows-1255"=>"windows-1255",
+    "x-cp1255"=>"windows-1255",
+    "cp1256"=>"windows-1256",
+    "windows-1256"=>"windows-1256",
+    "x-cp1256"=>"windows-1256",
+    "cp1257"=>"windows-1257",
+    "windows-1257"=>"windows-1257",
+    "x-cp1257"=>"windows-1257",
+    "cp1258"=>"windows-1258",
+    "windows-1258"=>"windows-1258",
+    "x-cp1258"=>"windows-1258",
+    "x-mac-cyrillic"=>"macCyrillic",
+    "x-mac-ukrainian"=>"macCyrillic",
+    "chinese"=>"gbk",
+    "csgb2312"=>"gbk",
+    "csiso58gb231280"=>"gbk",
+    "gb2312"=>"gbk",
+    "gb_2312"=>"gbk",
+    "gb_2312-80"=>"gbk",
+    "gbk"=>"gbk",
+    "iso-ir-58"=>"gbk",
+    "x-gbk"=>"gbk",
+    "gb18030"=>"gb18030",
+    "big5"=>"big5",
+    "big5-hkscs"=>"big5",
+    "cn-big5"=>"big5",
+    "csbig5"=>"big5",
+    "x-x-big5"=>"big5",
+    "cseucpkdfmtjapanese"=>"cp51932",
+    "euc-jp"=>"cp51932",
+    "x-euc-jp"=>"cp51932",
+    "csiso2022jp"=>"cp50221",
+    "iso-2022-jp"=>"cp50221",
+    "csshiftjis"=>"Windows-31J",
+    "ms932"=>"Windows-31J",
+    "ms_kanji"=>"Windows-31J",
+    "shift-jis"=>"Windows-31J",
+    "shift_jis"=>"Windows-31J",
+    "sjis"=>"Windows-31J",
+    "windows-31j"=>"Windows-31J",
+    "x-sjis"=>"Windows-31J",
+    "cseuckr"=>"euc-kr",
+    "csksc56011987"=>"euc-kr",
+    "euc-kr"=>"euc-kr",
+    "iso-ir-149"=>"euc-kr",
+    "korean"=>"euc-kr",
+    "ks_c_5601-1987"=>"euc-kr",
+    "ks_c_5601-1989"=>"euc-kr",
+    "ksc5601"=>"euc-kr",
+    "ksc_5601"=>"euc-kr",
+    "windows-949"=>"euc-kr",
+    "utf-16be"=>"utf-16be",
+    "utf-16"=>"utf-16le",
+    "utf-16le"=>"utf-16le",
+  } # :nodoc:
+  Ractor.make_shareable(WEB_ENCODINGS_) if defined?(Ractor)
+
+  # :nodoc:
+  # return encoding or nil
+  # http://encoding.spec.whatwg.org/#concept-encoding-get
+  def self.get_encoding(label)
+    Encoding.find(WEB_ENCODINGS_[label.to_str.strip.downcase]) rescue nil
+  end
+end # module URI
+
+module Kernel
+
+  #
+  # Returns a \URI object derived from the given +uri+,
+  # which may be a \URI string or an existing \URI object:
+  #
+  #   require 'uri'
+  #   # Returns a new URI.
+  #   uri = URI('http://github.com/ruby/ruby')
+  #   # => #<URI::HTTP http://github.com/ruby/ruby>
+  #   # Returns the given URI.
+  #   uri = URI(uri)
+  #   # => #<URI::HTTP http://github.com/ruby/ruby>
+  #
+  # You must require 'uri' to use this method.
+  #
+  def URI(uri)
+    if uri.is_a?(URI::Generic)
+      uri
+    elsif uri = String.try_convert(uri)
+      URI.parse(uri)
+    else
+      raise ArgumentError,
+        "bad argument (expected URI object or URI string)"
+    end
+  end
+  module_function :URI
+end
