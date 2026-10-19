@@ -15,6 +15,113 @@ runtime floor for generated code.
 
 ---
 
+## ⏸ PAUSED 2026-10-19 — read this to resume
+
+The M5 remote half is written and spec'd but sits in a **stash**, not in a
+commit, because it cannot pass the suite while the compiler deviates from MRI on
+`lhs ||= rhs`. When the compiler fix described below lands, work resumes here.
+
+**Where the work is.** Branch `digging_for_gems`, HEAD `fec5398bf`; that commit's
+tree is clean and its suite is green. Everything from this batch is in
+`stash@{0}` — verify with `git stash list` that the first entry reads
+`On digging_for_gems: M5-remote-half: compact index client, API set, SafeMarshal
+Time, zlib byte decode (blocked by ||= writing to frozen objects)` and restore
+it by that message, never by index alone: there are older `WIP on master` stash
+entries underneath. `git stash pop 'stash@{0}'` (AGENTS.md warns how a mis-picked
+stash poisons the tree). The stash also carries two stray untracked files from
+earlier sessions, `PARSER.md` and `TODO.md`, which come back with it.
+
+It holds: the compact-index client (`lib/rubygems/compact_index_client.rb` and
+`compact_index_client/{cache,cache_file,http_fetcher,parser,updater}.rb`), the
+API-set resolver (`resolver/{api_set.rb,api_set/gem_parser.rb,api_specification.rb,
+source_set.rb}`), `lib/rubygems/openssl.rb`, and edits to `lib/rubygems.rb`,
+`remote_fetcher.rb`, `resolver.rb`, `source.rb`, `uri.rb`, `vendored_net_http.rb`
+(response header names are stored lower case, a real port bug),
+`safe_marshal/visitors/to_ruby.rb` (Time inside a CRuby-written spec dump: the two
+packed little-endian words of `rb_time_mdump` are decoded instead of upstream's
+rebuild-and-`Marshal.load` path, which Opal cannot take), `stdlib/zlib.rb`, and
+specs `spec/opal/gems/{compact_index_client,remote_source,util,safe_marshal,
+remote_fetcher}_spec.rb`, `spec/opal/gems/support/http_fixture.rb` (the shared
+Worker-hosted fixture server), new fixtures under `spec/opal/gems/fixtures/`, and
+`spec/opal/stdlib/zlib/gzip_file_wrap_spec.rb`.
+
+**Why it stopped.** For a variable target the compiler rewrites `@x ||= rhs` into
+`@x = (@x || rhs)` (`lib/opal/compiler/transforms/operator_assignment.mjs:105-113`
+returns `setNode(condition)`, so the write wraps the short circuit) and emits
+`(self.x = ($truthy(($ret_or_1 = self.x)) ? ($ret_or_1) : (2)))` — it writes in
+both branches. MRI assigns only when the short circuit reaches the right-hand
+side. A write to a frozen object goes through the setter guard
+(`opal/runtime/freeze.rb`, `freeze_props` → `deny_frozen_access`) and raises, so
+`@x ||= v` raises on a frozen object whose `@x` is already truthy; `@x &&= v`
+likewise defines an ivar MRI leaves undefined. Two probes reproduce it in three
+lines: `tmp/gems_probe/or_write.rb` and `tmp/gems_probe/version_freeze.rb`.
+
+The gem port meets it because upstream `resolver/api_specification.rb:40-46`
+freezes the `Version`, the `Dependency` array and the `Requirement`s it parses,
+and `Gem::Version#freeze` pre-caches the very `||=` memos (`canonical_segments`)
+that then get rewritten to `@canonical_segments = ...` on a frozen object.
+`Gem::Version.new` caches instances in `@@all`, so one frozen Version poisons
+every `'1.0.0'` in the process. Tally with the stash applied: parser, compiler,
+gems, mspec_ruby, minitest_cruby, minitest_node all ok; **mspec_opal 957 examples,
+13 failures** — 11 `FrozenError: can't modify frozen Gem::Version` (count varies
+11-15 with the spec order; `RANDOM_SEED=1 bin/test spec/opal/gems` reproduces a
+stable set) and 2 not compiler-related, listed under Open items.
+
+**What was tried, and why it is not the fix.** Two attempts at that transform,
+both reverted. The second moved the write inside the short circuit
+(`OrNode(getNode, setNode(rhs))`, returning `condition` without the outer
+`setNode`), which does fix the frozen case, but it stops the returnable-logic pass
+from wrapping the conditional in a `(function(){ ... })()` IIFE, and that IIFE is
+what lets a statement-form right-hand side exist at all:
+`@result ||= begin ... %x{ try {...} } ... end` at `stdlib/opal-parser.rb:61` and
+`@memoized_value ||= begin return nil if x; y end` in
+`spec/opal/core/language/memoization_spec.rb` then emit
+`return (self.result = ((js = self.js), try { ... }))` — `SyntaxError: Unexpected
+token 'try'`. Any memoized `begin` with a guard clause, a `rescue`, or a statement
+`%x{}` is affected, which is common Ruby. Ten pairs in
+`spec/lib/fixtures/compiler_rewrites.json` also pin the old equivalence
+(`'@a ||= 1' => '@a = @a || 1'`) and would have to go. `tmp/gems_probe/or_shapes.rb`
+is the matrix of right-hand-side shapes such a fix must keep compiling.
+
+**Open items to settle after the compiler lands** (neither is compiler-related):
+
+1. `Gem::DependencyInstaller stops at the seam where a remote index would be read`
+   and `Gem::Resolver asks the remote index for what the local repository does not
+   hold` now raise `URI::InvalidURIError: bad URI (is not URI?): "/"`: those M4
+   specs build a source from `"/"` and the `Gem::URI` module alias plus the
+   `Gem::URI(uri)` `module_function` this batch added in `lib/rubygems/uri.rb` are
+   stricter than what they used. Compare `/root/workspace/rubygems/lib/rubygems/uri.rb`
+   and `source.rb` and either match upstream or give the specs a real URI.
+2. `stdlib/zlib.rb`'s new `GzipReader#tag` decodes the bytes it read with
+   `@external_encoding.decode(IO::Buffer.for(string))` instead of the old
+   `force_encoding`, which only retagged (so UTF-8 gzip text read back one
+   character per byte). But `@external_encoding` may be a String: `read_spec.rb`'s
+   `respects :external_encoding option` example fails with `NoMethodError:
+   undefined method 'decode' for "UTF-8"`. Convert a String/nil encoding to an
+   `Encoding` first. Note `bin/test spec/ruby/library/zlib` (whole directory, more
+   files than the selection lists) reports 67 failures with the batch against 72
+   at HEAD; the selected run (`node tasks/test.mjs mspec_ruby`) is green either way.
+
+**Resume checklist.** Pop the stash → land the compiler fix with its specs (the
+CRuby-verified expectations: frozen + truthy ivar returns the old value; frozen +
+nil ivar still raises; `@unset &&= v` on a frozen object neither raises nor
+defines `@unset`; add these to `spec/opal/core/language/memoization_spec.rb`) →
+keep upstream's freezes in `api_specification.rb`, no port-side workaround →
+`bin/test spec/opal/gems` down to 0 failures (fix open item 1 and 2) → write the
+remaining M5 specs → full `node tasks/test.mjs` and `node tasks/lint.mjs` →
+rebuild `node tasks/ruby.mjs` (`exe/ruby` grows past 2,085,434 bytes) → the docs
+commit: §Status, the M5 marker, §11 rows for `lib/opal/gems/http.mjs` and the node
+runner `OPAL_HOME`, the D2 layout deviation (the vendored `net/http` sits in
+`lib/rubygems/vendored_net_http.rb`, not `lib/opal/gems/http.rb`), the CGI fix,
+the `HTTPResponse` header downcasing, the zlib fix, SafeMarshal Time — plus new
+AGENTS.md trap bullets (an empty `**kwargs` leaking into the next optional
+positional; `force_encoding` retags only; marshal fixnum lengths are `value + 5`
+and `u:` payloads are `length + raw bytes` with no `"` marker; `%x{}` cannot sit
+in assignment position — use a statement x-string plus a single-expression
+backtick read-back; the `||=`-on-frozen deviation until this section is deleted).
+
+---
+
 ## Status
 
 Sections 1–10 are the survey and the plan as they were written, and stay as a
