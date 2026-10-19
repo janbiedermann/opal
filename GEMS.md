@@ -25,7 +25,9 @@ core files the work has changed so far.
 **M0–M4 are done, except the one line of M4's exit test that needs a `gem`
 command** (`exe/gem install ./hello-1.0.0.gem`); the install itself works
 through the API, and the command is the first thing M6's CLI plumbing brings.
-M5, M6 and M8 have not been started; M7 is half in, its `exe/ruby` side came
+M5 is under way — the PubGrub solver and the resolver over the local and
+installed sources are in and spec'd; fetching indexes and `.gem` files is not.
+M6 and M8 have not been started; M7 is half in, its `exe/ruby` side came
 with M0 and M4.
 
 What runs now, with no `-I` and no network:
@@ -40,7 +42,12 @@ What runs now, with no `-I` and no network:
 * install → activate → require: `Gem::Installer.at(path).install` into a
   `GEM_HOME`, then `exe/ruby -e "require 'gem_name'"` with no `-I`, the
   wrapper in `<gem_home>/bin` running the gem's executable, and
-  `Gem::Uninstaller` taking all of it away again (M4).
+  `Gem::Uninstaller` taking all of it away again (M4);
+* resolve → install offline: `Gem::Resolver` over a directory of `.gem` files
+  solves a dependency tree with PubGrub, `ActivationRequest#download` fetches
+  each gem from `Gem::Source::Local`, and the set installs in dependency order —
+  and the same resolver answers against the installed gems with
+  `Gem::Resolver.for_current_gems` (M5's offline half).
 
 Where it is tested: the port's own specs are under `spec/opal/gems/`, the
 ruby command's gem behaviour sits with the rest of its cases in
@@ -55,7 +62,8 @@ milestones after it:
   shipped as one compiled bundle, where a require decided at run time would
   have nothing to load. Cost: everything loads with `require "rubygems"`.
 * **`exe/ruby` carries RubyGems** (`tasks/ruby/bundle.mjs` builds
-  `lib/rubygems.rb` into the bundle, 1.4MB → 1.9MB), because finding an
+  `lib/rubygems.rb` into the bundle, 1.4MB → 1.9MB, and 2.0MB now that the
+  resolver is required eagerly too), because finding an
   installed gem is a property of `require`, not of a library a script opts
   into.
 * **The activation hook is in the loader, not in `Kernel#require`.** Opal
@@ -83,14 +91,16 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M5, resolution**: `Gem::Resolver` and its sets, `DependencyInstaller`,
-   `Source::AggregateSource`, the vendored PubGrub. The local sets
-   (Installed/Local/SpecificFile) can be tested offline, so they come first;
-   the compact index and the HTTP transport (§6.3) come second. The marshal
-   reader `Gem::SafeMarshal` (525 upstream lines) belongs to that second half:
-   `Source#load_specs`/`fetch_spec` answer marshalled indexes with it, and
-   `Specification._load` already calls a `Gem.load_safe_marshal` that is not
-   ported yet.
+1. **M5, resolution** (offline half in): the vendored PubGrub, `Gem::Resolver`
+   and its sets, `Gem::SpecFetcher` and the resolver sets of `Gem::Source` are
+   ported and spec'd against a local repository and the installed gems. What is
+   left is the install driver — `Gem::RequestSet` and `Gem::DependencyInstaller`,
+   which `exe/gem install ./x.gem` needs and which work offline — and the half
+   that needs the network: the marshal reader `Gem::SafeMarshal` (525 upstream
+   lines, and the `Gem.load_safe_marshal` `Specification._load` already calls),
+   `http.mjs` + `Gem::RemoteFetcher` + `Gem::CompactIndexClient` (§6.3), then
+   `resolver/api_set*` and `resolver/source_set` to replace the "remote sources
+   are not available yet" raise of `Gem::Source`.
 2. **M6, `exe/gem`**: `GemRunner`/`CommandManager`/`Command` and the option
    classes, plus `tasks/gem.mjs`, starting from `install` — which closes M4's
    exit test.
@@ -777,7 +787,7 @@ installed gem, is the builder's half and waits for M7. Three deviations:
   of being half-built (§1), and no plugin or Windows stub wrappers are
   generated — hence no `installer_uninstaller_utils.rb`.
 
-### M5 — remote metadata and resolution (~2600 lines) — **not started**
+### M5 — remote metadata and resolution (~2600 lines) — **under way**
 
 `lib/opal/gems/http.mjs` (persistent fetch worker, §6.3) + `http.rb`
 binding + `Gem::RemoteFetcher`,
@@ -789,18 +799,54 @@ binding + `Gem::RemoteFetcher`,
 `exe/gem install <gem>` where the resolver must backtrack, and a
 `SolveFailure` case whose message renders.
 
-**Status: not started.** The remote methods of `Gem::Source` — `load_specs`,
-`fetch_spec`, `download` — raise `Gem::Exception "remote sources are not
-available yet"`, and that raise marks the seam. The offline half can land
-first and be tested without network: `Source::Installed`, `Source::Local` and
-`Source::SpecificFile` came with M4, so the resolver's sets,
-`Source::AggregateSource` and `DependencyInstaller` already have something
-real to sit on. Two prerequisites for the remote half: the `Gem::LoadError`
-hierarchy, now in place (see M2), because it is what a resolution failure is
-rescued as, and `Gem::SafeMarshal` (525 upstream lines) — upstream's
-`Source#load_specs` and `fetch_spec` read the marshalled indexes through it,
-and `Specification._load` already calls a `Gem.load_safe_marshal` that the port
-does not have.
+**Status: offline half in.** The engine first: `lib/rubygems/vendor/pub_grub`
+and `lib/rubygems/vendored_pub_grub.rb` are byte-identical to upstream (1926
+lines, `diff -rq` clean), covered by `spec/opal/gems/pub_grub_spec.rb` — a
+solve, a backtrack, a `SolveFailure` whose message renders, and the
+`Gem::Requirement`-to-range bridge. Corelib needed nothing for it:
+`Hash#compare_by_identity`, `Range#bsearch`, `Struct.new(…) do` and keyword
+arguments all exist, so the vendored files stand exactly as upstream writes
+them. Above it sits `Gem::Resolver` (667 lines, itself the PubGrub source
+object) with 16 files of `resolver/` — the sets (`Set`, `ComposedSet`,
+`BestSet`, `CurrentSet`, `IndexSet`, `InstallerSet`, `RequirementList`), the
+specifications (`Specification`, `SpecSpecification`, `IndexSpecification`,
+`InstalledSpecification`, `LocalSpecification`) and the requests
+(`DependencyRequest`, `ActivationRequest`, `Incompatibility`, `Strategy`) —
+plus `Gem::SpecFetcher`. `spec/opal/gems/resolver_spec.rb` (7 examples) resolves
+a tree of local `.gem` files, downloads them through `Gem::Source::Local`,
+installs them in dependency order, resolves against the installed gems, and
+checks both failure classes and the remote seam. Six deviations, all of them the
+transport or a feature §1 drops:
+
+* `resolver.rb`'s require list stops at what is ported: `api_set*`,
+  `source_set` (compact index: the transport) and the git, lock and vendor sets
+  and specifications (upstream's `gem dependencies` machinery, which §1 leaves
+  out) are not there.
+* `Gem::Source#dependency_resolver_set`/`#new_dependency_resolver_set` are ported
+  with the probe replaced: choosing compact index over marshal index is one HTTP
+  fetch, so a remote source answers the same "remote sources are not available
+  yet" as its other remote methods, and a `file://` source gets the
+  marshal-index set, whose reader is the missing `Gem::SafeMarshal`.
+* `Gem::SpecFetcher`: its three `Gem::RemoteFetcher::FetchError` rescues read
+  for `Gem::Exception` (upstream's `FetchError` is a subclass of it, and every
+  remote read currently raises that), and its `@fetcher`, which this file never
+  reads back, stays nil.
+* `ActivationRequest#installed?` loses its `VendorSpecification` branch — no
+  vendored-gem source here.
+* `Gem::DependencyResolutionError` (PubGrub's explanation as the message) joined
+  `exceptions.rb`, and `Gem::UnsatisfiableDependencyError` took 4.1's shape
+  `(dep_request, platform_mismatch)` with `attr_accessor :errors`: the port's
+  3.x-era shape died on the resolver's `new(dep_request, all)`, where `all` is
+  an Array, and 4.1's `#errors` is what the commands print.
+
+What is missing is the install driver (`Gem::RequestSet`,
+`Gem::DependencyInstaller` — offline once the sets exist) and the half that
+reads indexes and `.gem` files over HTTP: `Gem::SafeMarshal` (525 upstream
+lines — upstream's `Source#load_specs` and `fetch_spec` read the marshalled
+indexes through it, and `Specification._load` already calls a
+`Gem.load_safe_marshal` the port does not have), `lib/opal/gems/http.mjs` +
+`Gem::RemoteFetcher` + `Gem::CompactIndexClient` (§6.3), and then `api_set` and
+`source_set`.
 
 ### M6 — the `gem` CLI (~1500 lines) — **not started**
 
@@ -943,11 +989,13 @@ M8 is the largest and depends on all of the above.
 
 ## 10. Immediate next steps
 
-1. M5's offline half: `Gem::Resolver` + `resolver/*` (sets, specifications,
-   requests), `Source::AggregateSource`, `Gem::DependencyInstaller`, and the
-   vendored PubGrub from `lib/rubygems/vendor/pub_grub`. `Source::Installed`,
-   `Source::Local` and `Source::SpecificFile` already exist, so all of this is
-   testable without a network.
+1. The install driver on top of the resolver that is now in: `Gem::RequestSet`
+   and `Gem::DependencyInstaller` (4.1 composes the local, installed and remote
+   sets in `Resolver::InstallerSet`; upstream has no `Gem::Source::Aggregate`
+   any more). Both work offline against `Source::Local`/`SpecificFile`, which is
+   the whole path `exe/gem install ./x.gem` takes, and it closes the API half of
+   M4's exit test. Lookups that reach `BestSet` or the marshalled indexes keep
+   raising "remote sources are not available yet" until the transport lands.
 2. Fixtures for it: a few real `.gem` files (one plain, one with dependencies,
    one with a `java` platform variant) committed where the offline resolver and
    CLI tests can read them — `spec/opal/gems/fixtures/` already starts that,
