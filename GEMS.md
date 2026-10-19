@@ -83,21 +83,20 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **A small correction first**: upstream hangs `MissingSpecError` and friends
-   off `Gem::LoadError < ::LoadError` (`errors.rb`); the port folded them under
-   `Gem::Exception` and never defined `Gem::LoadError`, which its own
-   `specification.rb` constructs on an activation conflict — so that path
-   raises `NameError` today.
-2. **M5, resolution**: `Gem::Resolver` and its sets, `DependencyInstaller`,
+1. **M5, resolution**: `Gem::Resolver` and its sets, `DependencyInstaller`,
    `Source::AggregateSource`, the vendored PubGrub. The local sets
    (Installed/Local/SpecificFile) can be tested offline, so they come first;
-   the compact index and the HTTP transport (§6.3) come second.
-3. **M6, `exe/gem`**: `GemRunner`/`CommandManager`/`Command` and the option
+   the compact index and the HTTP transport (§6.3) come second. The marshal
+   reader `Gem::SafeMarshal` (525 upstream lines) belongs to that second half:
+   `Source#load_specs`/`fetch_spec` answer marshalled indexes with it, and
+   `Specification._load` already calls a `Gem.load_safe_marshal` that is not
+   ported yet.
+2. **M6, `exe/gem`**: `GemRunner`/`CommandManager`/`Command` and the option
    classes, plus `tasks/gem.mjs`, starting from `install` — which closes M4's
    exit test.
-4. **M7**: the builder consulting the gem directories (`--gem`, `Opalfile`'s
+3. **M7**: the builder consulting the gem directories (`--gem`, `Opalfile`'s
    `add_gem_dependency`) and the precompiled `compiled/` tree.
-5. **M8, Bundler.**
+4. **M8, Bundler.**
 
 ---
 
@@ -681,17 +680,22 @@ for the two documented rewrites.
 Three changes of shape: `lib/opal/gems/node_platform.rb` never appeared, the
 Opal answers sit in `lib/rubygems/defaults.rb` (no system directory,
 `default_dir` is `user_dir`, no vendor or extension directory,
-`local_platform` is plain `ruby`); `errors.rb` is not a file of its own, its
-exception classes were folded into `exceptions.rb`; and the files are
-`require`d eagerly by `lib/rubygems.rb` instead of autoloaded, so that a
-compiled bundle carries them. Two files arrived later than the plan assumed,
+`local_platform` is plain `ruby`); `errors.rb` was folded into
+`exceptions.rb`, which lost the load-error hierarchy (next paragraph); and the
+files are `require`d eagerly by `lib/rubygems.rb` instead of autoloaded, so that
+a compiled bundle carries them. Two files arrived later than the plan assumed,
 with the milestones that first needed them: `text.rb` and `deprecate.rb`.
 
-One hole left by that folding, still open: upstream hangs `MissingSpecError`
-and its relatives off `Gem::LoadError < ::LoadError`, the port has them off
-`Gem::Exception` and never defines `Gem::LoadError` — which its own
-`specification.rb` constructs when an activation conflicts. Worth closing
-before M5 starts rescuing it.
+That folding was undone afterwards, and `errors.rb` is a file of its own again:
+the activation failures belong to it, not to `Gem::Exception`. `Gem::LoadError <
+::LoadError` — not a `StandardError`, so a script rescues it the way it does in
+CRuby — carries `name` and `requirement`, and `MissingSpecError`,
+`MissingSpecVersionError` and `ConflictError` hang off it. Until then the two
+raises in `specification.rb` and the `rescue Gem::LoadError` of
+`Gem.try_activate` were naming a constant that did not exist, so a gem that
+could not activate died with `NameError` instead. Specs:
+`spec/opal/gems/errors_spec.rb`, and the last four examples of
+`spec/opal/gems/activation_spec.rb` reach all three through a real activation.
 
 ### M3 — `Gem::Specification` and the gemspec round-trip (~1200 lines) — **done**
 
@@ -721,9 +725,10 @@ committed under `spec/opal/gems/fixtures/` — verifies, parses and extracts
 through it; and `to_ruby`/`Gem::Specification.load` round-trip a gemspec.
 What the exit test calls `exe/gem build` and `exe/gem spec` is the M6 command
 wrapped around that same call. Two files on the list were not ported as such:
-`validator.rb` became `Gem::Package#verify`, and
-`errors.rb`/`installer_uninstaller_utils.rb` need no counterpart — the first
-folds into `exceptions.rb`, the second only carried plugin bookkeeping.
+`validator.rb` became `Gem::Package#verify`, and `installer_uninstaller_utils.rb`
+need no counterpart — its only job was plugin bookkeeping. (`errors.rb` was left
+out too, its classes folded into `exceptions.rb`; that arrangement was undone
+later, see M2.)
 `matches_name?` is not missing: RubyGems 4.1 has no such method, the work is
 done by `contains_requirable_file?` and `find_inactive_by_path`.
 
@@ -790,8 +795,12 @@ available yet"`, and that raise marks the seam. The offline half can land
 first and be tested without network: `Source::Installed`, `Source::Local` and
 `Source::SpecificFile` came with M4, so the resolver's sets,
 `Source::AggregateSource` and `DependencyInstaller` already have something
-real to sit on. Close M2's `Gem::LoadError` hole first — the resolver's
-failure path is exactly what callers rescue.
+real to sit on. Two prerequisites for the remote half: the `Gem::LoadError`
+hierarchy, now in place (see M2), because it is what a resolution failure is
+rescued as, and `Gem::SafeMarshal` (525 upstream lines) — upstream's
+`Source#load_specs` and `fetch_spec` read the marshalled indexes through it,
+and `Specification._load` already calls a `Gem.load_safe_marshal` that the port
+does not have.
 
 ### M6 — the `gem` CLI (~1500 lines) — **not started**
 
@@ -934,21 +943,20 @@ M8 is the largest and depends on all of the above.
 
 ## 10. Immediate next steps
 
-1. Close the hole M2 left: define `Gem::LoadError < ::LoadError` as upstream's
-   `errors.rb` does and hang `MissingSpecError` and its relatives off it. The
-   ported `specification.rb` already constructs it on an activation conflict,
-   so today that path raises `NameError` — and M5's resolver is what rescues
-   it.
-2. M5's offline half: `Gem::Resolver` + `resolver/*` (sets, specifications,
+1. M5's offline half: `Gem::Resolver` + `resolver/*` (sets, specifications,
    requests), `Source::AggregateSource`, `Gem::DependencyInstaller`, and the
    vendored PubGrub from `lib/rubygems/vendor/pub_grub`. `Source::Installed`,
    `Source::Local` and `Source::SpecificFile` already exist, so all of this is
    testable without a network.
-3. Fixtures for it: a few real `.gem` files (one plain, one with dependencies,
+2. Fixtures for it: a few real `.gem` files (one plain, one with dependencies,
    one with a `java` platform variant) committed where the offline resolver and
    CLI tests can read them — `spec/opal/gems/fixtures/` already starts that,
    and `tasks/gems-fixtures.mjs` would vendor the rest from rubygems.org once,
    offline thereafter.
+3. `Gem::SafeMarshal` (`safe_marshal.rb` plus `safe_marshal/{elements,reader}.rb`,
+   525 lines): the marshal reader the compact index and the marshalled spec
+   indexes are parsed with. `Specification._load` calls it already, through a
+   `Gem.load_safe_marshal` that `lib/rubygems.rb` still lacks.
 4. M5's remote half: `lib/opal/gems/http.mjs` plus `Gem::RemoteFetcher` and
    `Gem::CompactIndexClient`, replacing the "remote sources are not available
    yet" raise in `lib/rubygems/source.rb`.
@@ -1002,11 +1010,10 @@ Only the lint-only catch bindings came with none.
 | `lib/opal/compiler/builder/erb_runner.mjs` | 763a227bd | the ERB worker gets the options a `new Worker` takes, from an allowlist, and retries with none. Node 26 hands a `node --test` child its whole resolved `process.execArgv` and `new Worker` rejects most of it (`ERR_WORKER_INVALID_EXEC_ARGV`), which took the compiler suite down. |
 
 Outside those two trees sits one tracked build artifact: `exe/ruby`, the
-compiled bundle of the core plus the port, rebuilt in nine of the commits —
-e18e99e41, 50a30e760, 50d7bc750, 13232bad5, a9007b0bd, 422f342da, 79382441e,
-d5ada5a88 and 9b9bf767b. It is a file to diff, not to edit, and a change to
-`lib/opal/exe/ruby.rb` or to `lib/rubygems/` is only finished once
-`node tasks/ruby.mjs` has rewritten it.
+compiled bundle of the core plus the port, rebuilt by every commit that changed
+either (`git log --oneline -- exe/ruby` lists them). It is a file to diff, not
+to edit, and a change to `lib/opal/exe/ruby.rb` or to `lib/rubygems/` is only
+finished once `node tasks/ruby.mjs` has rewritten it.
 
 Nothing else moved in the two trees. The entry points are untouched —
 `opal/base.rb`, `opal/mini.rb` and `opal/full.rb` needed no change, `exe/ruby`
