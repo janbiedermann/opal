@@ -17,9 +17,10 @@ runtime floor for generated code.
 
 ## Status
 
-Sections 1–9 are the survey and the plan as they were written, and stay as a
+Sections 1–10 are the survey and the plan as they were written, and stay as a
 record of them. Progress against §8 is marked on each milestone heading and
-summarised here — this section is the one to keep current.
+summarised here — this section is the one to keep current, and §11 lists the
+core files the work has changed so far.
 
 **M0–M4 are done, except the one line of M4's exit test that needs a `gem`
 command** (`exe/gem install ./hello-1.0.0.gem`); the install itself works
@@ -75,6 +76,10 @@ milestones after it:
   `test/opal/test_{digest,zlib,uri}.rb`**, since upstream already had specs
   for those libraries and most of them pass; only the deliberate gaps
   (unported schemes, the RFC 2396 parser) are filtered out.
+
+The core files the port had to touch — 15 of them, `opal/` and `lib/opal/`,
+every one reached through a failing gem path — are listed with their commits in
+§11.
 
 What is still open, in the order that unblocks the rest:
 
@@ -950,6 +955,64 @@ M8 is the largest and depends on all of the above.
 5. M6's `install` command — `GemRunner`, `CommandManager`, the option classes,
    `exe/gem`, `tasks/gem.mjs` — which retires the `Gem::Installer.at(...)`
    spelling in M4's exit test and gives M5's end-to-end test its command.
+
+---
+
+## 11. Changed core files
+
+The port itself is plain Ruby and lives outside the core trees (`lib/rubygems/`,
+its specs under `spec/opal/gems/`, the bundling in `tasks/ruby/bundle.mjs`).
+What it did change inside `opal/` and `lib/opal/` is 15 files, +302/−93 lines
+since the branch base `6b22c1080`. Every one of them was reached by running gem
+code — reading a `.gem`, a gemspec, a binstub — or by running ruby/spec over
+the stdlib pieces the port needs, and each comes with a test: a case under
+`spec/opal/`, one in `spec/lib/compiler/`, or a ruby/spec file added to
+`spec/selection/common` with its remaining failures in `spec/filters/bugs/`.
+Only the lint-only catch bindings came with none.
+
+### `opal/` — runtime and corelib
+
+| file | commit | what changed, and why |
+| --- | --- | --- |
+| `opal/corelib/array.rb` | e18e99e41 | M0.1. `Array#hash` joins the shared chain of the structures currently being hashed instead of keeping a map of every structure ever hashed and sending `eql?` to each. That map sent `Incompatibility#eql?` the wrong argument and raised inside PubGrub's failure reporting. |
+| `opal/corelib/hash.rb` | e18e99e41 | the same for `Hash#hash`. |
+| `opal/corelib/struct.rb` | e18e99e41 | `Struct#hash` joins the chain — it builds a fresh array per call, so no array repeats when a cycle closes on the Struct. |
+| `opal/runtime/hash.rb` | e18e99e41 | `Opal.hash_ids`, the push/pop chain the three `#hash` methods share, and `Opal.cyclic_hash`, the value a cycle answers that propagates up (which is what keeps `rec.hash == [[rec]].hash` without comparing). |
+| `opal/corelib/argf.rb` | cde8ad70b | `$<` (ARGF) was never defined. |
+| `opal/corelib/io.rb` | cde8ad70b | `$>`, the default output of `print`/`puts` without an explicit IO, was never defined. |
+| `opal/corelib/io.rb` | 0a62b3022 | an encoding written as a dash — `"r:UTF-8:-"`, `IO#set_encoding` — asks for no encoding of that kind, and reached `Encoding.find("-")` and raised. That is exactly how `Gem.open_file` opens a gemspec. The dash also arrives as a boxed String from `String#split`, so it compares by value. |
+| `opal/corelib/process/status.rb` | cde8ad70b | `Status#to_i` (the wait status word) and `Status#>>`; `Status#==` already called a `to_i` that did not exist. |
+| `opal/runtime/regexp.rb` | cde8ad70b | `Opal.last_match_ref` — the text of the rightmost group that matched, which is what `$+` means and which is not the last group when that one did not participate. |
+| `opal/runtime/regexp.rb` | 38b3d9ef1 | an extended (`/x`) pattern written across several lines keeps the source it was written with, so `Regexp#source` and `Regexp.new(regexp.source)` round-trip; the whitespace strip has to happen before escaping turns a newline into `"\n"`. A gemspec date matches such a pattern (`Gem::Specification::DateTimeFormat`). Spec: `spec/opal/core/regexp/extended_spec.rb`. |
+| `opal/io/buffer.rb` | a9007b0bd | binary data survives a read: decode with a fatal decoder, and when the bytes are not valid in the external encoding keep them and only label them. The old lossy decode turned every byte above 0x7f of a gzip stream into U+FFFD, so no `.gem` could be read back out of a StringIO. A slice ending mid-character is dropped and retried. |
+| `opal/io/buffer.rb` | 3e5d6a8eb | optional catch bindings — the form lint accepts in code the corelib and stdlint check. |
+| `opal/runtime/platforms/node_compatible.js` | 13232bad5 | exports `node:crypto` beside `fs` and `os`, which `stdlib/digest.rb` needs. |
+| `opal/runtime/platforms/node_compatible.js` | a9007b0bd | exports `node:zlib`, which `stdlib/zlib.rb` needs. |
+
+### `lib/opal/` — the toolchain
+
+| file | commit | what changed, and why |
+| --- | --- | --- |
+| `lib/opal/exe/ruby.rb` | 50a30e760 | M0.2–M0.4. The bundle carries `opal/full` (and `stdlib/thread.rb` for `Thread::Backtrace::Location`, 1085 KB → 1407 KB); `<home>`, `<home>/opal` and `<home>/stdlib` join `$LOAD_PATH` so the autoloads resolve at run time; `find_feature` finds a `<path>.js` as well as a `.rb`. |
+| `lib/opal/exe/ruby.rb` | d5ada5a88 | a `.js` feature that registers no `Opal.modules` entry — `stdlib/yaml.rb`'s `require "js-yaml-3-6-1"` — is evaluated and then given an empty module, instead of `Opal.require` raising LoadError because nothing appeared. |
+| `lib/opal/exe/ruby.rb` | 9b9bf767b | M4's activation hook, here rather than in a ported `core_ext/kernel_require.rb` because Opal compiles `require` to the runtime loader: `find_feature` asks `Gem.try_activate` for a path that is not on `$LOAD_PATH` and searches again. A feature no gem owns is now a `LoadError` instead of the platform loader's `ENOENT`, which nothing rescued. |
+| `lib/opal/compiler/cli/exe_compiler.mjs` | 491603b41 | M0.6. Node 26's `--build-sea` path: one step, no copy/chmod/sign and no `npx postject`, and the config's `output` names the executable instead of a blob. Below Node 26 the old path runs unchanged. |
+| `lib/opal/compiler/cli/options.mjs` | 9e51e8087 | accepts `--enable=frozen_string_literal`, which ruby/spec runs a few programs with. Opal's string literals are JS primitives already, so it is accepted and does nothing; an unknown feature still fails like Ruby's `--enable`. |
+| `lib/opal/compiler/nodes/variables.mjs` | cde8ad70b | the `+` case of `BackRefNode` fell through to a plain global nothing ever set; `$+` now reads `$~` through `Opal.last_match_ref`, and the "currently unsupported" comment goes with it. |
+| `lib/opal/compiler/builder/erb_runner.mjs` | 763a227bd | the ERB worker gets the options a `new Worker` takes, from an allowlist, and retries with none. Node 26 hands a `node --test` child its whole resolved `process.execArgv` and `new Worker` rejects most of it (`ERR_WORKER_INVALID_EXEC_ARGV`), which took the compiler suite down. |
+
+Outside those two trees sits one tracked build artifact: `exe/ruby`, the
+compiled bundle of the core plus the port, rebuilt in nine of the commits —
+e18e99e41, 50a30e760, 50d7bc750, 13232bad5, a9007b0bd, 422f342da, 79382441e,
+d5ada5a88 and 9b9bf767b. It is a file to diff, not to edit, and a change to
+`lib/opal/exe/ruby.rb` or to `lib/rubygems/` is only finished once
+`node tasks/ruby.mjs` has rewritten it.
+
+Nothing else moved in the two trees. The entry points are untouched —
+`opal/base.rb`, `opal/mini.rb` and `opal/full.rb` needed no change, `exe/ruby`
+only bundles `opal/full` — and beyond the `#hash` chain above, no `Array`,
+`String` or `Integer` method changed: `Gem::Version`, `Gem::Requirement` and the
+tar layer run on what corelib already does.
 
 ---
 
