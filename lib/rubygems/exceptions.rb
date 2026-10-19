@@ -4,9 +4,15 @@
 # reaches. The upstream file also carries the spell-checking of unknown
 # commands and the PubGrub failure wrapper; they come with the command line
 # and the resolver.
+#
+# The activation and lookup failures (Gem::LoadError, MissingSpecError,
+# ConflictError) and the error reasons a source answers with live in
+# rubygems/errors.rb, as upstream has them: they hang off ::LoadError rather
+# than off Gem::Exception, so that the scripts rescuing them see the same
+# hierarchy as in CRuby.
 
-# Base exception class for RubyGems. All exceptions raised by the ported code
-# are a subclass of this one.
+# Base exception class of RubyGems. Every exception the ported code raises
+# under this one, the load errors of rubygems/errors.rb excepted.
 
 #--
 # Workaround for directly loading a Gem:: class before the Gem module exists
@@ -137,29 +143,5 @@ class Gem::UnsatisfiableDependencyError < Gem::DependencyError
 
   def dependency
     @dependency
-  end
-end
-
-class Gem::MissingSpecError < Gem::Exception
-  attr_reader :name, :search_options
-
-  def initialize(name, search_options = "")
-    @name = name
-    @search_options = search_options
-
-    super "Could not find '#{name}' (#{search_options}) among #{Gem::Specification.all.size} installed gems"
-  end
-end
-
-class Gem::MissingSpecVersionError < Gem::MissingSpecError
-  attr_reader :version_requirements
-
-  def initialize(name, search_options = "", version_requirements = "")
-    super(name, search_options)
-    @version_requirements = version_requirements
-  end
-
-  def message
-    "#{super} (#{version_requirements})"
   end
 end

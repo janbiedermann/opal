@@ -39,6 +39,7 @@ end
 # Upstream loads its classes lazily with `autoload`; the port requires them
 # here instead: a gem command is shipped as one compiled bundle, where a
 # require decided at run time would have nothing to load (GEMS.md M6).
+require_relative "rubygems/errors"
 require_relative "rubygems/exceptions"
 require_relative "rubygems/deprecate"
 require_relative "rubygems/win_platform"
