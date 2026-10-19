@@ -25,8 +25,16 @@ function ruby(...args) {
 }
 
 function rubyEnv(env, ...args) {
+  return rubyIn(DIR, env, ...args);
+}
+
+// The same with another working directory: find_feature searches the current
+// directory after $LOAD_PATH (lib/opal/exe/ruby.rb), and the tests share DIR,
+// so a run that stays in DIR could load a file another test wrote there
+// instead of an installed gem of the same name.
+function rubyIn(cwd, env, ...args) {
   const run = spawnSync(process.execPath, [RUBY, ...args], {
-    encoding: "utf8", cwd: DIR, env: { ...process.env, OPAL_CACHE_DIR: CACHE, ...env },
+    encoding: "utf8", cwd, env: { ...process.env, OPAL_CACHE_DIR: CACHE, ...env },
   });
   return { out: run.stdout, err: run.stderr, status: run.status };
 }
@@ -185,6 +193,73 @@ describe("the ruby command", () => {
     test("the installed spec is found by name, with its version", () => {
       const r = rubyEnv({ GEM_HOME }, "-e", "puts Gem::Specification.find_by_name('tiny').full_name");
       assert.equal(r.out, "tiny-0.1.0\n", r.err);
+    });
+  });
+
+  describe("installing a gem with its dependencies", () => {
+    // The resolver and the install driver are built into the bundle too: one
+    // run resolves a tree against a directory of .gem files, picks the version
+    // the requirement allows rather than the newest, and installs the result
+    // (GEMS.md M5, offline half).
+    const HOME = join(DIR, "driver_home");
+    const REPO = join(DIR, "driver_repo");
+    let install;
+
+    before(() => {
+      for (const [name, version] of [["tiny", "0.1.0"], ["tiny", "0.2.0"], ["helper", "1.0.0"]]) {
+        const src = join(REPO, `${name}-${version}`);
+        mkdirSync(join(src, "lib"), { recursive: true });
+        // helper loads its dependency, the way a real gem does
+        const body = name === "helper" ? "require 'tiny'\n" : "";
+        writeFileSync(join(src, "lib", `${name}.rb`), `${body}module ${name[0].toUpperCase()}${name.slice(1)}\n  VERSION = '${version}'\nend\n`);
+      }
+
+      const build = script("build_repo.rb", `
+        require "fileutils"
+        ARGV[1].split(",").each do |name_and_version|
+          name, version = name_and_version.split ":"
+          Dir.chdir File.join(ARGV[0], "#{name}-#{version}") do
+            spec = Gem::Specification.new do |s|
+              s.name = name
+              s.version = version
+              s.summary = "the #{name} gem"
+              s.authors = ["Opal"]
+              s.license = "MIT"
+              s.files = ["lib/#{name}.rb"]
+              s.require_paths = ["lib"]
+              s.add_runtime_dependency "tiny", "~> 0.1.0" if name == "helper"
+            end
+            FileUtils.mv Gem::Package.build(spec), File.join(ARGV[0], "#{name}-#{version}.gem")
+          end
+        end
+      `);
+      const built = rubyIn(REPO, {}, build, REPO, "tiny:0.1.0,tiny:0.2.0,helper:1.0.0");
+      assert.equal(built.status, 0, built.err);
+
+      const at = script("install_helper.rb", `
+        Dir.chdir ARGV[0] do
+          installed = Gem::DependencyInstaller
+            .new(domain: :local, install_dir: ENV["GEM_HOME"])
+            .install("helper")
+          puts installed.map {|spec| spec.full_name }.sort.join(" ")
+        end
+      `);
+      install = rubyIn(REPO, { GEM_HOME: HOME }, at, REPO);
+    });
+
+    test("the run installs the set the resolver asked for", () => {
+      // ~> 0.1.0 means the 0.x line below 0.2.0, so 0.2.0 stays out
+      assert.equal(install.out.trim(), "helper-1.0.0 tiny-0.1.0", install.err);
+      assert.ok(!existsSync(join(HOME, "gems", "tiny-0.2.0")), "installed beyond the resolved set");
+    });
+
+    test("what it installed loads by require, with no -I", () => {
+      // from an unrelated directory: what finds the files is the gem, not -I
+      // and not the cwd, which find_feature searches last
+      const work = join(DIR, "driver_work");
+      mkdirSync(work, { recursive: true });
+      const r = rubyIn(work, { GEM_HOME: HOME }, "-e", "require 'helper'; puts Tiny::VERSION");
+      assert.equal(r.out, "0.1.0\n", r.err);
     });
   });
 

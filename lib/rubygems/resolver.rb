@@ -36,6 +36,11 @@ class Gem::Resolver
 
   ##
   # The Gem::Cooldown applied to release candidates, if any.
+  #
+  # Opal: Gem::Cooldown, the supply-chain filter that keeps gems published in
+  # the last N days out of a resolution, is not ported yet. Nothing sets this,
+  # so @cooldown stays nil and both cooldown paths below stay inert - which is
+  # what upstream does when no --cooldown is configured. M6 brings the option.
 
   attr_accessor :cooldown
 

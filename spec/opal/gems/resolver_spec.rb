@@ -122,7 +122,7 @@ describe 'Gem::Resolver' do
 
       # the installer refuses a gem whose own dependencies are not in place yet,
       # so a resolved set has to go in dependency order and not in resolution
-      # order - the job Gem::RequestSet does for `gem install` once M6 lands
+      # order - what Gem::RequestSet#sorted_requests does for the install driver
       list = Gem::DependencyList.new
       list.add(*requests.map {|request| request.spec.spec })
       order = list.dependency_order.reverse

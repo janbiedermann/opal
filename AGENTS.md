@@ -297,7 +297,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   the SEA fuse, which the system `node-22` lacks.
 - The gem port (GEMS.md, `lib/rubygems/`) requires its files eagerly - no
   `autoload` - so a compiled bundle can carry them; `tasks/ruby/bundle.mjs`
-  bundles `lib/rubygems.rb` into `exe/ruby` (1.4MB -> 1.9MB) and
+  bundles `lib/rubygems.rb` into `exe/ruby` (1.4MB -> 2.06MB as the port grew) and
   `find_feature` calls `Gem.try_activate` when a path is not on `$LOAD_PATH`,
   so a feature that no gem owns must raise LoadError, not the ENOENT
   `Opal.platform.load_file` raises (Opal compiles `require` to the runtime, so
@@ -315,9 +315,25 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `Gem::UnsatisfiableDependencyError.new(dep_request, platform_mismatch)` —
   upstream 4.1's shape, which takes a `DependencyRequest` and answers
   `#dependency` and `#errors` rather than an `original` exception. Install the
-  resolved set in `Gem::DependencyList#dependency_order.reverse`: that method
-  returns dependents first, and `Gem::Installer` refuses a gem whose
-  dependencies are not in place.
+  resolved set in `Gem::RequestSet#sorted_requests` order — TSort over the
+  requests, dependencies first, while `#specs` keeps resolution order. Sorting
+  is not optional: `Gem::Installer` refuses a gem whose dependencies are not in
+  place yet, and hand-sorting with `Gem::DependencyList#dependency_order` gives
+  the reverse (dependents first).
+- The install driver: `Gem::DependencyInstaller#install` builds a
+  `Gem::RequestSet` over a `Gem::Resolver::InstallerSet`. `RequestSet#resolve`
+  hands the set its `remote=`, and `InstallerSet#remote=(true)` widens a
+  `:local` domain to `:both` - an offline caller must answer that back with
+  `request_set.remote = set.consider_remote?` (upstream's installer does), or
+  the lookup walks into the remote seam. `Gem::Cooldown` is not ported, so
+  `cooldown` stays nil everywhere and the cooldown filters in `resolver.rb`
+  stay inert; `DependencyInstaller#in_background` runs inline because Opal's
+  `Process.fork` is not a fork - it hands the block to the Opal system runner.
+- `exe/ruby`'s `find_feature` searches the current directory *last*, so an
+  integration test that keeps several runs in one temporary directory has to
+  give each run its own cwd: a `helper.rb` another test left in the shared cwd
+  shadows the installed `helper` gem (as `spec/lib/compiler/ruby_exe.test.mjs`
+  does with its per-run `cwd`).
 - MSpec in `spec/opal`: expect `-> { }.should raise_error(X)` (space, not
   `.should.raise`); `start_with` and `be_truthy` matchers do not exist there;
   a predicate that answers an object (`Gem::SourceList#include?` finds and

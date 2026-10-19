@@ -73,6 +73,9 @@ require_relative "rubygems/installer"
 require_relative "rubygems/uninstaller"
 require_relative "rubygems/spec_fetcher"
 require_relative "rubygems/resolver"
+require_relative "rubygems/available_set"
+require_relative "rubygems/request_set"
+require_relative "rubygems/dependency_installer"
 
 module Gem
   ##
