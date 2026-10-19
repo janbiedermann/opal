@@ -10,14 +10,57 @@ class CGI
     #   url_encoded_string = CGI.escape("'Stop!' said Fred")
     #      # => "%27Stop%21%27+said+Fred"
     def escape(c)
-      `encodeURI(c)`
+      %x{
+        // Only -._~ and the alphanumerics stay; every other byte becomes an
+        // uppercase %XX and a space a +, which is what Ruby does with a gsub
+        // over the ASCII-8BIT bytes. encodeURI keeps the reserved characters
+        // (`/#&?`) and the non-ASCII ones, so it answered something else.
+        let out = "";
+        for (const byte of #{c.bytes}) {
+          if (byte === 0x20) {
+            out += "+";
+          } else if ((byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5a) ||
+                     (byte >= 0x61 && byte <= 0x7a) || byte === 0x2d || byte === 0x2e ||
+                     byte === 0x5f || byte === 0x7e) {
+            out += String.fromCharCode(byte);
+          } else {
+            out += "%" + byte.toString(16).toUpperCase().padStart(2, "0");
+          }
+        }
+        return out;
+      }
     end
 
     # URL-decode an application/x-www-form-urlencoded string with encoding(optional).
     #   string = CGI.unescape("%27Stop%21%27+said+Fred")
     #      # => "'Stop!' said Fred"
     def unescape(c)
-      `decodeURI(c)`
+      %x{
+        // Every %XX pair becomes a byte and a + is a space; decodeURI leaves
+        // the escapes that are legal inside a URI (%2F, %3A) alone and hands
+        // the input back. The bytes are read as UTF-8 unless the string is
+        // binary, which is Ruby's ASCII-8BIT then force_encoding pair.
+        const str = String(c);
+        const encoder = new TextEncoder();
+        const bytes = [];
+        for (let i = 0; i < str.length; i++) {
+          const ch = str[i];
+          if (ch === "+") {
+            bytes.push(0x20);
+          } else if (ch === "%" && /^[0-9a-fA-F]{2}/.test(str.substr(i + 1, 2))) {
+            bytes.push(parseInt(str.substr(i + 1, 2), 16));
+            i += 2;
+          } else {
+            const point = str.codePointAt(i);
+            if (point > 0xffff) i++;
+            for (const byte of encoder.encode(String.fromCodePoint(point))) bytes.push(byte);
+          }
+        }
+        const buffer = Buffer.from(bytes);
+        const name = (c && c.encoding && c.encoding.name) || "UTF-8";
+        if (name === "ASCII-8BIT" || name === "BINARY") return Opal.str(buffer.toString("latin1"), "BINARY");
+        return new TextDecoder("utf-8").decode(buffer);
+      }
     end
 
     # URL-encode a string following RFC 3986

@@ -6,7 +6,7 @@
 //   node tasks/test.mjs -R chrome mspec  # browser runners for the Opal suites
 //   node tasks/test.mjs spec/opal/core/kernel spec/ruby/core/array/flatten_spec.rb test/opal/test_base64.rb
 //
-// Suites: parser, compiler, mspec_opal, mspec_ruby, minitest_cruby,
+// Suites: parser, compiler, gems, mspec_opal, mspec_ruby, minitest_cruby,
 // minitest_node; "mspec" and "minitest" name both of theirs. Files and
 // directories run their specs/tests (like bin/test). The suites read the
 // environment variables PATTERN, FILES, RANDOM_SEED, ... (see AGENTS.md).
@@ -22,13 +22,14 @@ const nodeTest = (pattern) => run(process.execPath, ["--test", ...glob(pattern)]
 const SUITES = {
   parser: () => nodeTest("spec/lib/parser/*.test.mjs"),
   compiler: () => nodeTest("spec/lib/compiler/**/*.test.mjs"),
+  gems: () => nodeTest("spec/lib/gems/*.test.mjs"),
   mspec_opal: (platform) => mspec("opal", platform),
   mspec_ruby: (platform) => mspec("ruby", platform),
   minitest_cruby: (platform) => minitestCruby(platform),
   minitest_node: () => minitestNode(),
 };
 const GROUPS = { mspec: ["mspec_opal", "mspec_ruby"], minitest: ["minitest_cruby", "minitest_node"] };
-const ALL = ["parser", "compiler", "mspec_opal", "mspec_ruby", "minitest_cruby", "minitest_node"];
+const ALL = ["parser", "compiler", "gems", "mspec_opal", "mspec_ruby", "minitest_cruby", "minitest_node"];
 
 function usage(status) {
   console.log("usage: node tasks/test.mjs [-R platform] [suite | file | directory]...");

@@ -17,7 +17,7 @@ async function main() {
   const steps = [
     ["parser:assemble --check", () => run(process.execPath, ["tasks/parser/assemble.mjs", "--check"])],
     ["parser", () => eslint("lib/opal/parser", "spec/lib/parser", "tasks/parser", "benchmark/parser", "exe/potch")],
-    ["compiler", () => eslint("lib/opal/compiler", "spec/lib/compiler", "tasks/compiler", ...glob("tasks/*.mjs"), "tasks/testing")],
+    ["compiler", () => eslint("lib/opal/compiler", "spec/lib/compiler", "lib/opal/gems", "spec/lib/gems", "tasks/compiler", ...glob("tasks/*.mjs"), "tasks/testing")],
     ["corelib and stdlib", async () => {
       rmSync("tmp/lint", { recursive: true, force: true });
       const built = await run(process.execPath, ["tasks/dist.mjs"], { env: { ...process.env, DIR: "tmp/lint", FORMATS: "js,map" } });

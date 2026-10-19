@@ -12,10 +12,14 @@ const parserFiles = [
   "exe/potch",
 ];
 
-// The JS compiler (lib/opal/compiler) is linted with the recommended rules.
+// The JS of the toolchain - the compiler, and the pieces beside it that a
+// compiled program loads at run time (lib/opal/gems) - is linted with the
+// recommended rules.
 const compilerFiles = [
   "lib/opal/compiler/**/*.mjs",
   "spec/lib/compiler/**/*.mjs",
+  "lib/opal/gems/**/*.mjs",
+  "spec/lib/gems/**/*.mjs",
   "tasks/compiler/**/*.mjs",
   "tasks/*.mjs",
   "tasks/testing/**/*.mjs",

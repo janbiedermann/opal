@@ -24,7 +24,6 @@ opal_filter "CGI" do
   fails "CGI#out includes Cookies in the @output_cookies field" # NoMethodError: undefined method `out' for #<CGI:0x86a74 @output_cookies=["multiple", "cookies"]>
   fails "CGI#out it writes a HTMl header based on the passed argument to $stdout" # NoMethodError: undefined method `out' for #<CGI:0x86a86>
   fails "CGI#out when passed no block raises a LocalJumpError" # Expected LocalJumpError but got: NoMethodError (undefined method `out' for #<CGI:0x86a96>)
-  fails "CGI.escape url-encodes the passed argument" # Expected "%20!%22\#$%25&'()*+,-./0123456789:;%3C=%3E?@ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D" == "+%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D" to be truthy but was false
   fails "CGI.escapeElement when passed String, elements, ... escapes only the tags of the passed elements in the passed String" # NoMethodError: undefined method `escapeElement' for CGI
   fails "CGI.escapeElement when passed String, elements, ... is case-insensitive" # NoMethodError: undefined method `escapeElement' for CGI
   fails "CGI.parse when passed String allows passing multiple values for one key" # NoMethodError: undefined method `parse' for CGI
@@ -34,7 +33,6 @@ opal_filter "CGI" do
   fails "CGI.pretty when passed html indents the passed html String with two spaces" # NoMethodError: undefined method `pretty' for CGI
   fails "CGI.pretty when passed html, indentation_unit indents the passed html String with the passed indentation_unit" # NoMethodError: undefined method `pretty' for CGI
   fails "CGI.rfc1123_date when passed Time returns the passed Time formatted in RFC1123 ('Sat, 01 Dec 2007 15:56:42 GMT')" # NoMethodError: undefined method `rfc1123_date' for CGI
-  fails "CGI.unescape url-decodes the passed argument" # Expected "+!\"%23%24%%26'()*%2B%2C-.%2F0123456789%3A%3B<%3D>%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" == " !\"\#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" to be truthy but was false
   fails "CGI.unescapeElement when passed String, elements, ... is case-insensitive" # NoMethodError: undefined method `unescapeElement' for CGI
   fails "CGI.unescapeElement when passed String, elements, ... unescapes only the tags of the passed elements in the passed String" # NoMethodError: undefined method `unescapeElement' for CGI
 end
