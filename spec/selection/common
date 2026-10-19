@@ -147,6 +147,7 @@ ruby/core/string/unpack/w_spec
 ruby/core/string/unpack/z_spec
 
 ruby/core/struct
+ruby/core/symbol/name_spec
 ruby/core/symbol/to_proc_spec
 ruby/core/systemexit
 ruby/core/time

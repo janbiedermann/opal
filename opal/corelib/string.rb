@@ -1873,6 +1873,27 @@ class ::String < `String`
     `self.valueOf()` # .$force_encoding(self.encoding)
   end
 
+  ##
+  # Symbol#name: the symbol as a String. CRuby answers the interned name, so
+  # the same frozen String comes back for the same symbol every time, and the
+  # table below is what keeps that identity here.
+  #
+  # Opal: a Symbol method, on String because symbols are strings until there
+  # are real Symbols (Symbol = String at the end of this file); the table is
+  # keyed by the symbol, which is a JavaScript string.
+  def name
+    %x{
+      const key = self.valueOf();
+      const cache = Opal.symbol_names || (Opal.symbol_names = new Map());
+      let name = cache.get(key);
+      if (name === undefined) {
+        name = $str(self.valueOf(), #{encoding});
+        cache.set(key, name.$freeze());
+      }
+      return cache.get(key);
+    }
+  end
+
   def length
     %x{
       const string = self.valueOf();
