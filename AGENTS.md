@@ -295,6 +295,23 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   the executable instead of a blob. Below 26 the old
   `--experimental-sea-config` + postject path runs, and it needs a build with
   the SEA fuse, which the system `node-22` lacks.
+- The gem port (GEMS.md, `lib/rubygems/`) requires its files eagerly - no
+  `autoload` - so a compiled bundle can carry them; `tasks/ruby/bundle.mjs`
+  bundles `lib/rubygems.rb` into `exe/ruby` (1.4MB -> 1.9MB) and
+  `find_feature` calls `Gem.try_activate` when a path is not on `$LOAD_PATH`,
+  so a feature that no gem owns must raise LoadError, not the ENOENT
+  `Opal.platform.load_file` raises (Opal compiles `require` to the runtime, so
+  upstream's `core_ext/kernel_require.rb` hook has no Ruby-level hook point).
+- RubyGems' ported code reads `Gem.ruby_version.segments` (a `Gem::Version`,
+  not `RUBY_VERSION`) and `Gem.rubygems_version`; `Gem.default_user_install`
+  must answer false on Opal, else an install into `GEM_HOME`/`--install-dir`
+  is redirected to the user directory. Node has no `flock`, so
+  `Gem.open_file_with_lock` is an exclusive-create `<path>.lock` file, stolen
+  once older than `Gem::LOCK_TIMEOUT`.
+- MSpec in `spec/opal`: expect `-> { }.should raise_error(X)` (space, not
+  `.should.raise`); `start_with` and `be_truthy` matchers do not exist there;
+  a predicate that answers an object (`Gem::SourceList#include?` finds and
+  returns) needs a `.nil?` assertion.
 - If an agent discovers information that required significant setup time, condense
   the result into a short bullet in this file so later agents can skip the same
   work.
