@@ -139,6 +139,13 @@ describe("the ruby command", () => {
     assert.equal(r.out, "from js\n", r.err);
   });
 
+  test("a plain .js library without an Opal module loads for its side effects", () => {
+    // js-yaml-3-6-1.js is this kind of file: it only sets a global
+    writeFileSync(join(DIR, "sideeffect.js"), "Opal.const_set(Opal.Object, 'SIDE_EFFECT', 'ran');");
+    const r = ruby("-I", DIR, "-e", "require 'sideeffect'; require 'sideeffect'; puts SIDE_EFFECT");
+    assert.equal(r.out, "ran\n", r.err);
+  });
+
   test("a .rb feature wins over a .js one of the same name", () => {
     writeFileSync(join(DIR, "both.rb"), "BOTH = 'rb'\n");
     writeFileSync(join(DIR, "both.js"), "Opal.modules['both'] = function (Opal) { Opal.const_set(Opal.top, 'BOTH', 'js'); };");

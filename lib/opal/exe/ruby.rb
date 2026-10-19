@@ -187,6 +187,12 @@ module RubyCommand
         # boxed String object, and JS eval() returns a non-primitive
         # argument without evaluating it, a silent no-op.
         `eval(String(#{File.read(file)}))`
+        # A .js is either a requirable module (a precompiled gem) that
+        # registers its Opal.modules entry itself, or a plain JS library
+        # that only has side effects (js-yaml-3-6-1.js). Opal.require runs
+        # the module after load_file and raises LoadError when there is
+        # none, so a side-effect-only file leaves an empty one behind.
+        `if (!Opal.modules[path]) Opal.modules[path] = function () {};`
         return
       end
       js = cached_compile(File.read(file), { file: path, requirable: true })
