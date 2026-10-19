@@ -67,7 +67,7 @@ module Gem
   def self.user_dir
     gem_dir = File.join(Gem.user_home, ".gem")
     gem_dir = File.join(Gem.data_home, "gem") unless File.exist?(gem_dir)
-    File.join gem_dir, ruby_engine, ruby_version
+    File.join gem_dir, ruby_engine, RUBY_VERSION
   end
 
   ##
@@ -78,10 +78,13 @@ module Gem
   end
 
   ##
-  # The version a gem directory uses for its versioned subdirectory.
+  # The version a gem directory uses for its versioned subdirectory, and the
+  # version a required_ruby_version is checked against: a Gem::Version, as
+  # upstream's, since the ported code reads its segments.
 
   def self.ruby_version
-    RUBY_VERSION
+    return @ruby_version if defined? @ruby_version
+    @ruby_version = Gem::Version.new RUBY_VERSION
   end
 
   ##
@@ -170,10 +173,15 @@ module Gem
   end
 
   ##
-  # A user install is the only install, so it is the default.
+  # Installing "as the user" is upstream's fallback for a default directory
+  # that belongs to the system and cannot be written. Here the default
+  # directory already is the user's own, so there is nothing to fall back
+  # to - and answering true would quietly write over a GEM_HOME the caller
+  # asked for. An unwritable gem directory says so instead, when a file is
+  # written to it (Gem::FilePermissionError).
 
   def self.default_user_install # :nodoc:
-    true
+    false
   end
 
   ##
@@ -181,6 +189,17 @@ module Gem
 
   def self.install_extension_in_lib # :nodoc:
     false
+  end
+
+  ##
+  # Returns binary extensions dir for specified RubyGems base dir or nil
+  # if such directory cannot be determined.
+  #
+  # By default, the binary extensions are located side by side with their
+  # Ruby counterparts, therefore nil is returned
+
+  def self.default_ext_dir_for(base_dir)
+    nil
   end
 
   ##

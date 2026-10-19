@@ -84,10 +84,12 @@ module URI
       begin
         return self.build(args)
       rescue InvalidComponentError
+        # Opal: the RFC 2396 parser this retry asks for an escape - it is not
+        # ported; URI::Util.escape does the same job on RFC 3986 terms.
         if args.kind_of?(Array)
           return self.build(args.collect{|x|
             if x.is_a?(String)
-              URI::RFC2396_PARSER.escape(x)
+              URI::Util.escape(x)
             else
               x
             end
@@ -96,7 +98,7 @@ module URI
           tmp = {}
           args.each do |key, value|
             tmp[key] = if value
-                URI::RFC2396_PARSER.escape(value)
+                URI::Util.escape(value)
               else
                 value
               end

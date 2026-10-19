@@ -54,6 +54,22 @@ module URI
   self.parser = RFC3986_PARSER
 
   module Util # :nodoc:
+    # Everything RFC 3986 does not allow to stand as it is in a URI or in one
+    # of its components: the characters this library percent-encodes.
+    UNSAFE = %r{[^A-Za-z0-9\-._~!$&'()*+,;=:@/?#\[\]%]}
+
+    # The same string with every character +UNSAFE+ names percent-escaped.
+    #
+    # Opal: Ruby's URI::Generic.build2 asks URI::RFC2396_PARSER - the parser
+    # of the pre-3986 library it still ships - to do this job, and that parser
+    # is not ported (see the header of stdlib/uri.rb); the characters its
+    # pattern called unsafe and the ones RFC 3986 refuses overlap, so build2
+    # and Gem::Uri ask this instead.
+    def escape(str)
+      str.gsub(UNSAFE) {|character| percent_encode_utf8 character }
+    end
+    module_function :escape
+
     # The percent-escapes of the UTF-8 bytes of one character (Opal strings
     # hold characters, not bytes: CRuby reaches the same escapes by forcing
     # the whole string to ASCII-8BIT before a byte-wise table gsub). The
