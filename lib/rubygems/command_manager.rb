@@ -51,13 +51,16 @@ class Gem::CommandManager
 
   BUILTIN_COMMANDS = [ # :nodoc:
     :build,
+    :cleanup,
     :contents,
+    :dependency,
     :environment,
     :fetch,
     :help,
     :info,
     :install,
     :list,
+    :outdated,
     :search,
     :sources,
     :specification,

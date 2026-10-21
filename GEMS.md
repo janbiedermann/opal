@@ -26,13 +26,14 @@ core files the work has changed so far.
 *and* through the command line — `exe/gem install ./hello-1.0.0.gem` then
 `exe/ruby -e "require 'hello'"`, and `exe/gem install tiny --source <fixture
 server>` over the compact index (`spec/lib/gems/cli.test.mjs`).
-M6 is in with its plumbing and twelve commands — the runner, the command
+M6 is in with its plumbing and seventeen commands — the runner, the command
 manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
-`help`, `list`, `search`, `info`, `contents`, `which`, `spec`, `build`, `fetch`
-and `unpack`; `outdated`, `cleanup`, `environment`/`env`, `sources` and
-`dependency` are the next batch and `lock` is out, its backend being the
-unported lockfile and gemdeps support (§8's M6). M8 has not been
-started; M7 is half in, its `exe/ruby` side came with M0 and M4.
+`help`, `list`, `search`, `info`, `contents`, `which`, `spec`, `build`, `fetch`,
+`unpack`, `env`, `sources`, `outdated`, `dependency` and `cleanup`. What is
+left of §8's M6 list is `lock`, out with the lockfile and gemdeps machinery,
+and the `update` commands, out with the dependency resolver's install side
+(M8); the Opal-only `compile` command (D7) is the one M6 item still to write.
+M8 has not been started; M7 is half in, its `exe/ruby` side came with M0 and M4.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -178,12 +179,10 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M6's remaining commands**: `outdated`, `cleanup`, `environment`/`env`,
-   `sources` and `dependency`, sharing `Gem::QueryUtils` for the first two —
-   and the Opal-only `compile` command (D7). `lock` is out with the lockfile
-   and gemdeps machinery (M8). The plumbing (`GemRunner`, `CommandManager`,
-   `Command` and its option mixins, `tasks/gem{,.exe}`) is in, and the commands
-   that went in with it closed M4's and M5's exit tests.
+1. **M6's last piece is the Opal-only `compile` command** (D7). Every upstream
+   command this port has a body for is registered; `lock` and the `update`
+   commands are out with the lockfile, the gemdeps machinery and the
+   resolver's install side (M8).
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1134,8 +1133,10 @@ Two read-only batches have gone in since: `Gem::QueryUtils` with `list`,
 `search`, `info`, `contents`, `which` and `spec` (the last four including what
 an installed repository answers: `list -i`, `--details`, `contents -l`,
 `spec FIELD`), and the packaging trio `build`, `fetch` and `unpack` with
-`Gem::GemspecHelpers`. Twelve of the commands §8 lists are in; the rest need machinery this port has
-not (see the list below). The read-only
+`Gem::GemspecHelpers`. Since then `environment`, `sources`, `outdated`,
+`dependency` and `cleanup` came in, which is every command §8 lists except
+`lock` (out with the lockfile and gemdeps machinery) and the `update` commands
+(out with the resolver's install side, M8). The read-only
 query path also runs against rubygems.org by hand: `gem search rake` answers
 from the live compact index, `gem fetch rake` writes the package where it
 runs, and `gem install rake` / `gem install addressable` (two gems, a real
@@ -1181,6 +1182,15 @@ What the batch leaves out, each traceable to §1 or a later milestone:
   is.
 * `BuildCommand`'s `options[:build_path]` branch stays as written although
   nothing sets it: `--build-path` belongs to the unported `rebuild` command.
+* `OutdatedCommand` keeps only the listing half. The cooldown half —
+  `Gem::Cooldown`, `Gem::CooldownOption` and its `--cooldown` option, the two
+  methods that pick the newest version outside the period and annotate the ones
+  inside it, and the `Gem::Source#created_at_for_tuple` they read — is out with
+  that cache (§1). The listing itself needed one method this port had not
+  reached: `Gem::Specification.outdated_and_latest_version`.
+* `DependencyCommand`'s `-p` is the local/remote options' `--http-proxy`, which
+  registers it after the command's own `--pipe`; `--pipe` is the form that
+  reaches the pipe format. That collision is upstream's, comment and all.
 
 ### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **partly done**
 

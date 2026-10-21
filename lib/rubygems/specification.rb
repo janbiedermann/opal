@@ -1076,6 +1076,32 @@ class Gem::Specification < Gem::BasicSpecification
   end
 
   ##
+  # Yields each installed spec that has a newer version somewhere, with that
+  # newest remote version.
+
+  def self.outdated_and_latest_version
+    return enum_for __method__ unless block_given?
+
+    # TODO: maybe we should switch to rubygems' version service?
+    fetcher = Gem::SpecFetcher.fetcher
+
+    latest_specs(true).each do |local_spec|
+      dependency =
+        Gem::Dependency.new local_spec.name, ">= #{local_spec.version}"
+
+      remotes, = fetcher.search_for_dependency dependency
+      remotes  = remotes.map {|n, _| n.version }
+
+      latest_remote = remotes.sort.last
+
+      yield [local_spec, latest_remote] if
+        latest_remote && local_spec.version < latest_remote
+    end
+
+    nil
+  end
+
+  ##
   # Return the latest installed spec for gem +name+.
 
   def self.latest_spec_for(name)

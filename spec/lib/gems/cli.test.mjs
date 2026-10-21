@@ -219,6 +219,16 @@ describe("the gem command", () => {
     assert.match(specYaml.out, /^--- !ruby\/object:Gem::Specification\nname: hello\n/, specYaml.out);
     assert.match(gem("spec", "hello", "summary").out.trim(), /^--- the hello gem$/);
 
+    // What the repository answers about the gems it holds and how they relate.
+    assert.match(gem("dependency", "hello").out, /^Gem hello-1\.0\.0$/m, gem("dependency", "hello").out);
+    // -p is the local/remote options' --http-proxy here, as it is upstream's,
+    // so the pipe format is spelled out.
+    assert.equal(gem("dependency", "--pipe", "hello").out.trim(), "");
+    assert.equal(gem("cleanup").out.trim(), "Cleaning up installed gems...\nClean up complete");
+    const stale = gem("outdated");
+    assert.equal(stale.out.trim(), "");
+    assert.equal(stale.status, 0, stale.err);
+
     // A remote query with no source answers nothing rather than reaching the
     // network or dying on an empty source list.
     const remote = gem("list", "--remote");
