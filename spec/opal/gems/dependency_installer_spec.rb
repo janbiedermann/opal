@@ -124,18 +124,24 @@ describe 'Gem::DependencyInstaller' do
     error.message.should.include? "user requested 'nope"
   end
 
-  it 'stops at the seam where a remote index would be read' do
+  it 'refuses a gem no source of the remote domain offers' do
+    # The M5 transport is in, so a :remote install asks its sources; with none
+    # configured the request fails on the dependency, not on the seam.
+    saved = Gem.sources.to_a
     error = nil
     begin
+      Gem.sources = []
       Dir.chdir(@repo) do
         Gem::DependencyInstaller.new(domain: :remote, install_dir: @home).install('helper')
       end
     rescue Gem::Exception => e
       error = e
+    ensure
+      Gem.sources = saved
     end
 
     error.should_not == nil
-    error.message.should.include? 'remote sources are not available yet'
+    error.message.should.include? "user requested 'helper"
   end
 end
 

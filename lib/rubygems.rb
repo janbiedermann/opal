@@ -400,6 +400,25 @@ module Gem
   end
 
   ##
+  # The version of the Marshal format for your Ruby.
+  #
+  # Opal: this is what the index and spec-dump file names carry
+  # (specs.4.8.gz, quick/Marshal.4.8/name.gemspec.4.8.rz), so it says what the
+  # port's own reader, Gem::SafeMarshal, reads and writes rather than what the
+  # host Ruby's Marshal would: Opal's Marshal is the reader-only port, and it
+  # answers the same 4.8 as CRuby does.
+
+  def self.marshal_version
+    "#{Marshal::MAJOR_VERSION}.#{Marshal::MINOR_VERSION}"
+  end
+
+  ##
+  # The directory of a remote index's marshalled specs, where a fetched
+  # specification is cached.
+
+  MARSHAL_SPEC_DIR = "quick/Marshal.#{Gem.marshal_version}/".freeze
+
+  ##
   # The paths of an activated gem go after -I and the load path of the run,
   # which is where upstream puts them.
 

@@ -9,7 +9,9 @@ require 'rubygems'
 # the CRuby script that wrote them: dump the index triples ["tiny",
 # Gem::Version.new("0.1.0"), Gem::Platform.new("ruby")] etc, a Hash of permitted
 # symbols, ["café", "日本語", "plain"], a Gem::Specification with a Time as its
-# date, {shady: 1}, Object.new, and a String carrying an @shady ivar.
+# date, {shady: 1}, Object.new, and a String carrying an @shady ivar; and the
+# three time_* files, which are Time.at(1577934245).localtime,
+# Time.utc(2020,1,2,3,4,5.75) and Time.at(1577934245 + Rational(1,4)).
 
 def safe_marshal_fixture(name)
   File.binread File.expand_path("fixtures/safe_marshal/#{name}.marshal", __dir__)
@@ -71,20 +73,59 @@ describe 'Gem::SafeMarshal' do
       .should raise_error(Gem::SafeMarshal::Visitors::ToRuby::UnpermittedIvarError)
   end
 
-  it 'refuses a Time, which is what a marshalled spec carries as its date' do
-    error = nil
-    begin
-      Gem::SafeMarshal.safe_load(safe_marshal_fixture('spec'))
-    rescue Gem::SafeMarshal::Visitors::ToRuby::UnsupportedError => e
-      error = e
-    end
+  it 'reads the date of a marshalled full specification' do
+    spec = Gem::SafeMarshal.safe_load(safe_marshal_fixture('spec'))
 
-    error.should_not == nil
+    spec.class.should == Gem::Specification
+    spec.name.should == 'tiny'
     # RubyGems normalizes Specification#date to a Time, so this is the shape
-    # every marshalled full spec has: the port names the missing Marshal
-    # support rather than answering the wrong date Opal's Marshal reads
-    error.message.should.include? 'no Time support'
-    error.message.should.include? 'Time in a marshal stream'
+    # every marshalled full spec has, and the instant is the one the dumping
+    # process wrote
+    spec.date.class.should == Time
+    spec.date.to_i.should == 1_792_368_000
+    spec.date.utc?.should == true
+  end
+
+  it 'reads a Time the writing process kept in its own zone' do
+    time = Gem::SafeMarshal.safe_load(safe_marshal_fixture('time_local'))
+
+    # the body names the instant in UTC whatever the zone it was displayed in,
+    # and this Time has no zone of its own to display it in
+    time.class.should == Time
+    time.to_i.should == 1_577_934_245
+  end
+
+  it 'reads the microseconds a Time carries' do
+    time = Gem::SafeMarshal.safe_load(safe_marshal_fixture('time_subsec'))
+
+    time.to_f.should == 1_577_934_245.75
+    time.usec.should == 750_000
+  end
+
+  it 'reads the exact fraction of a Rational Time, as far as a JavaScript Date keeps it' do
+    time = Gem::SafeMarshal.safe_load(safe_marshal_fixture('time_rational'))
+
+    # the writing process kept a third of a second as a Rational; the payload
+    # holds it as microseconds
+    time.to_f.should == 1_577_934_245.25
+    time.usec.should == 250_000
+  end
+
+  it 'reads the time_t and microseconds Ruby 1.9 and older wrote' do
+    # written by hand rather than dumped: no Ruby still writes this shape, whose
+    # two words carry no marker bit and hold the seconds and microseconds plainly
+    stream = "\x04\x08u:\x09Time\x0D\xE8\x03\x00\x00\x20\xA1\x07\x00".b
+
+    time = Gem::SafeMarshal.safe_load(stream)
+    time.to_f.should == 1_000.5
+  end
+
+  it 'refuses the extended-year form no gem timestamp needs' do
+    # eight words' worth of fields plus the tail a year outside 1900..2099 needs
+    stream = "\x04\x08u:\x09Time\x11\x43\x00\x1E\xC0\x00\x00\x50\x10\x02\x00\x00\x00".b
+
+    -> { Gem::SafeMarshal.safe_load(stream) }
+      .should raise_error(Gem::SafeMarshal::Visitors::ToRuby::TimeTooLargeError, /extended year/)
   end
 end
 
@@ -94,15 +135,15 @@ describe 'Gem::SafeMarshal wiring' do
     Gem.load_safe_marshal.should == true
   end
 
-  it 'is what Specification._load reads through' do
-    error = nil
-    begin
-      Gem::Specification._load(safe_marshal_fixture('spec'))
-    rescue Gem::SafeMarshal::Visitors::ToRuby::UnsupportedError => e
-      error = e
-    end
+  it 'is what a quick-index spec dump reads through' do
+    # the body of the .gemspec.rz a marshal index answers for one gem: written
+    # by CRuby, whose user-defined spec dump carries a created_at Time
+    packed = File.binread File.expand_path('fixtures/helper-1.0.0.gemspec.rz', __dir__)
+    spec = Gem::SafeMarshal.safe_load Gem::Util.inflate packed
 
-    error.should_not == nil
-    error.message.should.include? 'Time in a marshal stream'
+    spec.class.should == Gem::Specification
+    spec.name.should == 'helper'
+    spec.version.to_s.should == '1.0.0'
+    spec.date.to_i.should == 1_792_368_000
   end
 end

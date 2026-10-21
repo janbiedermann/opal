@@ -32,11 +32,6 @@ describe 'Gem::Source' do
     (Gem::Source.new('https://a.example/') <=> Gem::Source.new('https://b.example/')).should == 1
   end
 
-  it 'says what it cannot do before the fetcher arrives' do
-    -> { Gem::Source.new('https://rubygems.org/').load_specs(:released) }
-      .should raise_error(Gem::Exception)
-  end
-
   it 'finds the gem of a specific file, and its spec' do
     dir = tmp 'gem_source_specific_file'
     FileUtils.mkdir_p File.join(dir, 'lib')

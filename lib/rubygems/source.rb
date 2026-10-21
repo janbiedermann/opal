@@ -9,11 +9,21 @@ require_relative "uri"
 # There are other Source subclasses for installed gems, local gems, the
 # Compact Index API and so-forth.
 #
-# Opal: what a remote source does - reading the compact index or the marshal
-# spec indexes, downloading a .gem - needs the fetcher and the resolver, which
-# are milestone M5; here those answers say so. The identity, the ordering and
-# the cache layout of a source are upstream's, so a source can be named,
-# compared and cached the same way before M5 lands.
+# Opal: the remote reads are upstream's - the compact index through
+# Gem::CompactIndexClient, the marshal spec indexes through Gem::SafeMarshal, a
+# .gem through Gem::RemoteFetcher - and each one is only reached through the
+# fetcher, which source.rb does not require, exactly as upstream leaves it.
+#
+# What this file does not carry is the content-addressable half of 4.1's index
+# handling: ContentAddressableInfo, #decode_content_addressable_tuples,
+# #content_addressable_tuples and -metadata, #compact_index_info_rows,
+# #compact_index_requirements, #created_at and #created_at_for_tuple (they read
+# Gem::Cooldown, which is not ported, §1), #typo_squatting? and the cooldown
+# require. A tuple read from the compact index still carries a content address
+# when the versions line has one - Gem::NameTuple and Gem::ContentAddress are
+# ported - but nothing goes back to the index to turn that address into a
+# platform and a Ruby ABI, so such a gem is fetched by the address as its
+# platform, the way RubyGems 3.6 did before the /info metadata existed.
 
 class Gem::Source
   include Comparable
@@ -113,45 +123,229 @@ class Gem::Source
   # Gem::RemoteFetcher#download.
 
   def download(spec, dir = Dir.pwd)
-    remote_not_available
+    fetcher = Gem::RemoteFetcher.fetcher
+    fetcher.download spec, uri.to_s, dir
   end
 
   ##
-  # The name tuples +type+ of this remote index, see upstream. M5.
+  # Loads +type+ kind of specs fetching from +@uri+ if the on-disk cache is
+  # out of date.
+  #
+  # +type+ is one of the following:
+  #
+  # :released   => Return the list of all released specs
+  # :latest     => Return the list of only the highest version of each gem
+  # :prerelease => Return the list of all prerelease only specs
+  #
+  # The compact index is used when the source provides it, falling back
+  # to the Marshal spec indexes.
 
   def load_specs(type)
-    remote_not_available
+    load_compact_index_specs(type) || load_marshal_specs(type)
   end
 
   ##
-  # Fetches the specification +name_tuple+ from this remote index. M5.
+  # The compact index client for this source, caching under
+  # Gem.spec_cache_dir. Also used by Gem::Resolver::APISet.
+
+  def compact_index_client # :nodoc:
+    @compact_index_client ||= begin
+      require_relative "compact_index_client"
+
+      index_uri = compact_index_uri
+
+      Gem::CompactIndexClient.new(compact_index_cache_dir(index_uri),
+        Gem::CompactIndexClient::HTTPFetcher.new(index_uri))
+    end
+  end
+
+  ##
+  # Fetches a specification for the given Gem::NameTuple.
 
   def fetch_spec(name_tuple)
-    remote_not_available
+    fetcher = Gem::RemoteFetcher.fetcher
+
+    spec_file_name = name_tuple.spec_name
+
+    # The name tuple comes from a remote index and is not otherwise
+    # validated, so refuse anything that would escape the spec cache
+    # directory when used as a path component.
+    if File.basename(spec_file_name) != spec_file_name
+      raise Gem::Exception, "malformed spec name: #{spec_file_name.inspect}"
+    end
+
+    source_uri = enforce_trailing_slash(uri) + "#{Gem::MARSHAL_SPEC_DIR}#{spec_file_name}"
+
+    cache_dir = cache_dir source_uri
+
+    local_spec = File.join cache_dir, spec_file_name
+
+    if File.exist? local_spec
+      spec = Gem::read_binary local_spec
+      Gem.load_safe_marshal
+      spec = begin
+               Gem::SafeMarshal.safe_load(spec)
+             rescue StandardError
+               nil
+             end
+      return spec if spec
+    end
+
+    # Opal: upstream shoves ".rz" onto the path with String#<<, which mutates
+    # the URI object along with the string; a String is immutable here, so the
+    # fetcher gets a copy of the URI whose path is longer.
+    source_uri = source_uri.dup
+    source_uri.path = "#{source_uri.path}.rz"
+
+    spec = fetcher.fetch_path source_uri
+    spec = Gem::Util.inflate spec
+
+    if update_cache?
+      require "fileutils"
+      FileUtils.mkdir_p cache_dir
+
+      File.open local_spec, "wb" do |io|
+        io.write spec
+      end
+    end
+
+    Gem.load_safe_marshal
+    # TODO: Investigate setting Gem::Specification#loaded_from to a URI
+    Gem::SafeMarshal.safe_load spec
   end
 
   ##
   # Which resolver set reads this source: a directory of the old marshal
   # indexes for a file:// source, otherwise the compact index when the server
   # publishes one and the marshal index when it does not.
-  #
-  # Opal: that choice is one HTTP request - a fetch of <compact index>/versions,
-  # falling back on a fetch error - so it belongs to the transport of M5's
-  # second half, and a remote source answers the same raise as its other remote
-  # methods. A file:// source already has its index on disk, so it gets the
-  # marshal-index set, whose reader (Gem::SafeMarshal) is the other thing that
-  # half brings.
 
   def new_dependency_resolver_set
     return Gem::Resolver::IndexSet.new self if uri.scheme == "file"
 
-    remote_not_available # M5
+    bundler_api_uri = enforce_trailing_slash(compact_index_uri) + "versions"
+
+    begin
+      fetcher = Gem::RemoteFetcher.fetcher
+      response = fetcher.fetch_path bundler_api_uri, nil, true
+    rescue Gem::RemoteFetcher::FetchError
+      Gem::Resolver::IndexSet.new self
+    else
+      Gem::Resolver::APISet.new response.uri + "./info/"
+    end
   end
 
   private
 
-  def remote_not_available
-    raise Gem::Exception, "remote sources are not available yet: #{@uri}" # M5
+  def load_marshal_specs(type)
+    file       = FILES[type]
+    fetcher    = Gem::RemoteFetcher.fetcher
+    file_name  = "#{file}.#{Gem.marshal_version}"
+    spec_path  = enforce_trailing_slash(uri) + "#{file_name}.gz"
+    cache_dir  = cache_dir spec_path
+    local_file = File.join(cache_dir, file_name)
+    retried    = false
+
+    if update_cache?
+      require "fileutils"
+      FileUtils.mkdir_p cache_dir
+    end
+
+    spec_dump = fetcher.cache_update_path spec_path, local_file, update_cache?
+
+    Gem.load_safe_marshal
+    begin
+      Gem::NameTuple.from_list Gem::SafeMarshal.safe_load(spec_dump)
+    rescue ArgumentError
+      if update_cache? && !retried
+        FileUtils.rm local_file
+        retried = true
+        retry
+      else
+        raise Gem::Exception.new("Invalid spec cache file in #{local_file}")
+      end
+    end
+  end
+
+  ##
+  # Builds the name tuple list for +type+ from the compact index versions
+  # file. Returns nil when the source does not provide a usable compact
+  # index, so the caller can fall back to the Marshal spec indexes.
+
+  def load_compact_index_specs(type)
+    return unless %w[http https].include?(uri.scheme)
+
+    versions = compact_index_versions
+    return if versions.nil? || versions.empty?
+
+    tuples = []
+
+    versions.each_value do |rows|
+      gem_tuples = rows.filter_map do |row_name, version_string, suffix|
+        next unless Gem::Version.correct?(version_string)
+
+        version = Gem::Version.new(version_string)
+        next if version.prerelease? != (type == :prerelease)
+
+        suffix ||= "ruby"
+        content_address = suffix if Gem::ContentAddress.match?(suffix)
+
+        Gem::NameTuple.new(row_name, version, suffix, content_address: content_address)
+      end
+
+      gem_tuples = max_versions_by_platform(gem_tuples) if type == :latest
+
+      tuples.concat(gem_tuples)
+    end
+
+    tuples
+  end
+
+  def compact_index_versions
+    @compact_index_versions ||= compact_index_client.versions
+  rescue Gem::RemoteFetcher::FetchError, Gem::CompactIndexClient::Error
+    @compact_index_versions = {}
+    nil
+  end
+
+  def max_versions_by_platform(tuples)
+    grouped_tuples = tuples.group_by {|tuple| latest_platform_key(tuple) }
+    grouped_tuples.map do |_, platform_tuples|
+      platform_tuples.max_by(&:version)
+    end
+  end
+
+  def latest_platform_key(tuple)
+    if tuple.content_address
+      [tuple.platform, tuple.ruby_abi || tuple.content_address]
+    else
+      tuple.platform
+    end
+  end
+
+  def compact_index_uri
+    if uri.host == "rubygems.org"
+      index_uri = uri.dup
+      index_uri.host = "index.rubygems.org"
+      index_uri
+    else
+      uri
+    end
+  end
+
+  def compact_index_cache_dir(index_uri)
+    if update_cache?
+      # Correct for windows paths
+      escaped_path = index_uri.path.sub(%r{^/([a-z]):/}i, '/\\1-/')
+
+      File.join Gem.spec_cache_dir, "compact_index",
+        "#{index_uri.host}%#{index_uri.port}", *escaped_path.split("/").reject(&:empty?)
+    else
+      require "tmpdir"
+      require "fileutils"
+      dir = Dir.mktmpdir "gem_compact_index"
+      at_exit { FileUtils.rm_rf dir }
+      dir
+    end
   end
 
   def enforce_trailing_slash(uri)

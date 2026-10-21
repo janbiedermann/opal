@@ -12,6 +12,37 @@
 
 require "uri"
 
+# Opal: upstream vendors the uri library under the name Gem::URI, and that
+# vendored copy brings the constructor Gem::URI(uri) the compact index client
+# and Gem::Resolver::APISet call. Here the library is stdlib/uri.rb and keeps
+# its upstream name (see the note above), so the name and the constructor get
+# defined to point at it, the way the vendored copy does.
+module Gem
+  URI = ::URI
+
+  ##
+  # Returns a URI object derived from the given +uri+, which may be a URI
+  # string or an existing URI object:
+  #
+  #   uri = Gem::URI('http://github.com/ruby/ruby')
+  #   #=> #<URI::HTTP http://github.com/ruby/ruby>
+  #   # Returns the given URI.
+  #   Gem::URI(uri)
+  #   #=> #<URI::HTTP http://github.com/ruby/ruby>
+
+  def URI(uri)
+    if uri.is_a?(::URI::Generic)
+      uri
+    elsif uri = String.try_convert(uri)
+      ::URI.parse(uri)
+    else
+      raise ArgumentError,
+        "bad argument (expected URI object or URI string)"
+    end
+  end
+  module_function :URI
+end
+
 class Gem::Uri
   ##
   # Parses and redacts uri

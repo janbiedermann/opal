@@ -107,7 +107,13 @@ module Gem
       def initialize(code, message, headers, body)
         @code = code.to_s
         @message = message.to_s
-        @headers = headers
+        # Net::HTTP keeps its response header names lower case and reads them
+        # that way whatever case they were given in; the transport hands this
+        # class the names Node had already lower-cased, but a response built by
+        # hand - a spec's fixture, mostly - arrives with the spelling HTTP
+        # writes on the wire, and has to read the same way.
+        @headers = {}
+        headers&.each {|name, value| @headers[name.to_s.downcase] = value }
         @body = body
       end
 

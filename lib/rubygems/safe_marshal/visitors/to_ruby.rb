@@ -92,13 +92,22 @@ module Gem::SafeMarshal
             # Opal: upstream rebuilds the marshal stream for the Time and hands
             # it back to Marshal.load, because a Time's ivars - @offset, @zone,
             # the nanoseconds - are its internal representation and can only be
-            # applied while it is read. Marshal here has no Time support at all:
-            # it takes the user-defined body CRuby writes for a time_t and
-            # answers a 1970 date, which is why every "Marshal.load for a Time"
-            # example is filtered in spec/filters/bugs/marshal.rb. A spec read
-            # this way would carry a wrong #date and nothing would notice, so
-            # the port stops and says what is missing instead.
-            raise UnsupportedError.new("Time in a marshal stream: Opal's Marshal has no Time support", stack: formatted_stack)
+            # applied while it is read. Marshal here has no Time support at all,
+            # so the port reads the body itself, see #time_from_dump. The ivars
+            # that body came with are part of that representation: the
+            # microseconds are already in the two packed words, and the ones
+            # beyond them - @nano_num, @nano_den, @submicro - are out of reach
+            # for a Time backed by a JavaScript Date, which stops at
+            # milliseconds; @offset and @zone say how the writing process
+            # displayed the instant, and this Time has no zone to display it in.
+            ivars.reject! do |k, _|
+              case k
+              when :offset, :zone, :nano_num, :nano_den, :submicro
+                true
+              else
+                false
+              end
+            end
           end
         when Elements::String
           enc = nil
@@ -178,19 +187,27 @@ module Gem::SafeMarshal
       SAFE_USER_DEFINED_CLASSES = [::Time, ::Gem::Specification].freeze
       private_constant :SAFE_USER_DEFINED_CLASSES
 
+      # The two packed words every CRuby Time dump is made of, see
+      # #time_from_dump; a year outside 1900..2099 appends a tail this port does
+      # not need and refuses.
+      TIME_DUMP_SIZE = 8
+      private_constant :TIME_DUMP_SIZE
+
       def visit_Gem_SafeMarshal_Elements_UserDefined(o)
         klass = resolve_class(o.name)
         unless SAFE_USER_DEFINED_CLASSES.include?(klass)
           raise UnsupportedError.new("Unsupported user-defined class #{klass} in marshal stream", stack: formatted_stack)
         end
-        # Opal: the Time branch of #visit_Gem_SafeMarshal_Elements_WithIvars
-        # explains why Time cannot be read here - _load is the method Marshal's
-        # reader would call with the user-defined body, and Opal has neither it
-        # nor a Time-aware reader.
+        # Opal: a Time's user-defined body is not something a Time here could
+        # be handed - there is no Time._load, and the method Marshal's reader
+        # would call does not exist - so the packed body is decoded below
+        # instead (#time_from_dump); every other permitted user-defined class
+        # answers its own _load, as upstream does.
         if klass == ::Time
-          raise UnsupportedError.new("Time in a marshal stream: Opal's Marshal has no Time support", stack: formatted_stack)
+          register_object(time_from_dump(o.binary_string))
+        else
+          register_object(call_method(klass, :_load, o.binary_string))
         end
-        register_object(call_method(klass, :_load, o.binary_string))
       end
 
       def visit_Gem_SafeMarshal_Elements_UserMarshal(o)
@@ -322,6 +339,62 @@ module Gem::SafeMarshal
             .decode(Uint8Array.from(#{bytes}.valueOf(), (character) => character.charCodeAt(0)));
           return Opal.str(characters, 'UTF-8');
         }
+      end
+
+      # Opal: CRuby dumps a Time as a user-defined object whose body is two
+      # little-endian words of packed calendar fields, the format time.c's
+      # rb_time_mdump writes:
+      #
+      #   first word  - a marker bit, whether the instant was kept in UTC,
+      #                 the year minus 1900, the month, the day and the hour
+      #   second word - the minute, the second and the microsecond
+      #
+      # Upstream rebuilds a marshal stream around that body and asks Marshal to
+      # read it; Marshal here has no Time at all, which is why every
+      # "Marshal.load for a Time" example sits in spec/filters/bugs/marshal.rb.
+      # So the words are unpacked here and the instant is answered with the Time
+      # this Opal has: milliseconds at best, and the process's own zone, because
+      # an Opal Time carries no zone to display the instant in - which is also
+      # why the offset, zone and nanosecond ivars are dropped above.
+      #
+      # The fields are read with division and remainder rather than shifts and
+      # masks: a JavaScript shift first squeezes its operand into a *signed*
+      # 32-bit integer, so shifting a word with its top bit set answers a
+      # negative number.
+      def time_from_dump(payload)
+        bytes = payload.bytes
+        raise FormatError, "Invalid Time dump: #{payload.bytesize} bytes" if bytes.size < TIME_DUMP_SIZE
+
+        # A year outside 1900..2099 appends an extended-year tail to the words,
+        # which upstream lets Marshal read. No gem timestamp has ever needed it,
+        # so the port names it instead of decoding a form it cannot test.
+        if bytes.size > TIME_DUMP_SIZE
+          raise TimeTooLargeError.new("Time dump of #{bytes.size} bytes: an extended year", stack: formatted_stack)
+        end
+
+        first = bytes[0] + bytes[1] * 256 + bytes[2] * 65_536 + bytes[3] * 16_777_216
+        second = bytes[4] + bytes[5] * 256 + bytes[6] * 65_536 + bytes[7] * 16_777_216
+
+        # Ruby 1.9 and older wrote the time_t and the microseconds straight out.
+        return Time.at(first + second / 1_000_000.0) if first < 0x8000_0000
+
+        first -= 0x8000_0000
+        utc = first >= 0x4000_0000
+        first -= 0x4000_0000 if utc
+
+        year = first / 0x4000 + 1900
+        month = first % 0x4000 / 0x400
+        # The month has four bits, so a December of the older encoding spills
+        # into the next year - the same fix Ruby's own reader applies.
+        if month >= 12
+          month -= 12
+          year += 1
+        end
+
+        rest = first % 0x400
+        seconds = Time.utc(year, month + 1, rest / 32, rest % 32, second / 0x4000_000, second % 0x4000_000 / 0x10_0000).to_i
+        time = Time.at(seconds + second % 0x10_0000 / 1_000_000.0)
+        utc ? time.utc : time
       end
 
       def resolve_ivar(klass, name)

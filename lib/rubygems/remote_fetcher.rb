@@ -22,12 +22,15 @@
 #   install directory alone;
 # * #atomic_copy sets the mode on the destination after the writer has moved
 #   the file, because Opal's IO has no #chmod;
-# * the rescue lists drop SocketError (Opal has no Socket) and the
-#   OpenSSL::SSL::SSLError splat (the transport answers a fetch failure as a
-#   FetchError already); Errno::EACCES and Errno::EPERM do exist here.
+# * the rescue lists drop SocketError (Opal has no Socket, and naming a missing
+#   constant in a rescue list stops the rescue itself); the
+#   OpenSSL::SSL::SSLError splat stays and stays empty, because
+#   Gem::HAVE_OPENSSL is nil here - Node does the TLS and the transport answers
+#   a fetch that never completed as a FetchError already.
 
 require_relative "../rubygems"
 require_relative "vendored_net_http"
+require_relative "openssl"
 require_relative "uri_formatter"
 require_relative "uri"
 require_relative "user_interaction"
@@ -294,8 +297,10 @@ class Gem::RemoteFetcher
     end
 
     data
-  # Opal: SocketError and the OpenSSL splat are gone - see this file's header.
-  rescue Gem::Timeout::Error, IOError, SystemCallError => e
+  # Opal: SocketError is out of the list, see this file's header; the OpenSSL
+  # splat is upstream's and stays, empty while Gem::HAVE_OPENSSL is nil.
+  rescue Gem::Timeout::Error, IOError, SystemCallError,
+         *(OpenSSL::SSL::SSLError if Gem::HAVE_OPENSSL) => e
     raise FetchError.new("#{e.class}: #{e}", uri)
   end
 

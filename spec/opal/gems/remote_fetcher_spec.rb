@@ -3,121 +3,14 @@ require 'spec_helper'
 require 'rubygems'
 require 'rubygems/remote_fetcher'
 require 'fileutils'
+require_relative 'support/http_fixture'
 
 # The half of M5 that reads over the network, and the net/http names the ported
 # code reads an answer through.
 #
-# The fixture server runs on a Node Worker (see GemsHTTPFixture below), so the
+# The fixture server runs on a Node Worker (see support/http_fixture.rb), so the
 # suite needs the Node runner: an example skips when the platform has no
 # transport to load (Gem::HTTPTransport.available?).
-
-# An HTTP server on a Worker of its own. It cannot run in the process the spec
-# runs in: Gem::HTTPTransport parks the main thread in Atomics.wait while a
-# request is in flight, so a server on that thread could not answer it.
-module GemsHTTPFixture
-  SERVER_SOURCE = <<~JS
-    const { parentPort, workerData } = require("node:worker_threads");
-    const http = require("node:http");
-    const zlib = require("node:zlib");
-
-    const server = http.createServer((req, res) => {
-      if (req.url === "/info/rake") {
-        res.writeHead(200, { "content-type": "text/plain" });
-        res.end("rake,13.2.1\\nrake,13.1.0\\n");
-      } else if (req.url === "/bytes") {
-        res.writeHead(200, { "content-type": "application/octet-stream" });
-        res.end(Buffer.from([0x00, 0xff, 0xc3, 0xa9, 0x41]));
-      } else if (req.url === "/versions.4.gz") {
-        // a gzip file served as its bytes: fetch_path gunzips it by the URL
-        res.writeHead(200, { "content-type": "application/octet-stream" });
-        res.end(zlib.gzipSync("the index"));
-      } else if (req.url === "/redirect-once") {
-        res.writeHead(302, { location: "/info/rake" });
-        res.end();
-      } else if (req.url === "/redirect-loop") {
-        res.writeHead(302, { location: "/redirect-loop" });
-        res.end();
-      } else if (req.url === "/redirect-no-location") {
-        res.writeHead(302);
-        res.end();
-      } else if (req.url === "/missing") {
-        res.writeHead(404, { "x-error-message": "no such gem" });
-        res.end("not here");
-      } else if (req.url === "/cond") {
-        if (req.headers["if-modified-since"]) {
-          res.writeHead(304);
-          res.end();
-        } else {
-          res.writeHead(200, { "last-modified": "Wed, 01 Jan 2025 00:00:00 GMT" });
-          res.end("fresh");
-        }
-      } else if (req.url === "/auth") {
-        const wanted = "Basic " + Buffer.from("usr:p/ss").toString("base64");
-        if (req.headers.authorization === wanted) {
-          res.writeHead(200);
-          res.end("authorized");
-        } else {
-          res.writeHead(401, { "www-authenticate": "Basic" });
-          res.end("denied");
-        }
-      } else if (req.url === "/echo") {
-        const lines = [req.method];
-        for (const [name, value] of Object.entries(req.headers)) lines.push(name + "=" + value);
-        res.writeHead(200, { "content-type": "text/plain" });
-        res.end(lines.join("\\n"));
-      } else {
-        res.writeHead(500);
-        res.end("boom");
-      }
-    });
-
-    server.listen(0, "127.0.0.1", () => {
-      workerData.port.postMessage(server.address().port);
-      Atomics.add(workerData.ready, 0, 1);
-      Atomics.notify(workerData.ready, 0);
-    });
-  JS
-
-  class << self
-    def start
-      %x{
-        if (Opal.__gems_fixture_port !== undefined) return Opal.__gems_fixture_port;
-
-        const { MessageChannel, Worker, receiveMessageOnPort } = require("node:worker_threads");
-        const ready = new Int32Array(new SharedArrayBuffer(4));
-        const { port1, port2 } = new MessageChannel();
-        const worker = new Worker(String(#{SERVER_SOURCE}), {
-          eval: true,
-          workerData: { ready, port: port2 },
-          transferList: [port2],
-        });
-        worker.unref();
-        port1.unref();
-        // The Worker has to be waited for the way the transport is: this thread
-        // is the event loop, and it only reaches the answer by polling the port.
-        Atomics.wait(ready, 0, 0, 10000);
-        const message = receiveMessageOnPort(port1);
-        if (!message) {
-          worker.terminate();
-          throw new Error("the fixture server did not answer");
-        }
-        Opal.__gems_fixture_worker = worker;
-        Opal.__gems_fixture_port = message.message;
-        return message.message;
-      }
-    end
-
-    def stop
-      %x{
-        if (Opal.__gems_fixture_worker !== undefined) {
-          Opal.__gems_fixture_worker.terminate();
-          Opal.__gems_fixture_worker = undefined;
-        }
-        Opal.__gems_fixture_port = undefined;
-      }
-    end
-  end
-end
 
 describe 'Gem::RemoteFetcher over the Node transport' do
   before :all do

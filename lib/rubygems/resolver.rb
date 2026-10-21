@@ -644,27 +644,27 @@ class Gem::Resolver
   end
 end
 
-# Opal: upstream requires every set and specification here. The compact-index
-# and marshal-index sets (api_set, api_specification, source_set) come with the
-# HTTP transport of GEMS.md M5's second half, and the git, lock and vendor sets
-# with the features this port leaves out (no git or vendored gem sources, no
-# `gem dependencies` lockfiles, §1); Gem::Source#dependency_resolver_set answers
-# the same "remote sources are not available yet" the remote Gem::Source methods
-# do, so nothing reaches the missing classes by accident.
+# Opal: upstream requires every set and specification here. The git, lock and
+# vendor sets come with the features this port leaves out (no git or vendored
+# gem sources, no `gem dependencies` lockfiles, §1); the rest, including the
+# compact-index set of GEMS.md M5's second half, are required as upstream does.
 require_relative "resolver/activation_request"
 require_relative "resolver/dependency_request"
 require_relative "resolver/incompatibility"
 require_relative "resolver/strategy"
 require_relative "resolver/requirement_list"
 require_relative "resolver/set"
+require_relative "resolver/api_set"
 require_relative "resolver/composed_set"
 require_relative "resolver/best_set"
 require_relative "resolver/current_set"
 require_relative "resolver/index_set"
 require_relative "resolver/installer_set"
+require_relative "resolver/source_set"
 
 require_relative "resolver/specification"
 require_relative "resolver/spec_specification"
+require_relative "resolver/api_specification"
 require_relative "resolver/index_specification"
 require_relative "resolver/installed_specification"
 require_relative "resolver/local_specification"

@@ -5,11 +5,12 @@ require 'fileutils'
 
 # Gem::Resolver, the layer that turns a dependency tree into the list of gems to
 # activate or install, on top of the PubGrub solver RubyGems vendors. The sets
-# here are the ones this port can reach without a network: the .gem files of a
+# here are the ones these specs reach without a server: the .gem files of a
 # directory (Gem::Source::Local) and the gems already installed
-# (Gem::Source::Installed). What stays out of reach until the transport of
-# M5's second half is the remote index, and the last example pins the seam down
-# so that a resolution which silently wanted the network fails where it should.
+# (Gem::Source::Installed). The sets that read an index over HTTP live in
+# remote_source_spec.rb and remote_installer_spec.rb, against the fixture
+# server; what stays out of both is a source that answers nothing, which the
+# last example pins down.
 describe 'Gem::Resolver' do
   def build_gem(name, version, deps: {})
     src = File.join @repo, "src-#{name}-#{version}"
@@ -153,18 +154,26 @@ describe 'Gem::Resolver' do
     requests.map {|r| r.installed? }.should == [true]
   end
 
-  it 'asks the remote index for what the local repository does not hold' do
+  it 'says a root dependency is unsatisfiable when no source offers it' do
+    # The seam of M4 is gone: a remote domain now really does ask its sources,
+    # and with none configured the solve fails on the dependency itself rather
+    # than on a missing transport.
+    saved = Gem.sources.to_a
     error = nil
     begin
+      Gem.sources = []
       Dir.chdir(@repo) do
         set = Gem::Resolver::InstallerSet.new :remote
         set.add_always_install Gem::Dependency.new('helper', '>= 0')
       end
     rescue Gem::Exception => e
       error = e
+    ensure
+      Gem.sources = saved
     end
 
     error.should_not == nil
-    error.message.should.include? 'remote sources are not available yet'
+    error.class.should == Gem::UnsatisfiableDependencyError
+    error.message.should.include? "user requested 'helper (>= 0)'"
   end
 end
