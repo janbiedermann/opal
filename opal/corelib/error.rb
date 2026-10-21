@@ -37,6 +37,16 @@ class ::Exception < `Error`
     new(*args)
   end
 
+  ##
+  # CRuby answers whether the error stream is a terminal here, and it is what
+  # #detailed_message and #full_message default their highlight: to. ruby/spec
+  # reads it too (`gem`'s command manager prints a failing command's
+  # detailed_message, and Exception#full_message builds on #detailed_message).
+
+  def self.to_tty?
+    $stderr&.tty? || false
+  end
+
   def initialize(*args)
     # using self.message aka @message to retain compatibility with native exception's message property
     `self.message = (args.length > 0) ? args[0] : nil`
@@ -137,6 +147,43 @@ class ::Exception < `Error`
     to_s
   end
 
+  # Builds the message CRuby shows for an uncaught exception: the message with
+  # the class of the exception beside it. A message-less exception answers its
+  # own name - except a message-less RuntimeError, what a bare `raise` builds,
+  # which has nothing to say and answers "unhandled exception"; an anonymous
+  # class names itself with its #inspect and drops the parenthesised part when
+  # there is a message. A message spanning several lines carries the class on
+  # its first line only. Only the highlight: keyword means anything - the
+  # escape control sequences being the ones Exception#full_message already
+  # uses - and other keywords are ignored.
+
+  def detailed_message(highlight: false, **_others)
+    highlight = false if highlight.nil?
+    bold, bold_underline, reset = highlight ? ["\e[1m", "\e[1;4m", "\e[m"] : ['', '', '']
+
+    message = to_s
+    klass = self.class
+    name = klass.name
+
+    if message.empty?
+      return "#{bold_underline}#{klass == RuntimeError ? 'unhandled exception' : (name || klass.inspect)}#{reset}"
+    end
+
+    head, _sep, tail = message.partition("\n")
+
+    if name
+      head = "#{bold}#{head} (#{bold_underline}#{name}#{reset}#{bold})#{reset}"
+    else
+      head = "#{bold}#{head}#{reset}"
+    end
+
+    return head if tail.empty?
+
+    # the lines after the first are shown as they were written, each highlighted
+    # on its own; an empty one keeps only its newline
+    "#{head}\n#{tail.split("\n").map {|line| line.empty? ? line : "#{bold}#{line}#{reset}" }.join("\n")}"
+  end
+
   def full_message(kwargs = nil)
     unless defined? Hash
       # We are dealing with an unfully loaded Opal library, so we should
@@ -146,9 +193,10 @@ class ::Exception < `Error`
     end
 
     kwargs ||= {}
-    kwargs[:highlight] = $stderr&.tty? unless kwargs.include?(:highlight)
+    kwargs[:highlight] = self.class.to_tty? unless kwargs.include?(:highlight)
     kwargs[:order] = :top unless kwargs.include?(:order)
     highlight, order = kwargs[:highlight], kwargs[:order]
+    kwargs.delete(:order)
     highlight = false if highlight.nil?
 
     unless `highlight === true || highlight === false`
@@ -171,8 +219,10 @@ class ::Exception < `Error`
     bt = caller if `bt == null || bt == nil || bt == ''`
     first = bt.shift
 
-    msg = "#{first}: "
-    msg += "#{bold}#{to_s} (#{bold_underline}#{self.class.name}#{reset}#{bold})#{reset}\n"
+    # the message part is #detailed_message's, so that an exception can
+    # override that one method and restyle itself; the keyword arguments that
+    # are not full_message's own travel on to it, #order does not
+    msg = "#{first}: #{detailed_message(**kwargs)}\n"
 
     msg += `bt.map((loc) => "\tfrom "+loc+"\n").join("")`
 
