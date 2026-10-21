@@ -7,6 +7,8 @@
 # input in a buffer instead: node's zlib streams are asynchronous, and a
 # synchronous reader would have to drive them by hand, so a chunk is
 # compressed or released when the stream says it is complete.
+require 'io/buffer'
+
 module Zlib
   VERSION = '1.3.1'
   ZLIB_VERSION = '1.3.1'
@@ -372,8 +374,14 @@ module Zlib
     # CRuby's .wrap builds the gzip IO, hands it to the block and answers with
     # what the block returned, closing the stream afterwards. RubyGems reads a
     # .gem file through it and expects that value back.
+    #
+    # The keyword arguments go to Gem::Package's GzipReader call
+    # (external_encoding:); they are only forwarded when there is something to
+    # forward, because this compiler hands an empty **kwargs hash to the next
+    # optional *positional* parameter, which for a GzipWriter is the compression
+    # level - and the level then reaches node:zlib as a Hash.
     def self.wrap(*args, **kwargs, &block)
-      gzip = new(*args, **kwargs)
+      gzip = kwargs.empty? ? new(*args) : new(*args, **kwargs)
       return gzip unless block
 
       begin
@@ -422,10 +430,19 @@ module Zlib
       @data = `$zlib().gunzipSync($buffer(#{data}))`
     end
 
-    # The bytes read so far, tagged with the encoding the stream was opened with.
+    # The bytes read so far, as the characters of the encoding the stream was
+    # opened with. An Opal String cannot carry bytes under a foreign tag - a
+    # force_encoding only retags, so the bytes of a UTF-8 stream would read back
+    # one character per byte - so the bytes go through IO::Buffer into the
+    # encoding's own decoder, which is how every other byte-to-character
+    # boundary in Opal is crossed (IO::Buffer#for has to copy, unlike CRuby's).
     def tag(string)
-      return string if @external_encoding.nil?
-      string.force_encoding(@external_encoding.name)
+      encoding = @external_encoding
+      return string if encoding.nil?
+      # RubyGems and these specs pass the encoding's name as often as the
+      # Encoding object, and Encoding#decode only lives on the object.
+      encoding = Encoding.find(encoding) if String === encoding
+      encoding.decode IO::Buffer.for(string)
     end
 
     # The mtime a gzip stream carries, in its fourth to seventh bytes.
@@ -441,7 +458,14 @@ module Zlib
     end
 
     def read(length = nil, outbuf = nil)
-      return '' if length == 0
+      if length
+        ::Kernel.raise ::ArgumentError, "negative length #{length} given" if length < 0
+        return '' if length == 0
+      elsif eof?
+        # Reading to the end of a stream that is already at it answers the
+        # empty string; only a positive length answers nil for nothing left.
+        return ''
+      end
       return nil if eof?
       count = length.nil? ? `#{@data}.length - #{@pos}` : length
       result = tag(`$binary_string(#{take(count)})`)

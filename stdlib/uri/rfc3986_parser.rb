@@ -18,6 +18,12 @@ module URI
     #   empty string; the IPv4address/ls32/seg references depend on Ruby's
     #   behaviour, so every one is replaced by a non-capturing copy of the
     #   fragment - those groups were captures upstream only to be named.
+    #   Note that `\g<seg>*+` is a subexpression call, so it re-expands the
+    #   pattern of seg and the possessive star applies to it: it is SEG*,
+    #   zero or more. The relative-ref path_absolute is therefore `/SEG*`,
+    #   which is what lets a path of just a slash - the argument of
+    #   `uri.merge("/")`, as Gem::Source#enforce_trailing_slash builds it
+    #   for a source URI with no path - parse at all.
     #
     DEC_OCTET = '(?:[1-9]\d|1\d{2}|2[0-4]\d|25[0-5]|\d)'
     IPV4_SRC = "(?:#{DEC_OCTET}\.){3}#{DEC_OCTET}"
@@ -75,7 +81,7 @@ module URI
             (?::(?<port>\d*))?
           )
           (?<path_abempty>(?:/#{SEG}*)?)
-        | (?<path_absolute>/#{SEG}+)
+        | (?<path_absolute>/#{SEG}*)
         | (?<path_noscheme>#{SEG_NC}+(?:/#{SEG}*)?)
         | (?<path_empty>)
         )
