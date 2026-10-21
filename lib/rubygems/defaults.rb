@@ -37,10 +37,14 @@ module Gem
   end
 
   ##
-  # Path to specification files of default gems: Opal has none.
+  # Path to specification files of default gems. Opal has none, and this stays
+  # upstream's path under Gem.default_dir rather than nil: Gem::Specification
+  # .default_stubs globs it, and a nil base makes Dir.glob look in the current
+  # directory instead, where a half-written gemspec of some other project would
+  # read as an installed default gem.
 
   def self.default_specifications_dir
-    nil
+    @default_specifications_dir ||= File.join(default_dir, "specifications", "default")
   end
 
   ##

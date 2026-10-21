@@ -32,7 +32,7 @@ class Gem::ConfigFile
            false: false, no: false, off: false }.freeze # :nodoc:
 
   def initialize(args = [])
-    @args = args
+    @args = args.dup
     @update_sources = true
     @verbose = true
     @backtrace = false
@@ -53,7 +53,10 @@ class Gem::ConfigFile
     # command line over both, as upstream does.
     apply_options "file", @hash
     apply_options "environment", env_options
-    apply_options "command line", get_config_from_options(args)
+    # The command line is the last word, and what its scan reads comes off @args
+    # as it goes: the command manager reads @args itself, and a --backtrace left
+    # in front of the command name would read to it as an unknown switch.
+    handle_arguments @args
   end
 
   ##
@@ -151,62 +154,58 @@ class Gem::ConfigFile
   end
 
   ##
-  # The arguments left over for the command itself.
+  # Reads the options the commands share off the head of the command line, as
+  # upstream's handle_arguments reads the few it needs there, and stops at the
+  # first argument that is not one of them: what it reads is taken off ARG_LIST,
+  # so the command does not meet it twice, and what it does not know stays where
+  # it is for the command manager to refuse or the command to take.
+  #
+  # Upstream reads --backtrace, --debug and --norc here; this trimmed file also
+  # reads the verbosity pair, --config-file, --install-dir, --no-interactive and
+  # --[no-]default-sources. Neither reads them with optparse: the standard
+  # library's parser answers --help and --version for every parser of its own
+  # accord (its Officious table), where --version aborts the process when the
+  # parser has no version of its own, and it also takes an unknown option off
+  # the list before raising, which would hide a `gem --frobnicate` from the
+  # command manager that has to answer for it. What the loop below gives up, in
+  # exchange, is optparse's abbreviation of a long option and its clustered
+  # short ones: --verb and -qN are not read here.
 
-  def handle_options(args)
-    parser = options_parser
-    parser.parse!(args)
-    args
+  def handle_arguments(arg_list)
+    while (argument = arg_list.first)
+      break unless argument.start_with?("-") && argument != "-"
+
+      name, value = argument.split("=", 2)
+      takes_value = false
+
+      case name
+      when "--verbose" then @verbose = true
+      when "--no-verbose" then @verbose = false
+      when "-V" then @verbose = (@verbose.is_a?(Integer) ? @verbose : 1) + 1
+      when "-q", "--quiet" then @verbose = false; @silent = true
+      when "--backtrace" then @backtrace = true
+      when "--no-backtrace" then @backtrace = false
+      when "-N", "--no-interactive" then @force = true
+      when "--default-sources" then @default_sources = true
+      when "--no-default-sources" then @default_sources = false
+      when "--config-file", "--config"
+        takes_value = true
+        @config_file_name = value || arg_list[1]
+      when "-i", "--install-dir"
+        takes_value = true
+        @install_dir = value || arg_list[1]
+      else
+        break
+      end
+
+      arg_list.shift
+      arg_list.shift if takes_value && value.nil?
+    end
+
+    arg_list
   end
 
   private
-
-  def options_parser
-    OptionParser.new do |opts|
-      opts.banner = "Common options:"
-
-      opts.on("--[no-]verbose", "Level of logging") do |v|
-        @verbose = v
-      end
-
-      opts.on("-V", "Verbose; give it more than once for the fullest output") do
-        @verbose = (@verbose.is_a?(Integer) ? @verbose : 1) + 1
-      end
-
-      opts.on("-q", "--quiet", "Enables quiet mode. Only warnings and errors") do |v|
-        @verbose = !v
-        @silent = v
-      end
-
-      opts.on("--[no-]backtrace", "Enable hiding backtrace information") do |v|
-        @backtrace = v
-      end
-
-      opts.on("--config-file FILE", "Config file location, default is ~/.gemrc") do |v|
-        @config_file_name = v
-      end
-
-      opts.on("--config FILE", "Config file location, default is ~/.gemrc") do |v|
-        @config_file_name = v
-      end
-
-      opts.on("-i", "--install-dir DIR", "Install to the given directory") do |v|
-        @install_dir = v
-      end
-
-      opts.on("-N", "--no-interactive", "Defaults to 'yes' for questions that arise") do |v|
-        @force = v
-      end
-
-      opts.on("--no-default-sources", "Default sources (https://rubygems.org) will be ignored") do
-        @default_sources = false
-      end
-
-      opts.on("--default-sources", "Default sources (https://rubygems.org) will be used") do
-        @default_sources = true
-      end
-    end
-  end
 
   def load_config_file
     return {} unless @config_file_name && File.exist?(@config_file_name)
@@ -272,16 +271,6 @@ class Gem::ConfigFile
     options[:verbose] = false if ENV["GEM_QUIET"]
     options[:backtrace] = ENV["GEM_BACKTRACE"] ? true : nil
     options.compact
-  end
-
-  def get_config_from_options(args)
-    # Only the options the commands share are taken off the command line here;
-    # the command then parses the rest of the arguments itself.
-    options = {}
-    scan = args.dup
-    parser = options_parser
-    parser.order!(scan)
-    options
   end
 
   def apply_options(_from, options)

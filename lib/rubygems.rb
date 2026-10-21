@@ -81,6 +81,25 @@ require_relative "rubygems/dependency_installer"
 # Gem.load_safe_marshal only ran once the library was fully up.
 require_relative "rubygems/safe_marshal"
 
+# The command line, required eagerly like the rest of the port rather than
+# lazily as upstream's Gem::CommandManager does it. That manager loads a command
+# with `require "rubygems/commands/<name>_command"` inside a rescue LoadError,
+# which a compiled bundle cannot answer - a dynamic require has no file to find
+# there - so the commands have to be in the bundle already, and the only way to
+# promise that is to require them here (GEMS.md §6: no autoload). It costs a
+# bundle the size of these files (about 60 KB compiled, most of it help text);
+# exe/gem is what pays for it either way.
+require_relative "rubygems/vendored_optparse"
+require_relative "rubygems/command"
+require_relative "rubygems/version_option"
+require_relative "rubygems/local_remote_options"
+require_relative "rubygems/install_update_options"
+require_relative "rubygems/command_manager"
+require_relative "rubygems/gem_runner"
+require_relative "rubygems/commands/help_command"
+require_relative "rubygems/commands/install_command"
+require_relative "rubygems/commands/uninstall_command"
+
 module Gem
   ##
   # The default remote source URI.
@@ -133,9 +152,58 @@ module Gem
     @paths ||= PathSupport.new(ENV)
   end
 
-  def self.paths=(paths)
+  ##
+  # Initialize the filesystem paths to use from +env+, a hash-like object
+  # queried for GEM_HOME, GEM_PATH and GEM_SPEC_CACHE, as upstream's Gem.paths=
+  # does: the process environment is the base and what +env+ says overrides it,
+  # so a caller that names no home does not throw GEM_HOME away.
+  #
+  # Opal: two small differences. The port's own tests build a Gem::PathSupport
+  # themselves and assign that, and an object that already is one goes through
+  # unchanged rather than being read as an environment. And an Array value
+  # joins onto the path separator without upstream's deprecation warning, which
+  # points at the caller's Ruby frame - this port's backtrace names JavaScript
+  # functions, so it would say nothing a reader could act on.
+
+  def self.paths=(env)
     defaults_clear
-    @paths = paths
+
+    @paths =
+      if PathSupport === env
+        env
+      else
+        target = {}
+        env.each_pair do |key, value|
+          case key
+          when "GEM_HOME", "GEM_PATH", "GEM_SPEC_CACHE"
+            case value
+            when nil, String
+              target[key] = value
+            when Array
+              target[key] = value.join File::PATH_SEPARATOR
+            end
+          else
+            target[key] = value
+          end
+        end
+        PathSupport.new ENV.to_hash.merge(target)
+      end
+
+    Gem::Specification.dirs = @paths.path
+  end
+
+  ##
+  # Point the paths at the +home+ and +paths+ a command line asked for, in the
+  # shape PathSupport reads the environment from. A nil home leaves GEM_HOME
+  # alone, and with no explicit paths GEM_PATH is left at the home too, so
+  # `gem --install-dir` does not silently narrow the search.
+
+  def self.use_paths(home, *paths)
+    paths.flatten!
+    paths.compact!
+    hash = { "GEM_HOME" => home, "GEM_PATH" => paths.empty? ? home : paths.join(File::PATH_SEPARATOR) }
+    hash.delete_if {|_, v| v.nil? }
+    self.paths = hash
   end
 
   ##
@@ -145,6 +213,7 @@ module Gem
   def self.defaults_clear
     @default_dir = nil
     @default_spec_cache_dir = nil
+    @default_specifications_dir = nil
     @default_sources = nil
     @config_home = nil
     @config_file = nil
@@ -194,12 +263,19 @@ module Gem
   def self.sources=(new_sources)
     require_relative "rubygems/source_list"
 
-    @sources = case new_sources
-               when Gem::SourceList
-                 new_sources
-               else
-                 Gem::SourceList.from new_sources
-    end
+    # Opal: nil clears the list, as upstream's setter does, and the getter
+    # builds a fresh one from the configuration and the defaults when asked
+    # again; SourceList.from(nil) would take nil as an array and fail on it.
+    # A list handed over as a Gem::SourceList is used as it stands, which the
+    # port's tests do.
+    @sources =
+      if new_sources.nil?
+        nil
+      elsif Gem::SourceList === new_sources
+        new_sources
+      else
+        Gem::SourceList.from new_sources
+      end
   end
 
   ##

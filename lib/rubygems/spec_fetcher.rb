@@ -1,16 +1,19 @@
 # frozen_string_literal: true
 
-# Opal: upstream requires rubygems/remote_fetcher here, the HTTP layer of M5's
-# second half. Until it is ported every remote lookup this class makes ends in
-# the "remote sources are not available yet" raise of Gem::Source, and that is a
-# plain Gem::Exception - upstream's Gem::RemoteFetcher::FetchError is a
-# Gem::Exception subclass too - so the rescues below read for Gem::Exception and
-# collect the failure as a Gem::SourceFetchProblem, as they do upstream when a
-# source is down.
+# Opal: upstream's require of rubygems/remote_fetcher below, the HTTP layer,
+# stayed out while that layer was unwritten (M5's first half) and came back with
+# it. Every remote lookup this class makes goes through it, and it is what puts
+# Gem::RemoteFetcher in front of the sources: source.rb uses that constant
+# without requiring it, as upstream leaves it, so a port that required neither
+# would NameError on the first marshal-index read. A `gem` command reaches this
+# file eagerly through lib/rubygems.rb, and the remote fetch failures stay
+# Gem::Exception subclasses either way, so the rescues below collect them as a
+# Gem::SourceFetchProblem, as they do upstream when a source is down.
 require_relative "user_interaction"
 require_relative "errors"
 require_relative "text"
 require_relative "name_tuple"
+require_relative "remote_fetcher"
 
 ##
 # SpecFetcher handles metadata updates from remote gem repositories.

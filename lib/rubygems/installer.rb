@@ -510,6 +510,12 @@ class Gem::Installer
   def ensure_loadable_spec
     spec = self.spec
 
+    # Opal: like Gem::Specification.load, evaluating a specification needs
+    # Opal's compiler, which opal-parser brings in (GEMS.md risk 5). Kernel#eval
+    # without it raises "You need to provision opal-parser yourself", and that
+    # would read here as a corrupt specification.
+    require "opal-parser"
+
     begin
       eval spec.to_ruby_for_cache
     rescue StandardError, SyntaxError => e

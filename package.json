@@ -22,6 +22,8 @@
     "update-fixtures": "node tasks/compiler/update_fixtures.mjs",
     "build-ruby": "node tasks/ruby.mjs",
     "build-ruby-exe": "node tasks/ruby_exe.mjs",
+    "build-gem": "node tasks/gem.mjs",
+    "build-gem-exe": "node tasks/gem_exe.mjs",
     "parser:assemble": "node tasks/parser/assemble.mjs"
   },
   "dependencies": {

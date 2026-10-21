@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 # The exception classes of RubyGems, trimmed to the ones the ported code
-# reaches. The upstream file also carries the spell-checking of unknown
-# commands and the PubGrub failure wrapper; they come with the command line
-# and the resolver.
+# reaches. The upstream file also attaches DidYouMean's spell-checking to the
+# unknown-command failure below; there is no DidYouMean here, so that one says
+# what is missing and nothing more.
 #
 # The activation and lookup failures (Gem::LoadError, MissingSpecError,
 # ConflictError) and the error reasons a source answers with live in
@@ -22,6 +22,19 @@ module Gem; end
 class Gem::Exception < RuntimeError; end
 
 class Gem::CommandLineError < Gem::Exception; end
+
+##
+# Raised by Gem::CommandManager when the name on the command line is not a
+# command it registered.
+
+class Gem::UnknownCommandError < Gem::Exception
+  attr_reader :unknown_command
+
+  def initialize(unknown_command)
+    @unknown_command = unknown_command
+    super("Unknown command #{unknown_command}")
+  end
+end
 
 class Gem::DependencyError < Gem::Exception; end
 
@@ -170,5 +183,19 @@ class Gem::UnsatisfiableDependencyError < Gem::DependencyError
 
     @dependency = dep
     @errors     = []
+  end
+
+  ##
+  # The name of the unresolved dependency
+
+  def name
+    @dependency.name
+  end
+
+  ##
+  # The Requirement of the unresolved dependency (not Version).
+
+  def version
+    @dependency.requirement
   end
 end
