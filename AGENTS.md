@@ -429,6 +429,29 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   compiling those files carries the whole parser and compiler whether it wants
   them or not: `exe/gem` is 2.2MB, the size of `exe/ruby`, because a `.gemspec`
   is Ruby source.
+- Reading a gem from a real source reaches code the fixtures never touch, and the
+  failures are Opal's, not the port's: `tr!` and `String#<<` raise
+  NotImplementedError at run time, and they sat in `SpecFetcher`'s name
+  suggestion and in `Gem::YAMLSerializer`'s folded plain scalars (a real
+  `metadata.gz` wraps a long summary onto the next line). A bundle's stack
+  frames are byte offsets, so reproduce with `node exe/opal <probe.rb>` running
+  `Gem::DependencyInstaller.new(domain: :both).install("thread_safe")` — that
+  answers a Ruby backtrace.
+- An installed gemspec is stub format here (`# stub:` header, no `files:`),
+  because upstream writes it through `to_ruby_for_cache` and `for_cache` nils
+  `files` — CRuby's `specifications/*.gemspec` look the same. `gem spec`
+  answering `files: []` is not a port bug.
+- `Time.iso8601`/`Time.xmlschema` (the parse class methods, and the `httpdate`
+  and `rfc2822` ones still missing) are core in CRuby and absent in Opal; the
+  port added them to `stdlib/time.rb`, where the instance formatters already
+  live. `Time.utc`/`gm`/`local`'s seventh argument is microseconds and must be
+  read with `typeof usec === 'number'`: the C-style call
+  `Time.utc(1,15,20,1,1,2000,:ignored,:ignored,:ignored,:ignored)` puts junk
+  there, and `Number(:ignored)` turns the whole Date into NaN.
+- A gem can fail for a reason outside the port: Opal compiles some Ruby regexp
+  literals (`'\)'` escapes under the `/u` flag, as in addressable) into a JS
+  expression JavaScript rejects, so `require 'addressable/uri'` dies in the
+  loader while `require 'public_suffix'` from the same install works.
 - If an agent discovers information that required significant setup time, condense
   the result into a short bullet in this file so later agents can skip the same
   work.

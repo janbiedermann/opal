@@ -26,11 +26,12 @@ core files the work has changed so far.
 *and* through the command line — `exe/gem install ./hello-1.0.0.gem` then
 `exe/ruby -e "require 'hello'"`, and `exe/gem install tiny --source <fixture
 server>` over the compact index (`spec/lib/gems/cli.test.mjs`).
-M6 is in with its plumbing and three commands — the runner, the command
-manager, `Gem::Command` and its option mixins, and `install`, `uninstall` and
-`help` — and its read-only commands (`list`, `search`, `info`, `contents`,
-`which`, `env`, `sources`, `build`, `spec`, `dependency`, `outdated`, `cleanup`,
-`fetch`, `unpack`, `lock`, `environment`) are the next batch. M8 has not been
+M6 is in with its plumbing and twelve commands — the runner, the command
+manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
+`help`, `list`, `search`, `info`, `contents`, `which`, `spec`, `build`, `fetch`
+and `unpack`; `outdated`, `cleanup`, `environment`/`env`, `sources` and
+`dependency` are the next batch and `lock` is out, its backend being the
+unported lockfile and gemdeps support (§8's M6). M8 has not been
 started; M7 is half in, its `exe/ruby` side came with M0 and M4.
 
 What runs now, with no `-I` and no network beyond a fixture server on
@@ -78,7 +79,21 @@ through the library alone:
   `gem uninstall -x -I`, and `gem install tiny --clear-sources --source
   http://127.0.0.1:PORT/ci/` against a compact index the test serves, which is
   also the case that shows a bundle reaches the transport through its
-  `OPAL_HOME` (`spec/lib/gems/cli.test.mjs`, M4's and M5's exit tests).
+  `OPAL_HOME` (`spec/lib/gems/cli.test.mjs`, M4's and M5's exit tests). The
+  same test reads that repository back with `gem list` (`-i`, `--details`),
+  `gem info`, `gem which`, `gem contents`, `gem spec` and `gem search`, and
+  `gem build` and `gem unpack` take a gem apart and put it back together; the
+  fixture index answers a query with its own spec cache, so the fetch cannot be
+  the install's.
+* the same commands against rubygems.org, run by hand rather than in the
+  suite: `gem search rake`, `gem fetch rake`, `gem install rake`, and
+  `gem install addressable`, which resolves a real dependency and lays in two
+  gems. Reading those two gems is what found the missing `Time.iso8601` and the
+  two in-place String mutations (§11's `opal/corelib/time.rb` row and
+  `Gem::YAMLSerializer`'s folded scalars). `exe/ruby -e "require
+  'public_suffix'"` then works; `require 'addressable/uri'` does not, because
+  Opal compiles one of that gem's regexp literals into a JavaScript expression
+  JavaScript rejects — a loader problem outside this port, not a gem one.
 
 Where it is tested: the port's own specs are under `spec/opal/gems/`, run
 against the fixture HTTP server in `spec/opal/gems/support/http_fixture.rb` when
@@ -163,18 +178,17 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M6's remaining commands**: the read-only half of the CLI — `list`,
-   `search`, `info`, `contents`, `which`, `env`, `sources`, `build`, `spec`,
-   `dependency`, `outdated`, `cleanup`, `fetch`, `unpack`, `lock`,
-   `environment`, sharing `Gem::QueryUtils` — and the Opal-only `compile`
-   command (D7). The plumbing (`GemRunner`, `CommandManager`, `Command` and its
-   option mixins, `tasks/gem{,.exe}`) is in with `install`, `uninstall` and
-   `help`, and those closed M4's and M5's exit tests.
-2. **A run against rubygems.org itself.** `exe/gem install rake` is no longer a
-   missing feature — it is the same path `spec/lib/gems/cli.test.mjs` walks
-   against a fixture compact index — but nothing in the suite exercises the real
-   index, the real solve with backtracking, or a `SolveFailure` message read
-   from the live server.
+1. **M6's remaining commands**: `outdated`, `cleanup`, `environment`/`env`,
+   `sources` and `dependency`, sharing `Gem::QueryUtils` for the first two —
+   and the Opal-only `compile` command (D7). `lock` is out with the lockfile
+   and gemdeps machinery (M8). The plumbing (`GemRunner`, `CommandManager`,
+   `Command` and its option mixins, `tasks/gem{,.exe}`) is in, and the commands
+   that went in with it closed M4's and M5's exit tests.
+2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
+   against rubygems.org when run by hand, and the suite keeps to the fixture
+   server so it stays offline and deterministic; what no test covers is the
+   live server's own behaviour — a `SolveFailure` message read back from it, a
+   real ETag negotiation, a 304.
 3. **M7**: the builder consulting the gem directories (`--gem`, `Opalfile`'s
    `add_gem_dependency`) and the precompiled `compiled/` tree.
 4. **M8, Bundler.**
@@ -1114,7 +1128,20 @@ exit tests that were waiting on a command: build → `exe/gem install
 `exe/gem install tiny --clear-sources --source http://127.0.0.1:PORT/ci/`
 against a compact index the test itself serves — the last case also being the
 one that shows a bundle reaches the transport through its baked `OPAL_HOME`.
-`spec/lib/gems/cli.test.mjs` covers it (14 cases, no network).
+`spec/lib/gems/cli.test.mjs` covers it (15 cases, no network).
+
+Two read-only batches have gone in since: `Gem::QueryUtils` with `list`,
+`search`, `info`, `contents`, `which` and `spec` (the last four including what
+an installed repository answers: `list -i`, `--details`, `contents -l`,
+`spec FIELD`), and the packaging trio `build`, `fetch` and `unpack` with
+`Gem::GemspecHelpers`. Twelve of the commands §8 lists are in; the rest need machinery this port has
+not (see the list below). The read-only
+query path also runs against rubygems.org by hand: `gem search rake` answers
+from the live compact index, `gem fetch rake` writes the package where it
+runs, and `gem install rake` / `gem install addressable` (two gems, a real
+dependency) resolve, download, check and install — the run that reached
+`Time.iso8601` and two in-place String mutations is what §11's
+`opal/corelib/time.rb` row and the YAMLSerializer fix came from.
 
 What the batch leaves out, each traceable to §1 or a later milestone:
 
@@ -1126,7 +1153,9 @@ What the batch leaves out, each traceable to §1 or a later milestone:
   that cannot exist.
 * `Gem::UnknownCommandError`'s spell-checking (DidYouMean is not in Opal); the
   error and the command manager's handling of it are upstream's otherwise.
-* `-P/--trust-policy` (`Gem::Security` here has no `Policy`/`Policies`),
+* `-P/--trust-policy`, in `install` and in `unpack` (`Gem::Security` here has
+  no `Policy`/`Policies`, so `Gem::SecurityOption` is not required and the
+  places the policy was passed answer nil),
   `--cooldown` (`Gem::Cooldown` is not ported), `-g/--file` and `--without`
   (`Gem::RequestSet#install_from_gemdeps` is not ported, M8),
   `--target-rbconfig` (M7) and `--user-install`'s `Gem.vendor_dir` partner,
@@ -1139,6 +1168,19 @@ What the batch leaves out, each traceable to §1 or a later milestone:
   carry them, and do nothing.
 * the `gemdeps` half of `install` and the `gem help gem_dependencies` guide,
   which describe the same unported feature.
+* **`gem lock` is out**, not deferred: its whole body is
+  `Gem::RequestSet#lock` and `#load_lockfile`, which `lib/rubygems/request_set.rb`
+  documents as left out with gemdeps and Bundler (M8). Porting the command
+  without them would mean a lock backend of this port's own.
+* **`ContentsCommand#files_in_default_gem` lists the directory instead.**
+  Upstream cannot glob a default gem — its files sit in the interpreter's own
+  library path — so it asks `$LOAD_PATH.resolve_feature_path` where requiring
+  each one lands and `RbConfig::CONFIG["bindir"]` where its executables do.
+  Neither exists here, and nothing installs a default gem, so a spec found
+  under `Gem.default_specifications_dir` is listed as the directory on disk it
+  is.
+* `BuildCommand`'s `options[:build_path]` branch stays as written although
+  nothing sets it: `--build-path` belongs to the unported `rebuild` command.
 
 ### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **partly done**
 
@@ -1279,7 +1321,7 @@ M8 is the largest and depends on all of the above.
 The port itself is plain Ruby and lives outside the core trees (`lib/rubygems/`,
 its specs under `spec/opal/gems/` and `spec/lib/gems/`, the bundling in
 `tasks/ruby/bundle.mjs` and `tasks/gem/bundle.mjs`).
-What it did change inside `opal/` and `lib/opal/` is 24 files, +637/−132 lines
+What it did change inside `opal/` and `lib/opal/` is 25 files, +652/−136 lines
 since the branch base `6b22c1080`. Every one of them was reached by running gem
 code — reading a `.gem`, a gemspec, a binstub — or by running ruby/spec over
 the stdlib pieces the port needs, and each comes with a test: a case under
@@ -1287,9 +1329,11 @@ the stdlib pieces the port needs, and each comes with a test: a case under
 `spec/selection/common` with its remaining failures in `spec/filters/bugs/`.
 Only the lint-only catch bindings came with none. Besides the two stdlib
 libraries M1 brought — `stdlib/uri` and `stdlib/zlib`, the bulk of those
-4,730 insertions — three stdlib files were changed for the port's sake:
-`stdlib/cgi/util.rb` (§8's M5 status), `stdlib/stringio.rb` and the
-`stdlib/uri/rfc3986_parser.rb` pattern of the same milestone.
+4,730 insertions — four stdlib files were changed for the port's sake:
+`stdlib/cgi/util.rb` (§8's M5 status), `stdlib/stringio.rb`, the
+`stdlib/uri/rfc3986_parser.rb` pattern of the same milestone, and
+`stdlib/time.rb`, whose `Time.xmlschema`/`iso8601` parse the compact index's
+created_at needs (§8's M6 status).
 
 ### `opal/` — runtime and corelib
 
@@ -1311,6 +1355,7 @@ libraries M1 brought — `stdlib/uri` and `stdlib/zlib`, the bulk of those
 | `opal/runtime/platforms/node_compatible.js` | a9007b0bd | exports `node:zlib`, which `stdlib/zlib.rb` needs. |
 | `opal/corelib/string.rb` | bfbd0acbb | M5. `Symbol#name`, which `Gem::SafeMarshal` asks a symbol link of a marshal stream for (`#resolve_ivar`, `#resolve_symbol_name`) and Opal did not have: a frozen String, kept in a Map keyed by the symbol so `:x.name.equal?(:x.name)` holds as it does in CRuby. It sits on String, where this implementation keeps the Symbol methods (`Symbol = String` at the end of that file). `spec/ruby/core/symbol/name_spec` joined `spec/selection/common` with it and its three examples pass. |
 | `opal/corelib/error.rb` | 1820b76dc | M6. `Exception#detailed_message` and `Exception.to_tty?`, the line `full_message` had been writing itself and the line `Gem::CommandManager` prints for a failed command: message with the class in parentheses on the *first* line of a multiline message, class name alone when the message is empty (a message-less `RuntimeError` answering `unhandled exception`), an anonymous class by its `#inspect` and no parenthesised part when there is a message, `highlight:` emitting the same escapes `full_message` uses, and `full_message` forwarding the keyword arguments it does not consume. The rules were pinned against the host's ruby 3.3.12 before writing them. Nine `spec/ruby/core/exception` examples came back from `spec/filters/bugs/exception.rb` with it, and those are the test. |
+| `opal/corelib/time.rb` | 3f1c797c4 | M6. `Time.gm`, and with it `Time.utc`, `Time.local` and `Time.mktime`, took a seventh argument named `millisecond` and then dropped it, so `Time.utc(1985,4,12,23,20,50,520000)` answered the bare second; MRI counts that argument in millionths whatever its numeric type, which is what it does now. A value that is not a number is left out — the C-style call puts `:ignored` placeholders in those positions and MRI takes no string as a subsecond either. The test is `spec/ruby/core/time/{utc,gm,local,mktime}_spec.rb` plus the two `spec/ruby/library/time` files the same commit unfiltered; Opal's `Time` keeps microseconds, so a finer fraction than that is dropped where CRuby keeps a Rational. |
 
 ### `lib/opal/` — the toolchain
 
