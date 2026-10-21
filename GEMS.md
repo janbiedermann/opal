@@ -15,113 +15,6 @@ runtime floor for generated code.
 
 ---
 
-## ⏸ PAUSED 2026-10-19 — read this to resume
-
-The M5 remote half is written and spec'd but sits in a **stash**, not in a
-commit, because it cannot pass the suite while the compiler deviates from MRI on
-`lhs ||= rhs`. When the compiler fix described below lands, work resumes here.
-
-**Where the work is.** Branch `digging_for_gems`, HEAD `fec5398bf`; that commit's
-tree is clean and its suite is green. Everything from this batch is in
-`stash@{0}` — verify with `git stash list` that the first entry reads
-`On digging_for_gems: M5-remote-half: compact index client, API set, SafeMarshal
-Time, zlib byte decode (blocked by ||= writing to frozen objects)` and restore
-it by that message, never by index alone: there are older `WIP on master` stash
-entries underneath. `git stash pop 'stash@{0}'` (AGENTS.md warns how a mis-picked
-stash poisons the tree). The stash also carries two stray untracked files from
-earlier sessions, `PARSER.md` and `TODO.md`, which come back with it.
-
-It holds: the compact-index client (`lib/rubygems/compact_index_client.rb` and
-`compact_index_client/{cache,cache_file,http_fetcher,parser,updater}.rb`), the
-API-set resolver (`resolver/{api_set.rb,api_set/gem_parser.rb,api_specification.rb,
-source_set.rb}`), `lib/rubygems/openssl.rb`, and edits to `lib/rubygems.rb`,
-`remote_fetcher.rb`, `resolver.rb`, `source.rb`, `uri.rb`, `vendored_net_http.rb`
-(response header names are stored lower case, a real port bug),
-`safe_marshal/visitors/to_ruby.rb` (Time inside a CRuby-written spec dump: the two
-packed little-endian words of `rb_time_mdump` are decoded instead of upstream's
-rebuild-and-`Marshal.load` path, which Opal cannot take), `stdlib/zlib.rb`, and
-specs `spec/opal/gems/{compact_index_client,remote_source,util,safe_marshal,
-remote_fetcher}_spec.rb`, `spec/opal/gems/support/http_fixture.rb` (the shared
-Worker-hosted fixture server), new fixtures under `spec/opal/gems/fixtures/`, and
-`spec/opal/stdlib/zlib/gzip_file_wrap_spec.rb`.
-
-**Why it stopped.** For a variable target the compiler rewrites `@x ||= rhs` into
-`@x = (@x || rhs)` (`lib/opal/compiler/transforms/operator_assignment.mjs:105-113`
-returns `setNode(condition)`, so the write wraps the short circuit) and emits
-`(self.x = ($truthy(($ret_or_1 = self.x)) ? ($ret_or_1) : (2)))` — it writes in
-both branches. MRI assigns only when the short circuit reaches the right-hand
-side. A write to a frozen object goes through the setter guard
-(`opal/runtime/freeze.rb`, `freeze_props` → `deny_frozen_access`) and raises, so
-`@x ||= v` raises on a frozen object whose `@x` is already truthy; `@x &&= v`
-likewise defines an ivar MRI leaves undefined. Two probes reproduce it in three
-lines: `tmp/gems_probe/or_write.rb` and `tmp/gems_probe/version_freeze.rb`.
-
-The gem port meets it because upstream `resolver/api_specification.rb:40-46`
-freezes the `Version`, the `Dependency` array and the `Requirement`s it parses,
-and `Gem::Version#freeze` pre-caches the very `||=` memos (`canonical_segments`)
-that then get rewritten to `@canonical_segments = ...` on a frozen object.
-`Gem::Version.new` caches instances in `@@all`, so one frozen Version poisons
-every `'1.0.0'` in the process. Tally with the stash applied: parser, compiler,
-gems, mspec_ruby, minitest_cruby, minitest_node all ok; **mspec_opal 957 examples,
-13 failures** — 11 `FrozenError: can't modify frozen Gem::Version` (count varies
-11-15 with the spec order; `RANDOM_SEED=1 bin/test spec/opal/gems` reproduces a
-stable set) and 2 not compiler-related, listed under Open items.
-
-**What was tried, and why it is not the fix.** Two attempts at that transform,
-both reverted. The second moved the write inside the short circuit
-(`OrNode(getNode, setNode(rhs))`, returning `condition` without the outer
-`setNode`), which does fix the frozen case, but it stops the returnable-logic pass
-from wrapping the conditional in a `(function(){ ... })()` IIFE, and that IIFE is
-what lets a statement-form right-hand side exist at all:
-`@result ||= begin ... %x{ try {...} } ... end` at `stdlib/opal-parser.rb:61` and
-`@memoized_value ||= begin return nil if x; y end` in
-`spec/opal/core/language/memoization_spec.rb` then emit
-`return (self.result = ((js = self.js), try { ... }))` — `SyntaxError: Unexpected
-token 'try'`. Any memoized `begin` with a guard clause, a `rescue`, or a statement
-`%x{}` is affected, which is common Ruby. Ten pairs in
-`spec/lib/fixtures/compiler_rewrites.json` also pin the old equivalence
-(`'@a ||= 1' => '@a = @a || 1'`) and would have to go. `tmp/gems_probe/or_shapes.rb`
-is the matrix of right-hand-side shapes such a fix must keep compiling.
-
-**Open items to settle after the compiler lands** (neither is compiler-related):
-
-1. `Gem::DependencyInstaller stops at the seam where a remote index would be read`
-   and `Gem::Resolver asks the remote index for what the local repository does not
-   hold` now raise `URI::InvalidURIError: bad URI (is not URI?): "/"`: those M4
-   specs build a source from `"/"` and the `Gem::URI` module alias plus the
-   `Gem::URI(uri)` `module_function` this batch added in `lib/rubygems/uri.rb` are
-   stricter than what they used. Compare `/root/workspace/rubygems/lib/rubygems/uri.rb`
-   and `source.rb` and either match upstream or give the specs a real URI.
-2. `stdlib/zlib.rb`'s new `GzipReader#tag` decodes the bytes it read with
-   `@external_encoding.decode(IO::Buffer.for(string))` instead of the old
-   `force_encoding`, which only retagged (so UTF-8 gzip text read back one
-   character per byte). But `@external_encoding` may be a String: `read_spec.rb`'s
-   `respects :external_encoding option` example fails with `NoMethodError:
-   undefined method 'decode' for "UTF-8"`. Convert a String/nil encoding to an
-   `Encoding` first. Note `bin/test spec/ruby/library/zlib` (whole directory, more
-   files than the selection lists) reports 67 failures with the batch against 72
-   at HEAD; the selected run (`node tasks/test.mjs mspec_ruby`) is green either way.
-
-**Resume checklist.** Pop the stash → land the compiler fix with its specs (the
-CRuby-verified expectations: frozen + truthy ivar returns the old value; frozen +
-nil ivar still raises; `@unset &&= v` on a frozen object neither raises nor
-defines `@unset`; add these to `spec/opal/core/language/memoization_spec.rb`) →
-keep upstream's freezes in `api_specification.rb`, no port-side workaround →
-`bin/test spec/opal/gems` down to 0 failures (fix open item 1 and 2) → write the
-remaining M5 specs → full `node tasks/test.mjs` and `node tasks/lint.mjs` →
-rebuild `node tasks/ruby.mjs` (`exe/ruby` grows past 2,085,434 bytes) → the docs
-commit: §Status, the M5 marker, §11 rows for `lib/opal/gems/http.mjs` and the node
-runner `OPAL_HOME`, the D2 layout deviation (the vendored `net/http` sits in
-`lib/rubygems/vendored_net_http.rb`, not `lib/opal/gems/http.rb`), the CGI fix,
-the `HTTPResponse` header downcasing, the zlib fix, SafeMarshal Time — plus new
-AGENTS.md trap bullets (an empty `**kwargs` leaking into the next optional
-positional; `force_encoding` retags only; marshal fixnum lengths are `value + 5`
-and `u:` payloads are `length + raw bytes` with no `"` marker; `%x{}` cannot sit
-in assignment position — use a statement x-string plus a single-expression
-backtick read-back; the `||=`-on-frozen deviation until this section is deleted).
-
----
-
 ## Status
 
 Sections 1–10 are the survey and the plan as they were written, and stay as a
@@ -132,13 +25,17 @@ core files the work has changed so far.
 **M0–M4 are done, except the one line of M4's exit test that needs a `gem`
 command** (`exe/gem install ./hello-1.0.0.gem`); the install itself works
 through the API, and the command is the first thing M6's CLI plumbing brings.
-M5 is under way — the PubGrub solver, the resolver over the local and installed
-sources, and the install driver (`Gem::RequestSet` + `Gem::DependencyInstaller`)
-are in and spec'd; fetching indexes and `.gem` files over HTTP is not.
+M5 is in as far as its library goes — the PubGrub solver, the resolver over the
+local, installed *and remote* sources (`lib/opal/gems/http.mjs` +
+`Gem::HTTPTransport`, `Gem::CompactIndexClient`, `Gem::Resolver::APISet`), and
+the install driver (`Gem::RequestSet` + `Gem::DependencyInstaller`) are in and
+spec'd, and an install from a source that has to be fetched works. What its exit
+test still wants is the `gem` command M6 brings.
 M6 and M8 have not been started; M7 is half in, its `exe/ruby` side came
 with M0 and M4.
 
-What runs now, with no `-I` and no network:
+What runs now, with no `-I`, no `gem` command and no network beyond a fixture
+server on `127.0.0.1`:
 
 * the M1 exit test — `Digest::SHA256.hexdigest("a")`,
   `Zlib.gunzip(Zlib.gzip("a"))`, `URI.parse("https://x/y").request_uri`,
@@ -164,15 +61,28 @@ What runs now, with no `-I` and no network:
 * a marshalled stream: `Gem::SafeMarshal.safe_load` reads the
   `[name, version, platform]` triples of a `specs.4.8` index, written by real
   CRuby, with their classes and their UTF-8 strings intact, and refuses what it
-  should — an unpermitted class, symbol or ivar, and a Time, which is what a
-  marshalled full spec carries as its date and which Opal's `Marshal` cannot
-  read (M5).
+  should — an unpermitted class, symbol or ivar. A full spec dump written by
+  CRuby reads too, its `created_at` Time included, through the packed
+  little-endian words of `rb_time_mdump` rather than upstream's
+  rebuild-and-`Marshal.load` path (M5);
+* install from a source that has to be fetched: the compact index client reads a
+  server's `versions`/`info` files with their ETags and grows a partial `info`
+  through a `Range` request, `Gem::Resolver::APISet` answers a dependency from
+  the information line without a second fetch, and
+  `Gem::DependencyInstaller.new(domain: :remote).install 'tiny'` downloads the
+  `.gem` into the cache of the `GEM_HOME` and lays the home out — measured
+  against a fixture server on `127.0.0.1`, in `spec/opal/gems/remote_source_spec.rb`
+  (M5's remote half).
 
-Where it is tested: the port's own specs are under `spec/opal/gems/`, the
-ruby command's gem behaviour sits with the rest of its cases in
-`spec/lib/compiler/ruby_exe.test.mjs`, and the URI/digest/zlib parts of
-ruby/spec run inside the usual `node tasks/test.mjs` (the URI files are in
-`spec/selection/common`, its exceptions in `spec/filters/bugs/uri.rb`).
+Where it is tested: the port's own specs are under `spec/opal/gems/`, run
+against the fixture HTTP server in `spec/opal/gems/support/http_fixture.rb` when
+they read a source (the transport parks the thread a main-thread server would
+need, so it is a Worker), the transport itself has a node suite in
+`spec/lib/gems/http.test.mjs`, the ruby command's gem behaviour sits with the
+rest of its cases in `spec/lib/compiler/ruby_exe.test.mjs`, and the
+URI/digest/zlib parts of ruby/spec run inside the usual `node tasks/test.mjs`
+(the URI files are in `spec/selection/common`, its exceptions in
+`spec/filters/bugs/uri.rb`).
 
 Things the port did differently than planned, each one inherited by the
 milestones after it:
@@ -181,10 +91,20 @@ milestones after it:
   shipped as one compiled bundle, where a require decided at run time would
   have nothing to load. Cost: everything loads with `require "rubygems"`.
 * **`exe/ruby` carries RubyGems** (`tasks/ruby/bundle.mjs` builds
-  `lib/rubygems.rb` into the bundle: 1.4MB, 1.9MB with the M4 store, 2.09MB now
+  `lib/rubygems.rb` into the bundle: 1.4MB, 1.9MB with the M4 store, 2.07MB now
   that the resolver, the install driver and the marshal reader are required
   eagerly too), because finding an installed gem is a property of `require`, not
   of a library a script opts into.
+* **The transport is one JS file, not a Ruby binding beside it.** D2 planned
+  `lib/opal/gems/{http.mjs,http.rb}`; the Ruby side is
+  `lib/rubygems/vendored_net_http.rb` instead, where the ported code looks for
+  `Gem::Net::HTTP` — it keeps upstream's name for the net/http it vendors and
+  holds the stand-in the ported code inspects (the status classes where
+  `Net::HTTP` puts them, `body_permitted?` per class, the nil body a 304
+  answers) plus `Gem::HTTPTransport`, the seam every remote read goes through.
+  Only `lib/opal/gems/http.mjs` sits where D2 put it, and a program that cannot
+  reach it — an `exe/ruby` run outside the source tree — says so at the first
+  fetch instead of failing inside a `require`.
 * **The activation hook is in the loader, not in `Kernel#require`.** Opal
   compiles `require` to a runtime call, so upstream's
   `core_ext/kernel_require.rb` has no Ruby-level method to wrap;
@@ -204,24 +124,19 @@ milestones after it:
   for those libraries and most of them pass; only the deliberate gaps
   (unported schemes, the RFC 2396 parser) are filtered out.
 
-The core files the port had to touch — 15 of them, `opal/` and `lib/opal/`,
+The core files the port had to touch — 22 of them, `opal/` and `lib/opal/`,
 every one reached through a failing gem path — are listed with their commits in
 §11.
 
 What is still open, in the order that unblocks the rest:
 
-1. **M5, the half that needs the network**: the resolver, its sets,
-   `Gem::SpecFetcher`, the install driver (`Gem::RequestSet`,
-   `Gem::DependencyInstaller`) and the marshal reader `Gem::SafeMarshal` are
-   ported and spec'd against a local repository, the installed gems and
-   CRuby-written marshal streams, and they are what `exe/gem install ./x.gem`
-   will run. What is missing is the transport: `http.mjs` +
-   `Gem::RemoteFetcher` + `Gem::CompactIndexClient` (§6.3), then
-   `resolver/api_set*` and `resolver/source_set` to replace the "remote sources
-   are not available yet" raise of `Gem::Source`. Reading a marshalled *full
-   spec* is also still out — a marshalled spec carries its date as a Time and
-   Opal's `Marshal` has no Time support (see M5's status below) — but the
-   compact index the plan follows answers full specs as YAML.
+1. **M5's exit test**, which is a command, not a library: `exe/gem install rake`
+   end to end (resolve → download → checksum → install) and a backtracking solve
+   whose `SolveFailure` message renders. The library half is in — the transport,
+   the compact-index client, `Gem::Resolver::APISet`/`APISpecification`,
+   `Gem::Source`'s choice between the two index formats, its downloads — and the
+   path is exercised against the fixture server, so what is missing is only the
+   `gem` command M6 brings to run it against rubygems.org itself.
 2. **M6, `exe/gem`**: `GemRunner`/`CommandManager`/`Command` and the option
    classes, plus `tasks/gem.mjs`, starting from `install` — which closes M4's
    exit test.
@@ -908,10 +823,11 @@ installed gem, is the builder's half and waits for M7. Three deviations:
   of being half-built (§1), and no plugin or Windows stub wrappers are
   generated — hence no `installer_uninstaller_utils.rb`.
 
-### M5 — remote metadata and resolution (~2600 lines) — **under way**
+### M5 — remote metadata and resolution (~2600 lines) — **library in, exit test open**
 
-`lib/opal/gems/http.mjs` (persistent fetch worker, §6.3) + `http.rb`
-binding + `Gem::RemoteFetcher`,
+`lib/opal/gems/http.mjs` (persistent fetch worker, §6.3) +
+`Gem::Net::HTTP`/`Gem::HTTPTransport` in `lib/rubygems/vendored_net_http.rb` +
+`Gem::RemoteFetcher`,
 `Gem::CompactIndexClient` (+ `cache`, `cache_file`, `http_fetcher`, `parser`,
 `updater`), `Gem::Resolver` + `resolver/*` (sets, specifications, requests),
 `vendor/pub_grub` (2 patches), `Gem::SpecFetcher`, `Gem::DependencyInstaller`.
@@ -936,18 +852,21 @@ specifications (`Specification`, `SpecSpecification`, `IndexSpecification`,
 plus `Gem::SpecFetcher`. `spec/opal/gems/resolver_spec.rb` (7 examples) resolves
 a tree of local `.gem` files, downloads them through `Gem::Source::Local`,
 installs them in dependency order, resolves against the installed gems, and
-checks both failure classes and the remote seam. Six deviations, all of them the
+checks both failure classes and what a remote domain with no source configured
+answers (that last example pinned the transport seam down until the remote half
+replaced it). Six deviations, all of them the
 transport or a feature §1 drops:
 
 * `resolver.rb`'s require list stops at what is ported: `api_set*`,
   `source_set` (compact index: the transport) and the git, lock and vendor sets
   and specifications (upstream's `gem dependencies` machinery, which §1 leaves
   out) are not there.
-* `Gem::Source#dependency_resolver_set`/`#new_dependency_resolver_set` are ported
-  with the probe replaced: choosing compact index over marshal index is one HTTP
-  fetch, so a remote source answers the same "remote sources are not available
-  yet" as its other remote methods, and a `file://` source gets the
-  marshal-index set, whose reader `Gem::SafeMarshal` came in below.
+* `Gem::Source#dependency_resolver_set`/`#new_dependency_resolver_set` came in
+  with the offline half and the probe stubbed out: choosing the compact index
+  over the marshal index is one HTTP fetch, so a remote source answered the same
+  "remote sources are not available yet" as its other remote methods and only a
+  `file://` source got the marshal-index set. The remote half restored the
+  probe; see below.
 * `Gem::SpecFetcher`: its three `Gem::RemoteFetcher::FetchError` rescues read
   for `Gem::Exception` (upstream's `FetchError` is a subclass of it, and every
   remote read currently raises that), and its `@fetcher`, which this file never
@@ -996,8 +915,10 @@ upstream's installer does.
 a directory of `.gem` files, installs the `.gem` named on the command line with
 its dependency, keeps `--ignore-dependencies` to the named gem, shows that a
 second run reinstalls only the gem in `always_install` and not its dependency,
-and checks both failure paths; the exe/ruby suite gained two cases proving the
-driver rides in the compiled bundle — one run resolves `helper (~> 0.1.0)` to
+and checks both failure paths (its remote-seam example became a check that a
+remote domain asks the sources it is given, once the remote half below landed);
+the exe/ruby suite gained two cases proving the driver rides in the compiled
+bundle — one run resolves `helper (~> 0.1.0)` to
 `tiny-0.1.0` rather than the `0.2.0` next to it and installs the pair, and
 `require 'helper'` with no `-I` then activates the gem and what it pulls in.
 
@@ -1020,27 +941,107 @@ part company:
   with `TextDecoder` as its `:E` ivar is read (`#decode_utf8`). A string tagged
   US-ASCII or BINARY keeps its bytes, which is what keeps `"\xff"` one byte
   rather than a replacement character.
-* the Time branch is out. Upstream rebuilds a marshal stream and hands it back
-  to `Marshal.load`, because a Time's ivars are its internal representation;
-  `Marshal` here has no Time support at all — it reads CRuby's user-defined
-  body as a `time_t` and answers 1970, which is why every `Marshal.load for a
-  Time` example is filtered in `spec/filters/bugs/marshal.rb`. RubyGems
+* the Time branch reads what CRuby wrote instead of upstream's rebuild. Upstream
+  rebuilds a marshal stream and hands it back to `Marshal.load`, because a
+  Time's ivars are its internal representation; `Marshal` here has no Time
+  support at all — it reads CRuby's user-defined body as a `time_t` and answers
+  1970, which is why every `Marshal.load for a Time` example is filtered in
+  `spec/filters/bugs/marshal.rb`, and Opal cannot even produce the stream
+  upstream rebuilds, since it dumps an object with ivars where CRuby writes a
+  user-defined one. So `ToRuby#time_from_dump` decodes `rb_time_mdump`'s two
+  packed little-endian words itself: seconds as `high * 2**32 + low` and the
+  nanosecond remainder, never `>>`/`&`, which coerce to a signed int32. RubyGems
   normalizes `Specification#date` to a Time, so *every* marshalled full spec
-  carries one: rather than answer a wrong `#date`, the port raises
-  `UnsupportedError` naming the gap. The compact index answers full specs as
-  YAML, so what that closes off is the legacy `.gemspec.rz` path.
+  carries one, and the extended-year form (`timewin` with the sign bit set) and
+  a Time's own ivars are refused with `UnsupportedError` rather than misread.
+  That opens the legacy `.gemspec.rz` path the compact index does not need.
 
-`spec/opal/gems/safe_marshal_spec.rb` (10 examples) reads fixtures under
+`spec/opal/gems/safe_marshal_spec.rb` (15 examples) reads fixtures under
 `spec/opal/gems/fixtures/safe_marshal/`: streams written by CRuby 3.3, kept as
 data because Opal's `Marshal` writes an object with ivars where CRuby writes a
 user-defined one. They cover the index triples with their classes, the
 symbols the gem format uses, the UTF-8 strings, the three permission refusals, a
-stream that is not marshal 4.8, the Time refusal, and that
-`Specification._load` reaches this reader.
+stream that is not marshal 4.8, a `Time` in its local, subsecond and rational
+forms, and that `Specification._load` reaches this reader.
 
-What is still missing is the half that reads indexes and `.gem` files over
-HTTP: `lib/opal/gems/http.mjs` + `Gem::RemoteFetcher` +
-`Gem::CompactIndexClient` (§6.3), and then `api_set` and `source_set`.
+**Status: remote half in** (`fec5398bf`, `ac054ad5e`). The transport runs the
+request on a standing Node Worker while the Ruby thread parks on a
+`SharedArrayBuffer` with `Atomics.wait` (§6.3): one Worker, so one connection
+pool for the process, and several URLs in one round trip, which is what a
+compact-index update asks of it. `Gem::Net::HTTP` is a stand-in that keeps
+upstream's names — the status classes where `Net::HTTP` puts them, the
+per-class `body_permitted?`, the nil body a 304 answers so that
+`cache_update_path` keeps its cached copy — over `Gem::HTTPTransport`, the seam
+every remote read goes through, and a program that cannot reach
+`lib/opal/gems/http.mjs` says so at the first fetch rather than failing inside
+a require. `Gem::RemoteFetcher` is the ported file: pooling, certificate files,
+proxy arguments, the global gem cache and the redirect limits. `Gem::URI` is the
+stdlib library under the name the vendored copy gives — the constant and the
+`Gem::URI(uri)` constructor the client and the API set call point at
+`stdlib/uri.rb`, which M1 put there under its real name.
+
+On top of it the four compact-index files came in (`cache`, `cache_file`,
+`http_fetcher`, `parser`, `updater`): the `versions` row agrees with the MD5 of
+the `info` file it points at, an ETag is stored unwrapped and sent re-quoted,
+and an `info` file that grew on the server is appended through a `Range` request
+rather than refetched. Its `HTTPFetcher` seam is what keeps the client
+independent of the transport, and `spec/opal/gems/compact_index_client_spec.rb`
+(19 examples) drives it against a synthetic index. `Gem::Resolver::APISet`,
+`APISpecification` and the small parser of the information lines answer a
+dependency with no second fetch — the line carries the dependencies and the
+requirements — and `Gem::Source#new_dependency_resolver_set` decides between the
+two index formats by asking for the `versions` file and falling back to the
+marshal indexes. `spec/opal/gems/remote_source_spec.rb` (11 examples) reads both
+formats, a `quick/Marshal.4.8/*.gemspec.rz` dump written by CRuby, a download
+into the cache of a `GEM_HOME`, and one install laid out end to end;
+`spec/opal/gems/remote_fetcher_spec.rb` (24) covers the fetcher itself. The
+bodies of every index the specs read are built in the spec or kept as fixtures,
+and the server is `spec/opal/gems/support/http_fixture.rb`: a Node Worker,
+because the thread that asks for a fetch is the event loop the specs run on.
+The deviations are those of §1 — no threads, no OpenSSL, no Socket, immutable
+strings:
+
+* upstream's `net/http` is not vendored: 4.1's reads sockets and does TLS
+  handshakes through OpenSSL. What `vendored_net_http.rb` holds is the interface
+  the ported code inspects, and the fetch is Node's `fetch`.
+* `compact_index_client/http_fetcher.rb` asks `Gem::HAVE_OPENSSL` of the constant
+  table (this port's `Gem::Security` carries no OpenSSL, so the file upstream
+  reads it from is gone) and drops `SocketError` from its `rescue` list — a
+  rescue list naming a missing constant dies when it is evaluated, and no DNS
+  failure can reach here.
+* the two Thread::Mutexes in these files — the one guarding the client's debug
+  output and the one around `@endpoints`, the set of paths the process has
+  already fetched — are gone (D13: one thread); `@endpoints` still means what it
+  did, which is what `#reset!` and `#already_fetched?` are about.
+* `Digest::MD5.file(path.to_s)`: the digest reads here take a path *name*, not
+  anything answering `#to_path`, which the client's Pathnames do.
+* the mutable strings the client and updater shave in place (`delete_prefix!`,
+  `delete_suffix!`, `tap(&:chomp!)`) have no counterpart, so the test and the
+  cut are one step each — `#unwrap(etag, '"')` refuses an ETag whose quotes are
+  unbalanced the way upstream's two bangs did.
+* `api_specification.rb` reads the `created_at` of an information line through a
+  private copy of `Gem::Cooldown.parse_created_at` rather than the class, which
+  §1 leaves out; nothing downstream asks for the value.
+
+Two bugs outside the port fell out of these specs. `Gem::Net::HTTPResponse`
+stored its header names as the server sent them while `#[]` downcased the query,
+so an ETag lookup missed — the names are stored lower case now, as `net/http`
+keeps them. `CGI.escape`/`CGI.unescape`, which `Gem::UriFormatter` is built on,
+were `encodeURI`/`decodeURI`: the first kept `#$&?` and the non-ASCII characters
+instead of escaping them, the second left the escapes that are legal in a URI
+(`%2F`, `%3A`) alone, and both are the form-urlencoded pair now, with the two
+ruby/spec examples for them out of `spec/filters/bugs/cgi.rb`. And `stdlib/uri/rfc3986_parser.rb` had the relative-ref
+`path_absolute` as `/SEG+` where upstream's `\g<seg>*+` is a subexpression call
+the possessive star applies to whole, i.e. `/SEG*`: `URI.parse("/")` raised,
+which is exactly the argument `Gem::Source#enforce_trailing_slash` merges for a
+source given without a path, so no source without a trailing slash could be read
+at all (ruby/spec parses no lone slash, hence nothing covered the alternative;
+`spec/opal/stdlib/uri/parse_relative_ref_spec.rb` does now). `stdlib/zlib.rb`
+came in with the batch too: `GzipReader#tag` decoded nothing — `force_encoding`
+only retags, so UTF-8 gzip text read back one character per byte — and `#read`
+answered wrong at the end of its stream and let a negative length through.
+
+What is left for M5 is its exit test, which needs the `gem` command M6 brings.
 
 ### M6 — the `gem` CLI (~1500 lines) — **not started**
 
@@ -1206,13 +1207,17 @@ M8 is the largest and depends on all of the above.
 
 The port itself is plain Ruby and lives outside the core trees (`lib/rubygems/`,
 its specs under `spec/opal/gems/`, the bundling in `tasks/ruby/bundle.mjs`).
-What it did change inside `opal/` and `lib/opal/` is 16 files, +323/−93 lines
+What it did change inside `opal/` and `lib/opal/` is 22 files, +563/−129 lines
 since the branch base `6b22c1080`. Every one of them was reached by running gem
 code — reading a `.gem`, a gemspec, a binstub — or by running ruby/spec over
 the stdlib pieces the port needs, and each comes with a test: a case under
 `spec/opal/`, one in `spec/lib/compiler/`, or a ruby/spec file added to
 `spec/selection/common` with its remaining failures in `spec/filters/bugs/`.
-Only the lint-only catch bindings came with none.
+Only the lint-only catch bindings came with none. Besides the two stdlib
+libraries M1 brought — `stdlib/uri` and `stdlib/zlib`, the bulk of those
+4,730 insertions — three stdlib files were changed for the port's sake:
+`stdlib/cgi/util.rb` (§8's M5 status), `stdlib/stringio.rb` and the
+`stdlib/uri/rfc3986_parser.rb` pattern of the same milestone.
 
 ### `opal/` — runtime and corelib
 
@@ -1245,6 +1250,9 @@ Only the lint-only catch bindings came with none.
 | `lib/opal/compiler/cli/options.mjs` | 9e51e8087 | accepts `--enable=frozen_string_literal`, which ruby/spec runs a few programs with. Opal's string literals are JS primitives already, so it is accepted and does nothing; an unknown feature still fails like Ruby's `--enable`. |
 | `lib/opal/compiler/nodes/variables.mjs` | cde8ad70b | the `+` case of `BackRefNode` fell through to a plain global nothing ever set; `$+` now reads `$~` through `Opal.last_match_ref`, and the "currently unsupported" comment goes with it. |
 | `lib/opal/compiler/builder/erb_runner.mjs` | 763a227bd | the ERB worker gets the options a `new Worker` takes, from an allowlist, and retries with none. Node 26 hands a `node --test` child its whole resolved `process.execArgv` and `new Worker` rejects most of it (`ERR_WORKER_INVALID_EXEC_ARGV`), which took the compiler suite down. |
+| `lib/opal/gems/http.mjs` | fec5398bf | M5, new. The fetch the transport runs on: a standing Worker does Node's `fetch` while the calling thread parks on a `SharedArrayBuffer` with `Atomics.wait` and reads the answer back with `receiveMessageOnPort` (§6.3). One Worker means one connection pool for the process; several URLs travel in one round trip, which is what a compact-index update asks for. `spec/lib/gems/http.test.mjs` is its suite, against a fixture server that is itself a Worker — the transport would otherwise park the very thread such a server needs. |
+| `lib/opal/compiler/cli/runners/nodejs.mjs` | fec5398bf | the node runner publishes `OPAL_HOME` the way `tasks/ruby/bundle.mjs` bakes it into `exe/ruby`. A program compiled from source had no directory for its libraries — `__dir__` inside a required file names the load-path entry, not a path — and the transport reaches `lib/opal/gems/http.mjs` by path, since a Ruby file under `lib/opal/` is not a name a program can require (`opal/` is the runtime's namespace). |
+| `lib/opal/compiler/transforms/operator_assignment.mjs`, `nodes/if.mjs`, `nodes/begin.mjs`, `transforms/conditionals.mjs` | f950e0ed8 | M5. For a variable target the transform rewrote `@x ||= rhs` into `@x = (@x || rhs)`, a write in *both* branches; MRI assigns only where the short circuit reaches the right-hand side. A memo on a frozen object therefore raised (`Gem::Version` freezes itself and pre-caches its `||=` memos, and `Gem::Version.new` caches instances in `@@all`, so one frozen Version poisoned every `'1.0.0'` in the process; `@unset &&= v` likewise defined an ivar MRI leaves undefined). The write now sits inside the Or/And branch, and `if.mjs` renders an operator assignment as a ternary in every position while `begin.mjs` and `conditionals.mjs` keep the statement shape a right-hand side can have — a memoized `begin` with a guard clause, a `rescue` or a statement `%x{}` stays an IIFE, which is what makes those compile. Same commit: the `case` switch subject is parenthesized, so `case f(x)` over a `&&`-joined subject no longer misparses. Specs: `spec/opal/core/language/memoization_spec.rb`, `.../case_spec.rb`, and the compiler fixtures for `assignment/operators` and `control/case`. |
 
 Outside those two trees sits one tracked build artifact: `exe/ruby`, the
 compiled bundle of the core plus the port, rebuilt by every commit that changed
@@ -1256,7 +1264,10 @@ Nothing else moved in the two trees. The entry points are untouched —
 `opal/base.rb`, `opal/mini.rb` and `opal/full.rb` needed no change, `exe/ruby`
 only bundles `opal/full` — and beyond the `#hash` chain above, no `Array`,
 `String` or `Integer` method changed: `Gem::Version`, `Gem::Requirement` and the
-tar layer run on what corelib already does.
+tar layer run on what corelib already does. In `stdlib/` the remote half
+changed two lines of the URI pattern and the reading end of
+`Zlib::GzipReader` (§8's M5 status); `stdlib/cgi/util.rb`'s escape pair came
+with the fetch commit before it.
 
 ---
 
