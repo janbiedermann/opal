@@ -275,6 +275,53 @@ describe("the gem command", () => {
     assert.equal(noGemspec.status, 1);
   });
 
+  test("env reports the environment the command reads", () => {
+    const r = gemIn(DIR, { GEM_SOURCES: "https://rubygems.org/" }, "env");
+    assert.equal(r.status, 0, r.err);
+    assert.match(r.out, /^RubyGems Environment:\n {2}- RUBYGEMS VERSION: 4\.1\.0\.opal\n/m, r.out);
+    assert.ok(r.out.includes(`  - INSTALLATION DIRECTORY: ${join(DIR, "repo")}`), r.out);
+    assert.match(r.out, /^ {2}- REMOTE SOURCES:\n {5}- https:\/\/rubygems\.org\/$/m, r.out);
+    // The two lines upstream builds from RbConfig are what this port leaves
+    // out, so their absence is part of what the test pins.
+    assert.doesNotMatch(r.out, /PREFIX|SYSTEM CONFIGURATION/);
+
+    assert.equal(gem("env", "home").out.trim(), join(DIR, "repo"));
+    assert.equal(gem("env", "gemdir").out.trim(), join(DIR, "repo"));
+    assert.equal(gem("env", "version").out.trim(), "4.1.0.opal");
+
+    const unknown = gem("env", "frobnicate");
+    assert.match(unknown.err, /Gem::CommandLineError/, unknown.err);
+    assert.match(unknown.err, /Unknown environment option \[frobnicate\]/, unknown.err);
+    assert.notEqual(unknown.status, 0);
+  });
+
+  test("sources lists the sources, clears the cache and refuses what is not a source", () => {
+    const sources = { GEM_SOURCES: "https://rubygems.org/", GEM_SPEC_CACHE: join(DIR, "sources-specs") };
+
+    const listed = gemIn(DIR, sources, "sources", "-l");
+    assert.match(listed.out, /\*\*\* CURRENT SOURCES \*\*\*/, `${listed.out}${listed.err}`);
+    assert.match(listed.out, /^https:\/\/rubygems\.org\/$/m, listed.out);
+    assert.equal(listed.status, 0, listed.err);
+
+    // The default with no argument is the same listing.
+    assert.equal(gemIn(DIR, sources, "sources").out, listed.out);
+
+    const notAUri = gemIn(DIR, sources, "sources", "-a", "not a uri");
+    assert.match(notAUri.out, /is not a URI/, notAUri.out);
+    assert.notEqual(notAUri.status, 0);
+
+    const missing = gemIn(DIR, sources, "sources", "-a", "http://127.0.0.1:1/ci/");
+    assert.match(missing.out, /^Error fetching http:\/\/127\.0\.0\.1:1\/ci\/:/m, missing.out);
+    assert.notEqual(missing.status, 0);
+
+    const absent = gemIn(DIR, sources, "sources", "-r", "https://nope.example.com/");
+    assert.match(absent.out, /cannot be removed because it's not present in/, absent.out);
+
+    const cleared = gemIn(DIR, sources, "sources", "-c");
+    assert.match(cleared.out, /\*\*\* Removed specs cache \*\*\*/, `${cleared.out}${cleared.err}`);
+    assert.equal(cleared.status, 0, cleared.err);
+  });
+
   test("a gem no source provides is reported as missing, not as a crash", () => {
     const r = gem("install", "nosuchgem-at-all");
     assert.match(r.err, /ERROR: {2}Could not find a valid gem 'nosuchgem-at-all' \(>= 0\) in any repository/);

@@ -154,6 +154,74 @@ class Gem::ConfigFile
   end
 
   ##
+  # Delegates to the config file's hash, as upstream's does: the four settings
+  # the reader already answers for come out first, then what the file added.
+
+  def each(&block)
+    hash = @hash.dup
+    hash.delete :update_sources
+    hash.delete :verbose
+    hash.delete :backtrace
+    hash.delete :bulk_threshold
+
+    yield :update_sources, @update_sources
+    yield :verbose, @verbose
+    yield :backtrace, @backtrace
+    yield :bulk_threshold, @bulk_threshold
+
+    yield "config_file_name", @config_file_name if @config_file_name
+
+    hash.each(&block)
+  end
+
+  ##
+  # Writes the file the sources and the shared options live in, as upstream's
+  # write does.
+
+  def write
+    require "fileutils"
+
+    FileUtils.mkdir_p File.dirname(config_file_name)
+
+    # Opal: upstream writes Psych's to_yaml; there is no Psych here, so the
+    # port's own YAMLSerializer writes the hash - which is the shape a .gemrc
+    # is read back from.
+    File.open config_file_name, "w" do |io|
+      io.write Gem::YAMLSerializer.dump(to_yaml)
+    end
+  end
+
+  # to_yaml only overwrites things you can't override on the command line.
+  #
+  # Opal: upstream fetches the five settings from @hash with its DEFAULT_*
+  # constants as the fallback; this trimmed file has no such constants and
+  # keeps the resolved values in ivars, so those - the file, then the
+  # environment, then the command line - are what a write answers. The source
+  # list is written as URIs, for a Gem::Source has no YAML form here.
+  def to_yaml # :nodoc:
+    yaml_hash = {}
+    yaml_hash[:backtrace] = @backtrace
+    yaml_hash[:bulk_threshold] = @bulk_threshold
+    yaml_hash[:sources] = Gem.sources.to_a.map {|source| source.to_s }
+    yaml_hash[:update_sources] = @update_sources
+    yaml_hash[:verbose] = @verbose
+    yaml_hash[:concurrent_downloads] = @concurrency
+
+    keys = yaml_hash.keys.map(&:to_s)
+    keys << "debug"
+    re = Regexp.union(*keys)
+
+    @hash.each do |key, value|
+      key = key.to_s
+      next if key&.match?(re)
+
+      yaml_hash[key] = value
+    end
+
+    yaml_hash
+  end
+
+  ##
   # Reads the options the commands share off the head of the command line, as
   # upstream's handle_arguments reads the few it needs there, and stops at the
   # first argument that is not one of them: what it reads is taken off ARG_LIST,

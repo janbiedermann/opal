@@ -55,4 +55,24 @@ describe 'Gem::ConfigFile' do
   it "works with no file at all" do
     Gem::ConfigFile.new(["--config-file=#{@path}/absent"]).sources.should == Gem.default_sources
   end
+
+  it "writes the sources and the settings back out, and reads them again" do
+    # What `gem sources -a` and `-r` do: change Gem.sources, then have the
+    # config write the file they live in.
+    old_sources = Gem.sources
+    begin
+      Gem.sources = Gem::SourceList.from(["https://gems.example.com/"])
+
+      Gem::ConfigFile.new(["--config-file=#{@path}"]).write
+
+      File.read(@path).should.include?("https://gems.example.com/")
+
+      again = Gem::ConfigFile.new(["--config-file=#{@path}"])
+      again.sources.should == ["https://gems.example.com/"]
+      again.verbose?.should == true
+      again.bulk_threshold.should == 3
+    ensure
+      Gem.sources = old_sources
+    end
+  end
 end

@@ -18,7 +18,7 @@ require_relative "uri"
 # handling: ContentAddressableInfo, #decode_content_addressable_tuples,
 # #content_addressable_tuples and -metadata, #compact_index_info_rows,
 # #compact_index_requirements, #created_at and #created_at_for_tuple (they read
-# Gem::Cooldown, which is not ported, §1), #typo_squatting? and the cooldown
+# Gem::Cooldown, which is not ported, §1) and the cooldown
 # require. A tuple read from the compact index still carries a content address
 # when the versions line has one - Gem::NameTuple and Gem::ContentAddress are
 # ported - but nothing goes back to the index to turn that address into a
@@ -142,6 +142,16 @@ class Gem::Source
 
   def load_specs(type)
     load_compact_index_specs(type) || load_marshal_specs(type)
+  end
+
+  ##
+  # True when this source's host is within +distance_threshold+ edits of +host+,
+  # which is how `gem sources -a` catches a typo of rubygems.org.
+
+  def typo_squatting?(host, distance_threshold = 4)
+    return if @uri.host.nil?
+
+    levenshtein_distance(@uri.host, host).between? 1, distance_threshold
   end
 
   ##
