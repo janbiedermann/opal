@@ -286,10 +286,17 @@ module Gem
         result = coerce(@lines.shift.strip)
         return register_anchor(anchor, result) if result.is_a?(Mapping) || result.is_a?(Sequence)
 
+        # Opal: Strings are immutable here (String#<< raises), so the folded
+        # continuation lines are collected and joined at the end instead of
+        # appended to the scalar as it goes.
+        parts = nil
         while result.is_a?(String) && @lines.any? &&
               !@lines[0].strip.empty? && current_indent > indent
-          result << " " << @lines.shift.strip
+          parts ||= [result]
+          parts << " " << @lines.shift.strip
         end
+        result = parts.join if parts
+
         register_anchor(anchor, Scalar.new(value: result))
       end
 
@@ -297,10 +304,15 @@ module Gem
         result = coerce(val)
         return result if result.is_a?(Mapping) || result.is_a?(Sequence)
 
+        # Opal: the same rewrite as parse_plain_scalar's.
+        parts = nil
         while result.is_a?(String) && @lines.any? &&
               !@lines[0].strip.empty? && current_indent > indent
-          result << " " << @lines.shift.strip
+          parts ||= [result]
+          parts << " " << @lines.shift.strip
         end
+        result = parts.join if parts
+
         Scalar.new(value: result)
       end
 

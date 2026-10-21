@@ -59,12 +59,10 @@ function runAsync(command, cwd, extra, args) {
   });
 }
 
-// A gem of the port's own making: Gem::Package builds it through exe/ruby, so
-// what `gem install` unpacks is a package this code wrote, in a directory of
-// its own (exe/ruby searches the current directory last, and the runs share
-// this tree).
-function builtGem(name, version) {
-  const dir = join(DIR, `build-${name}`);
+// The source tree of a gem of the port's own making, in a directory of its own
+// (exe/ruby searches the current directory last, and the runs share this tree).
+function gemTree(name, version, dirName = `build-${name}`) {
+  const dir = join(DIR, dirName);
   mkdirSync(join(dir, "lib"), { recursive: true });
   const module = name[0].toUpperCase() + name.slice(1);
   writeFileSync(join(dir, "lib", `${name}.rb`), `module ${module}\n  def self.hello\n    ${JSON.stringify(name)}\n  end\nend\n`);
@@ -79,9 +77,20 @@ function builtGem(name, version) {
   s.require_paths = ["lib"]
 end
 `);
+  return dir;
+}
+
+// The .gem that tree builds through exe/ruby's Gem::Package, so what
+// `gem install` unpacks is a package this code wrote through the API.
+function buildWithRuby(dir, name) {
   const built = run(RUBY, dir, {}, ["-e", "puts Gem::Package.build(Gem::Specification.load(ARGV[0]))", `${name}.gemspec`]);
   assert.equal(built.status, 0, built.err);
-  return { dir, path: join(dir, built.out.trim().split("\n").pop()) };
+  return join(dir, built.out.trim().split("\n").pop());
+}
+
+function builtGem(name, version) {
+  const dir = gemTree(name, version);
+  return { dir, path: buildWithRuby(dir, name) };
 }
 
 // The committed fixture gem, copied under the name its specification uses.
@@ -244,6 +253,28 @@ describe("the gem command", () => {
     assert.equal(missing.status, 1);
   });
 
+  test("build writes a gem from a gemspec, and unpack takes it apart", () => {
+    const tree = gemTree("packed", "2.1.0", "packed-src");
+
+    const built = gemIn(tree, {}, "build", "packed.gemspec");
+    assert.match(built.out, /Successfully built RubyGem/, `${built.out}${built.err}`);
+    assert.equal(built.status, 0, built.err);
+    assert.ok(existsSync(join(tree, "packed-2.1.0.gem")));
+
+    const unpacked = gemIn(tree, {}, "unpack", "packed-2.1.0.gem");
+    assert.match(unpacked.out, /^Unpacked gem: /m, unpacked.out);
+    assert.equal(unpacked.status, 0, unpacked.err);
+    assert.ok(existsSync(join(tree, "packed-2.1.0", "lib", "packed.rb")));
+
+    const dumped = gemIn(tree, {}, "unpack", "--spec", "--target", "dumped", "packed-2.1.0.gem");
+    assert.equal(dumped.status, 0, dumped.err);
+    assert.ok(existsSync(join(tree, "dumped", "packed-2.1.0.gemspec")));
+
+    const noGemspec = gemIn(join(DIR, "nowhere"), {}, "build", "nosuch");
+    assert.match(noGemspec.err, /^ERROR: {2}Couldn't find a gemspec file matching 'nosuch' in /m, noGemspec.err);
+    assert.equal(noGemspec.status, 1);
+  });
+
   test("a gem no source provides is reported as missing, not as a crash", () => {
     const r = gem("install", "nosuchgem-at-all");
     assert.match(r.err, /ERROR: {2}Could not find a valid gem 'nosuchgem-at-all' \(>= 0\) in any repository/);
@@ -302,6 +333,16 @@ describe("the gem command", () => {
         ["search", "tin", "--clear-sources", "--source", `http://127.0.0.1:${port}/ci/`]);
       assert.match(searched.out, /^tiny \(0\.1\.0\)$/m, `${searched.out}${searched.err}`);
       assert.equal(searched.status, 0, `${searched.out}${searched.err}`);
+
+      // And a name that is not there at all comes back from fetch as a
+      // lookup failure rather than as a crash.
+      const fetchedCwd = join(DIR, "fetched");
+      mkdirSync(fetchedCwd, { recursive: true });
+      const fetched = await runAsync(GEM, fetchedCwd, {
+        GEM_SPEC_CACHE: join(DIR, "fetch-specs"), no_proxy: "127.0.0.1,localhost",
+      }, ["fetch", "nosuchgem-at-all", "--clear-sources", "--source", `http://127.0.0.1:${port}/ci/`]);
+      assert.match(fetched.err, /^ERROR: {2}Could not find a valid gem 'nosuchgem-at-all' \(>= 0\)/m, `${fetched.out}${fetched.err}`);
+      assert.equal(fetched.status, 2);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

@@ -58,4 +58,14 @@ describe 'Gem::YAMLSerializer' do
     Gem::ConfigFile.deep_transform_config_keys(loaded).should ==
       { "update_sources" => false, "bulk_threshold" => 3 }
   end
+
+  it "joins the lines a plain scalar is folded onto and stops at the next key" do
+    # The shape a gem's metadata.gz writes for a summary or description longer
+    # than a line, which is where reading a real package reaches this.
+    loaded = Gem::YAMLSerializer.load(
+      "name: wrapped\nsummary: a summary that goes on\n  past the end of its line\nversion: 1.0.0\n"
+    )
+    loaded["summary"].should == "a summary that goes on past the end of its line"
+    loaded["version"].should == "1.0.0"
+  end
 end

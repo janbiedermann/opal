@@ -225,9 +225,10 @@ class Gem::SpecFetcher
       # This would be rejected later, so we skip it for performance.
       next if len <= min_length
 
-      # The candidate name, normalized the same as gem_name.
-      normalized_name = n.name.downcase
-      normalized_name.tr!("_-", "")
+      # The candidate name, normalized the same as gem_name. (Opal: upstream
+      # trs in place; Strings are immutable here, so the copy is what tr
+      # answers.)
+      normalized_name = n.name.downcase.tr("_-", "")
 
       # If the gem is "{NAME}-ruby" and "ruby-{NAME}", we want to return it.
       # But we already removed hyphens, so we check "{NAME}ruby" and "ruby{NAME}".

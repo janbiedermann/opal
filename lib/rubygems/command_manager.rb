@@ -50,7 +50,9 @@ class Gem::CommandManager
   include Gem::UserInteraction
 
   BUILTIN_COMMANDS = [ # :nodoc:
+    :build,
     :contents,
+    :fetch,
     :help,
     :info,
     :install,
@@ -58,6 +60,7 @@ class Gem::CommandManager
     :search,
     :specification,
     :uninstall,
+    :unpack,
     :which,
   ].freeze
 
