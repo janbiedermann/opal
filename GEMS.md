@@ -22,20 +22,20 @@ record of them. Progress against §8 is marked on each milestone heading and
 summarised here — this section is the one to keep current, and §11 lists the
 core files the work has changed so far.
 
-**M0–M4 are done, except the one line of M4's exit test that needs a `gem`
-command** (`exe/gem install ./hello-1.0.0.gem`); the install itself works
-through the API, and the command is the first thing M6's CLI plumbing brings.
-M5 is in as far as its library goes — the PubGrub solver, the resolver over the
-local, installed *and remote* sources (`lib/opal/gems/http.mjs` +
-`Gem::HTTPTransport`, `Gem::CompactIndexClient`, `Gem::Resolver::APISet`), and
-the install driver (`Gem::RequestSet` + `Gem::DependencyInstaller`) are in and
-spec'd, and an install from a source that has to be fetched works. What its exit
-test still wants is the `gem` command M6 brings.
-M6 and M8 have not been started; M7 is half in, its `exe/ruby` side came
-with M0 and M4.
+**M0–M5 are done, exit tests included**: the install path works through the API
+*and* through the command line — `exe/gem install ./hello-1.0.0.gem` then
+`exe/ruby -e "require 'hello'"`, and `exe/gem install tiny --source <fixture
+server>` over the compact index (`spec/lib/gems/cli.test.mjs`).
+M6 is in with its plumbing and three commands — the runner, the command
+manager, `Gem::Command` and its option mixins, and `install`, `uninstall` and
+`help` — and its read-only commands (`list`, `search`, `info`, `contents`,
+`which`, `env`, `sources`, `build`, `spec`, `dependency`, `outdated`, `cleanup`,
+`fetch`, `unpack`, `lock`, `environment`) are the next batch. M8 has not been
+started; M7 is half in, its `exe/ruby` side came with M0 and M4.
 
-What runs now, with no `-I`, no `gem` command and no network beyond a fixture
-server on `127.0.0.1`:
+What runs now, with no `-I` and no network beyond a fixture server on
+`127.0.0.1` — and every path below except the last works with no `gem` command,
+through the library alone:
 
 * the M1 exit test — `Digest::SHA256.hexdigest("a")`,
   `Zlib.gunzip(Zlib.gzip("a"))`, `URI.parse("https://x/y").request_uri`,
@@ -72,14 +72,23 @@ server on `127.0.0.1`:
   `Gem::DependencyInstaller.new(domain: :remote).install 'tiny'` downloads the
   `.gem` into the cache of the `GEM_HOME` and lays the home out — measured
   against a fixture server on `127.0.0.1`, in `spec/opal/gems/remote_source_spec.rb`
-  (M5's remote half).
+  (M5's remote half);
+* the `gem` command itself: `gem --version`, `gem help commands`, `gem help
+  install`, `gem -C DIR install ./hello-1.0.0.gem`, `gem install --install-dir`,
+  `gem uninstall -x -I`, and `gem install tiny --clear-sources --source
+  http://127.0.0.1:PORT/ci/` against a compact index the test serves, which is
+  also the case that shows a bundle reaches the transport through its
+  `OPAL_HOME` (`spec/lib/gems/cli.test.mjs`, M4's and M5's exit tests).
 
 Where it is tested: the port's own specs are under `spec/opal/gems/`, run
 against the fixture HTTP server in `spec/opal/gems/support/http_fixture.rb` when
 they read a source (the transport parks the thread a main-thread server would
 need, so it is a Worker), the transport itself has a node suite in
-`spec/lib/gems/http.test.mjs`, the ruby command's gem behaviour sits with the
-rest of its cases in `spec/lib/compiler/ruby_exe.test.mjs`, and the
+`spec/lib/gems/http.test.mjs`, the `gem` command's own cases (which build
+`exe/gem` and run it as a child process, with a temporary `GEM_HOME` and a
+fixture source of their own) in `spec/lib/gems/cli.test.mjs`, the ruby command's
+gem behaviour sits with the rest of its cases in
+`spec/lib/compiler/ruby_exe.test.mjs`, and the
 URI/digest/zlib parts of ruby/spec run inside the usual `node tasks/test.mjs`
 (the URI files are in `spec/selection/common`, its exceptions in
 `spec/filters/bugs/uri.rb`).
@@ -124,22 +133,48 @@ milestones after it:
   for those libraries and most of them pass; only the deliberate gaps
   (unported schemes, the RFC 2396 parser) are filtered out.
 
-The core files the port had to touch — 22 of them, `opal/` and `lib/opal/`,
+* **The command line's option parser is the stdlib's, under upstream's name.**
+  Upstream vendors its own `Gem::OptionParser` (`lib/rubygems/optparse`); this
+  port has no vendored copy and `lib/rubygems/vendored_optparse.rb` aliases
+  `Gem::OptionParser` to the stdlib's `::OptionParser`, which understands
+  `accept`, `on` and `program_name` as the ported commands use them. Two places
+  had to be written differently than upstream, both because of how Opal reads
+  Ruby rather than because of the parser:
+  `Gem::Command#add_option` cannot ask `Symbol === opts.first` to spot its
+  option-group argument (Opal has `Symbol = String`, so that is true of every
+  option flag), and `Gem::ConfigFile` reads the few shared options it needs with
+  a hand loop, as upstream 4.1 does, rather than with a parser — optparse adds
+  its `Officious` `--help`/`--version` to every parser it builds, and it shifts
+  an unknown option off the argument list before raising, so a parser here
+  either swallows `--version` or dies on it before the command manager can
+  answer either.
+* **`exe/gem` carries the parser and the compiler as well.** A `.gemspec` is
+  Ruby source that `Gem::Specification.load` and
+  `Gem::Installer#ensure_loadable_spec` eval, and `Kernel#eval` needs
+  opal-parser; since the port's require of it is static, every bundle compiling
+  those files carries the whole compiler, which is why `exe/gem` (2.2MB) is the
+  size of `exe/ruby` rather than half of it. It is built by `tasks/gem.mjs`
+  from `tasks/gem/bundle.mjs`, and `tasks/gem_exe.mjs`/`tasks/sea_exe.mjs` make
+  the single-file executable the way `tasks/ruby_exe.mjs` does.
+
+The core files the port had to touch — 24 of them, `opal/` and `lib/opal/`,
 every one reached through a failing gem path — are listed with their commits in
 §11.
 
 What is still open, in the order that unblocks the rest:
 
-1. **M5's exit test**, which is a command, not a library: `exe/gem install rake`
-   end to end (resolve → download → checksum → install) and a backtracking solve
-   whose `SolveFailure` message renders. The library half is in — the transport,
-   the compact-index client, `Gem::Resolver::APISet`/`APISpecification`,
-   `Gem::Source`'s choice between the two index formats, its downloads — and the
-   path is exercised against the fixture server, so what is missing is only the
-   `gem` command M6 brings to run it against rubygems.org itself.
-2. **M6, `exe/gem`**: `GemRunner`/`CommandManager`/`Command` and the option
-   classes, plus `tasks/gem.mjs`, starting from `install` — which closes M4's
-   exit test.
+1. **M6's remaining commands**: the read-only half of the CLI — `list`,
+   `search`, `info`, `contents`, `which`, `env`, `sources`, `build`, `spec`,
+   `dependency`, `outdated`, `cleanup`, `fetch`, `unpack`, `lock`,
+   `environment`, sharing `Gem::QueryUtils` — and the Opal-only `compile`
+   command (D7). The plumbing (`GemRunner`, `CommandManager`, `Command` and its
+   option mixins, `tasks/gem{,.exe}`) is in with `install`, `uninstall` and
+   `help`, and those closed M4's and M5's exit tests.
+2. **A run against rubygems.org itself.** `exe/gem install rake` is no longer a
+   missing feature — it is the same path `spec/lib/gems/cli.test.mjs` walks
+   against a fixture compact index — but nothing in the suite exercises the real
+   index, the real solve with backtracking, or a `SolveFailure` message read
+   from the live server.
 3. **M7**: the builder consulting the gem directories (`--gem`, `Opalfile`'s
    `add_gem_dependency`) and the precompiled `compiled/` tree.
 4. **M8, Bundler.**
@@ -802,12 +837,13 @@ In the port itself: drop the `@load_cache_mutex`, `DEBUG_MUTEX` and
 `exe/ruby -e "require 'hello'; puts Hello.hi"` with **no `-I`**, and
 `exe/opal -e "require 'hello'"` compiling it.
 
-**Status: done, except how the first line is spelled.** There is no `gem`
-command yet, so the install goes through `Gem::Installer.at(path).install`;
-everything after it is what the specs check — `exe/ruby -e "require 'hello'"`
-with no `-I`, the wrapper in `<gem_home>/bin` running the gem's executable,
-and `Gem::Uninstaller` taking all of it away (see the Status section at the
-top for where that is tested). The last line, `exe/opal` compiling an
+**Status: done**, first line included. `exe/gem install ./hello-1.0.0.gem`
+(the `.gem` built by `exe/ruby`'s `Gem::Package`), then `exe/ruby -e
+"require 'hello'"` with no `-I`, and `gem uninstall -x -I` taking all of it
+away again — `spec/lib/gems/cli.test.mjs` walks that path, and the specs check
+the API version of it too: the wrapper in `<gem_home>/bin` running the gem's
+executable, and `Gem::Uninstaller` removing the binstub with the rest. The last
+line of the exit test, `exe/opal` compiling an
 installed gem, is the builder's half and waits for M7. Three deviations:
 
 * no ported `core_ext/kernel_require.rb`: Opal compiles `require` to a
@@ -823,7 +859,7 @@ installed gem, is the builder's half and waits for M7. Three deviations:
   of being half-built (§1), and no plugin or Windows stub wrappers are
   generated — hence no `installer_uninstaller_utils.rb`.
 
-### M5 — remote metadata and resolution (~2600 lines) — **library in, exit test open**
+### M5 — remote metadata and resolution (~2600 lines) — **done**
 
 `lib/opal/gems/http.mjs` (persistent fetch worker, §6.3) +
 `Gem::Net::HTTP`/`Gem::HTTPTransport` in `lib/rubygems/vendored_net_http.rb` +
@@ -1041,9 +1077,13 @@ came in with the batch too: `GzipReader#tag` decoded nothing — `force_encoding
 only retags, so UTF-8 gzip text read back one character per byte — and `#read`
 answered wrong at the end of its stream and let a negative length through.
 
-What is left for M5 is its exit test, which needs the `gem` command M6 brings.
+M5's exit test came with M6's first batch: `exe/gem install tiny
+--clear-sources --source http://127.0.0.1:PORT/ci/`, resolving against a
+compact index the test itself serves and installing the package it downloads,
+in `spec/lib/gems/cli.test.mjs`. Running the same path against rubygems.org is
+now a run rather than a missing feature; the suite keeps to the fixture.
 
-### M6 — the `gem` CLI (~1500 lines) — **not started**
+### M6 — the `gem` CLI (~1500 lines) — **in progress**
 
 `lib/opal/exe/gem.rb`, `Gem::GemRunner`, `Gem::CommandManager`,
 `Gem::Command`, `user_interaction.rb` (trimmed), `version_option.rb`,
@@ -1062,12 +1102,43 @@ Build tasks: `tasks/gem.mjs`, `tasks/gem/bundle.mjs`, `tasks/gem_exe.mjs`
 Tests: `spec/lib/gems/cli.test.mjs` — spawn `exe/gem` against a local
 `Source::Local` fixture directory (no network) plus one network-marked test.
 
-**Status: not started.** The parts it wraps all exist and are tested at the
-API level — `Gem::Installer`, `Gem::Uninstaller`, `Gem::Package.build`,
-`Gem::Specification`, `SourceList` — so what is left is the runner, the
-option-parser classes and `tasks/gem.mjs`. Doing `install` first closes M4's
-exit test and makes an end-to-end CLI test possible with the offline
-build → install → require path already used in `spec/lib/compiler/ruby_exe.test.mjs`.
+**Status: in progress.** The runner is in — `lib/opal/exe/gem.rb` (the script
+`tasks/gem.mjs` bundles into `exe/gem`, with `tasks/gem_exe.mjs` for the
+single-file executable), `Gem::GemRunner`, `Gem::CommandManager` with its
+abbreviated-command lookup and `-h`/`-v`/`-C` handling, `Gem::Command` with its
+option groups, common options and `show_lookup_failure`, the
+`version_option`/`local_remote_options`/`install_update_options` mixins, and the
+`install`, `uninstall` and `help` commands with the `i` alias. That closed both
+exit tests that were waiting on a command: build → `exe/gem install
+./hello-1.0.0.gem` → `exe/ruby -e "require 'hello'"` → uninstall, and
+`exe/gem install tiny --clear-sources --source http://127.0.0.1:PORT/ci/`
+against a compact index the test itself serves — the last case also being the
+one that shows a bundle reaches the transport through its baked `OPAL_HOME`.
+`spec/lib/gems/cli.test.mjs` covers it (14 cases, no network).
+
+What the batch leaves out, each traceable to §1 or a later milestone:
+
+* plugin loading in `gem_runner.rb` (`Gem::PluginManager`, `load_plugins`), and
+  with it `Gem::CommandManager`'s require of a command file: the commands are
+  required eagerly by `lib/rubygems.rb` (§6, no `autoload`), which is the only
+  way a compiled bundle can carry them — and a require path built by
+  interpolation reads as a static one to the builder, which then asks for a file
+  that cannot exist.
+* `Gem::UnknownCommandError`'s spell-checking (DidYouMean is not in Opal); the
+  error and the command manager's handling of it are upstream's otherwise.
+* `-P/--trust-policy` (`Gem::Security` here has no `Policy`/`Policies`),
+  `--cooldown` (`Gem::Cooldown` is not ported), `-g/--file` and `--without`
+  (`Gem::RequestSet#install_from_gemdeps` is not ported, M8),
+  `--target-rbconfig` (M7) and `--user-install`'s `Gem.vendor_dir` partner,
+  which this port has no equivalent of — `--vendor` keeps upstream's "your
+  platform is not supported" raise.
+* `Gem::UpdateSuggestion` (this is not a RubyGems that can update itself) and
+  `load_hooks` (no rdoc/ri, no post-install message printer); the options that
+  would feed them — `--document`, `--post-install-message`,
+  `--build-extension`, `--install-plugin` — still parse, as upstream's defaults
+  carry them, and do nothing.
+* the `gemdeps` half of `install` and the `gem help gem_dependencies` guide,
+  which describe the same unported feature.
 
 ### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **partly done**
 
@@ -1206,8 +1277,9 @@ M8 is the largest and depends on all of the above.
 ## 11. Changed core files
 
 The port itself is plain Ruby and lives outside the core trees (`lib/rubygems/`,
-its specs under `spec/opal/gems/`, the bundling in `tasks/ruby/bundle.mjs`).
-What it did change inside `opal/` and `lib/opal/` is 22 files, +563/−129 lines
+its specs under `spec/opal/gems/` and `spec/lib/gems/`, the bundling in
+`tasks/ruby/bundle.mjs` and `tasks/gem/bundle.mjs`).
+What it did change inside `opal/` and `lib/opal/` is 24 files, +637/−132 lines
 since the branch base `6b22c1080`. Every one of them was reached by running gem
 code — reading a `.gem`, a gemspec, a binstub — or by running ruby/spec over
 the stdlib pieces the port needs, and each comes with a test: a case under
@@ -1238,6 +1310,7 @@ libraries M1 brought — `stdlib/uri` and `stdlib/zlib`, the bulk of those
 | `opal/runtime/platforms/node_compatible.js` | 13232bad5 | exports `node:crypto` beside `fs` and `os`, which `stdlib/digest.rb` needs. |
 | `opal/runtime/platforms/node_compatible.js` | a9007b0bd | exports `node:zlib`, which `stdlib/zlib.rb` needs. |
 | `opal/corelib/string.rb` | bfbd0acbb | M5. `Symbol#name`, which `Gem::SafeMarshal` asks a symbol link of a marshal stream for (`#resolve_ivar`, `#resolve_symbol_name`) and Opal did not have: a frozen String, kept in a Map keyed by the symbol so `:x.name.equal?(:x.name)` holds as it does in CRuby. It sits on String, where this implementation keeps the Symbol methods (`Symbol = String` at the end of that file). `spec/ruby/core/symbol/name_spec` joined `spec/selection/common` with it and its three examples pass. |
+| `opal/corelib/error.rb` | 1820b76dc | M6. `Exception#detailed_message` and `Exception.to_tty?`, the line `full_message` had been writing itself and the line `Gem::CommandManager` prints for a failed command: message with the class in parentheses on the *first* line of a multiline message, class name alone when the message is empty (a message-less `RuntimeError` answering `unhandled exception`), an anonymous class by its `#inspect` and no parenthesised part when there is a message, `highlight:` emitting the same escapes `full_message` uses, and `full_message` forwarding the keyword arguments it does not consume. The rules were pinned against the host's ruby 3.3.12 before writing them. Nine `spec/ruby/core/exception` examples came back from `spec/filters/bugs/exception.rb` with it, and those are the test. |
 
 ### `lib/opal/` — the toolchain
 
@@ -1253,6 +1326,7 @@ libraries M1 brought — `stdlib/uri` and `stdlib/zlib`, the bulk of those
 | `lib/opal/gems/http.mjs` | fec5398bf | M5, new. The fetch the transport runs on: a standing Worker does Node's `fetch` while the calling thread parks on a `SharedArrayBuffer` with `Atomics.wait` and reads the answer back with `receiveMessageOnPort` (§6.3). One Worker means one connection pool for the process; several URLs travel in one round trip, which is what a compact-index update asks for. `spec/lib/gems/http.test.mjs` is its suite, against a fixture server that is itself a Worker — the transport would otherwise park the very thread such a server needs. |
 | `lib/opal/compiler/cli/runners/nodejs.mjs` | fec5398bf | the node runner publishes `OPAL_HOME` the way `tasks/ruby/bundle.mjs` bakes it into `exe/ruby`. A program compiled from source had no directory for its libraries — `__dir__` inside a required file names the load-path entry, not a path — and the transport reaches `lib/opal/gems/http.mjs` by path, since a Ruby file under `lib/opal/` is not a name a program can require (`opal/` is the runtime's namespace). |
 | `lib/opal/compiler/transforms/operator_assignment.mjs`, `nodes/if.mjs`, `nodes/begin.mjs`, `transforms/conditionals.mjs` | f950e0ed8 | M5. For a variable target the transform rewrote `@x ||= rhs` into `@x = (@x || rhs)`, a write in *both* branches; MRI assigns only where the short circuit reaches the right-hand side. A memo on a frozen object therefore raised (`Gem::Version` freezes itself and pre-caches its `||=` memos, and `Gem::Version.new` caches instances in `@@all`, so one frozen Version poisoned every `'1.0.0'` in the process; `@unset &&= v` likewise defined an ivar MRI leaves undefined). The write now sits inside the Or/And branch, and `if.mjs` renders an operator assignment as a ternary in every position while `begin.mjs` and `conditionals.mjs` keep the statement shape a right-hand side can have — a memoized `begin` with a guard clause, a `rescue` or a statement `%x{}` stays an IIFE, which is what makes those compile. Same commit: the `case` switch subject is parenthesized, so `case f(x)` over a `&&`-joined subject no longer misparses. Specs: `spec/opal/core/language/memoization_spec.rb`, `.../case_spec.rb`, and the compiler fixtures for `assignment/operators` and `control/case`. |
+| `lib/opal/exe/gem.rb` | 0bbcc9fa7 | M6, new. The `gem` command's program: `Gem::GemRunner.new.run ARGV.clone`, which is upstream's `exe/gem` — a command ends with `terminate_interaction`, which raises `Gem::SystemExitException`, and an uncaught `SystemExit` ends an Opal program with that status, so nothing here translates it. `tasks/gem.mjs` bundles it with opal, opal/full, thread, rubygems and opal-parser as a requirable module, plus the `OPAL_HOME` constant `Gem::HTTPTransport` reads to find `lib/opal/gems/http.mjs`; `tasks/gem_exe.mjs` makes the single-file executable, sharing the SEA re-run helper `tasks/sea_exe.mjs` with `tasks/ruby_exe.mjs`. |
 
 Outside those two trees sits one tracked build artifact: `exe/ruby`, the
 compiled bundle of the core plus the port, rebuilt by every commit that changed

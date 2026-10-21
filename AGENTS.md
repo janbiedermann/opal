@@ -302,6 +302,22 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   so a feature that no gem owns must raise LoadError, not the ENOENT
   `Opal.platform.load_file` raises (Opal compiles `require` to the runtime, so
   upstream's `core_ext/kernel_require.rb` hook has no Ruby-level hook point).
+- `exe/gem` is `tasks/gem.mjs` (bundle in `tasks/gem/bundle.mjs`, single-file
+  executable in `tasks/gem_exe.mjs` and `tasks/sea_exe.mjs`, which both `*_exe`
+  tasks share): opal, opal/full, thread and rubygems at boot, opal-parser
+  requirable, and the `OPAL_HOME` constant `Gem::HTTPTransport` needs to find
+  `lib/opal/gems/http.mjs` - without it a bundle's first fetch raises
+  `TransportMissing`. The command classes are required eagerly by
+  `lib/rubygems.rb`, which is also why `Gem::CommandManager` no longer requires
+  a command by name: a require path with an interpolation in it still reads as
+  static to the builder, which then asks for `rubygems/commands/_command`.
+- A `spec/lib/gems/*.test.mjs` case that runs `exe/gem` and answers its HTTP
+  requests from the test process must spawn it asynchronously: `spawnSync`
+  blocks the event loop that serves the fixture, the child waits for a response
+  that cannot arrive, and the transport's 30s timeout burns minutes
+  (`spec/lib/gems/cli.test.mjs` has both runners). Give every run its own cwd,
+  and a temporary `HOME`, `GEM_HOME`, `GEM_PATH` and `GEM_SPEC_CACHE`; keep
+  `GEM_SOURCES` empty to hold resolution off the network.
 - RubyGems' ported code reads `Gem.ruby_version.segments` (a `Gem::Version`,
   not `RUBY_VERSION`) and `Gem.rubygems_version`; `Gem.default_user_install`
   must answer false on Opal, else an install into `GEM_HOME`/`--install-dir`
@@ -387,6 +403,32 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `.should.raise`); `start_with` and `be_truthy` matchers do not exist there;
   a predicate that answers an object (`Gem::SourceList#include?` finds and
   returns) needs a `.nil?` assertion.
+- Opal has `Symbol = String` (`opal/corelib/string.rb`, at the end), so
+  `Symbol === x` and `x.is_a?(Symbol)` are true of *every* String and a Symbol
+  cannot be told from one at run time. Upstream Ruby that branches on a Symbol
+  argument needs a shape test instead: `Gem::Command#add_option` reads a leading
+  dash to tell an option flag from the option-group name it also accepts first.
+- optparse registers its `Officious` switches (`--help`, `--version`) on every
+  parser: `--help` prints that parser's own banner and exits, `--version` aborts
+  with "<program>: version unknown" when the parser has no version, and an
+  unknown option is shifted off the argv *before* `InvalidOption` is raised, so a
+  scan that rescues ParseError silently eats it. That is why `Gem::ConfigFile`
+  reads its few options with a hand loop (upstream 4.1 does the same) instead of
+  with a parser: `gem --version` and `gem --frobnicate` belong to
+  `Gem::CommandManager`, which never sees them otherwise.
+- `Dir.glob(pattern, base: nil)` ignores the nil and searches the current
+  directory (CRuby raises TypeError), so a nil directory handed to
+  `Gem::Util.glob_files_in_dir` reads whatever gemspec sits in the cwd. Keep
+  `Gem.default_specifications_dir` a real path - upstream's, under
+  `Gem.default_dir` - rather than nil, which is what `Gem::Specification
+  .default_stubs` assumes.
+- `Kernel#eval` raises RuntimeError "You need to provision opal-parser yourself
+  in this environment" unless opal-parser is loaded, so a ported body that evals
+  has to `require "opal-parser"` (as `Specification.load` and
+  `Installer#ensure_loadable_spec` do). That require is static, so any bundle
+  compiling those files carries the whole parser and compiler whether it wants
+  them or not: `exe/gem` is 2.2MB, the size of `exe/ruby`, because a `.gemspec`
+  is Ruby source.
 - If an agent discovers information that required significant setup time, condense
   the result into a short bullet in this file so later agents can skip the same
   work.
