@@ -390,6 +390,85 @@ describe("a compilation error", () => {
   });
 });
 
+describe("logical operator assignment", () => {
+  // The write belongs to the branch that reaches it, as in MRI: `@x ||= rhs`
+  // is `@x || (@x = rhs)`, never `@x = (@x || rhs)`.
+  test("assigns a variable only on the branch that needs it", () => {
+    includes("def m; @x ||= 2; end",
+      "return ($truthy(($ret_or_1 = self.x)) ? ($ret_or_1) : ((self.x = 2)))");
+    includes("def m; @x &&= 2; end",
+      "return ($truthy(($ret_or_1 = self.x)) ? ((self.x = 2)) : ($ret_or_1))");
+    includes("@x ||= 2\nx = 1",
+      "($truthy(($ret_or_1 = self.x)) ? ($ret_or_1) : ((self.x = 2)));");
+    includes("x = (@a ||= 1)", "x = ($truthy(($ret_or_1 = self.a)) ? ($ret_or_1) : ((self.a = 1)))");
+    excludes("def m; @x ||= 2; end", "self.x = ($truthy");
+  });
+
+  test("keeps the defined? guard of a constant or class variable read", () => {
+    includes("A ||= 1", "? 'constant' : nil", "$const_set($nesting[0], 'A', 1)");
+    includes("@@a ||= 1", "? 'class variable' : nil", "$class_variable_set($nesting[0], '@@a', 1)");
+    excludes("A ||= 1", "$const_set($nesting[0], 'A', ($truthy");
+  });
+
+  // The right hand side of a memoized assignment can be statement-shaped (a
+  // guard clause, a rescue, a multi-line %x{}); it closes itself over.
+  test("closes a statement-shaped right hand side over", () => {
+    includes("@r ||= begin; a; rescue; b; end", "self.r = (function() { try {");
+    includes("# backtick_javascript: true\n@m ||= begin\n  a\n  %x{\n    var v = 1;\n    return v;\n  }\nend",
+      "self.m = (function() {");
+  });
+
+  // An `&&`/`||` is a value, so it keeps the ternary form even where a
+  // statement would do; only a Ruby `if` compiles to an if statement.
+  test("keeps the ternary of a logical operator statement", () => {
+    includes("def m; a || b; end", "return ($truthy(($ret_or_1 = self.$a())) ? ($ret_or_1) : (self.$b()))");
+    includes("a && b\nx = 1", "($truthy(($ret_or_1 = self.$a())) ? (self.$b()) : ($ret_or_1));");
+    includes("if a; 1; else; 2; end", "if ($truthy(self.$a())) {");
+    // a parenthesized chain comes back as a begin whose last statement was
+    // wrapped in `return`, and goes back to being one expression
+    includes("def m; a || (b && c); end",
+      "return ($truthy(($ret_or_1 = self.$a())) ? ($ret_or_1) : (($truthy(($ret_or_2 = self.$b())) ? (self.$c()) : ($ret_or_2))))");
+  });
+
+  // The branches of a returned if are wrapped in `return` before codegen; the
+  // ternary takes them back, so a branch that returns its own way (a JS
+  // x-string, a yield) stays an operand of the ternary rather than a `return`
+  // inside it.
+  test("returns the ternary once, not each branch", () => {
+    includes("# backtick_javascript: true\nclass C\n  def m\n    @x ||= `foo()`\n  end\nend",
+      "return ($truthy(($ret_or_1 = self.x)) ? ($ret_or_1) : ((self.x = foo())))");
+    includes("def m; @x ||= yield; end",
+      "return ($truthy(($ret_or_1 = self.x)) ? ($ret_or_1) : ((self.x = $yieldX($yield, []))))");
+    for (const src of ["# backtick_javascript: true\nclass C\n  def m\n    @x ||= `foo()`\n  end\nend",
+      "def m; @x ||= yield; end"]) {
+      excludes(src, " : (return ");
+      excludes(src, " ? (return ");
+    }
+  });
+});
+
+describe("case / switch", () => {
+  // The subject of a `case` is spliced into a JS switch and the `.valueOf()`
+  // that follows it has to apply to that whole subject: `switch (1.valueOf())`
+  // is not JavaScript at all, and `switch (str[i] || nil.valueOf())` is not
+  // the Ruby it came from.
+  test("parenthesizes the subject of a switch", () => {
+    includes("case 1; when 2; a; else; b; end", "switch ((1).valueOf()) {");
+    includes("case -1; when -1; a; end", "switch ((-1).valueOf()) {");
+    includes("case 0x10; when 16; a; end", "switch ((16).valueOf()) {");
+    includes("case x; when 1; a; end", "switch ((self.$x()).valueOf()) {");
+    includes("# backtick_javascript: true\ndef m(str, i)\n  case `str[i] || nil`\n  when \"a\" then a\n  end\nend",
+      "switch ((str[i] || nil).valueOf()) {");
+  });
+
+  // The value of a `case` is compared with `===` and no switch is built, so
+  // there is no `.valueOf()` on the subject there either.
+  test("compiles a `case` whose value is used without a switch", () => {
+    includes("y = case 1; when 1; a; end", "($eqeqeq(1, ($ret_or_1 = 1)) ? (self.$a()) : (nil))");
+    excludes("y = case 1; when 1; a; end", "switch (");
+  });
+});
+
 describe("[regressions]", () => {
   test("accepts empty rescue within while loop", () => {
     compiled("while foo\n  begin\n  rescue\n  end\nend");

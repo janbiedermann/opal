@@ -47,52 +47,62 @@
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "a = local; a ||= 1",
-    "to": "a = local; a = a || 1"
+    "to": "a = local; a || a = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "a = local; a &&= 1",
-    "to": "a = local; a = a && 1"
+    "to": "a = local; a && a = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "@a ||= 1",
-    "to": "@a = @a || 1"
+    "to": "@a || @a = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "@a &&= 1",
-    "to": "@a = @a && 1"
+    "to": "@a && @a = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "CONST ||= 1",
-    "to": "CONST = defined?(CONST) ? (CONST || 1) : 1"
+    "to": "defined?(CONST) ? (CONST || CONST = 1) : CONST = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "CONST &&= 1",
-    "to": "CONST = CONST && 1"
+    "to": "CONST && CONST = 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "A::B ||= 1",
+    "to": "defined?(A::B) ? (A::B || A::B = 1) : A::B = 1"
+  },
+  {
+    "file": "logical_operator_assignment_spec.rb",
+    "from": "A::B &&= 1",
+    "to": "A::B && A::B = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "$g ||= 1",
-    "to": "$g = $g || 1"
+    "to": "$g || $g = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "$g &&= 1",
-    "to": "$g = $g && 1"
+    "to": "$g && $g = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "@@a ||= 1",
-    "to": "@@a = defined?(@@a) ? (@@a || 1) : 1"
+    "to": "defined?(@@a) ? (@@a || @@a = 1) : @@a = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",
     "from": "@@a &&= 1",
-    "to": "@@a = @@a && 1"
+    "to": "@@a && @@a = 1"
   },
   {
     "file": "logical_operator_assignment_spec.rb",

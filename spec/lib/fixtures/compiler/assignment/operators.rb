@@ -3,4 +3,6 @@ a ||= 1; a &&= 2; a += 3
 A ||= 1; A::B ||= 2; A &&= 3; C += 1
 a.b ||= 1; x[1] += 2; a&.b ||= 3; y.z -= 1; foo.bar.baz ||= 2
 x = (a ||= 1)
+def f; @m ||= begin; @n ||= 2; x = 1; x + 1; end; end
+def g; @r ||= begin; a; rescue; b; end; end
 a&.b += 1
