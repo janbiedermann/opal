@@ -96,9 +96,15 @@ require_relative "rubygems/local_remote_options"
 require_relative "rubygems/install_update_options"
 require_relative "rubygems/command_manager"
 require_relative "rubygems/gem_runner"
+require_relative "rubygems/commands/contents_command"
 require_relative "rubygems/commands/help_command"
+require_relative "rubygems/commands/info_command"
 require_relative "rubygems/commands/install_command"
+require_relative "rubygems/commands/list_command"
+require_relative "rubygems/commands/search_command"
+require_relative "rubygems/commands/specification_command"
 require_relative "rubygems/commands/uninstall_command"
+require_relative "rubygems/commands/which_command"
 
 module Gem
   ##

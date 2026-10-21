@@ -73,6 +73,8 @@ function builtGem(name, version) {
   s.version = ${JSON.stringify(version)}
   s.summary = "the ${name} gem"
   s.authors = ["Opal"]
+  s.licenses = ["MIT"]
+  s.homepage = "https://example.com/${name}"
   s.files = ["lib/${name}.rb"]
   s.require_paths = ["lib"]
 end
@@ -122,9 +124,9 @@ describe("the gem command", () => {
 
   test("help commands lists the commands the port registers", () => {
     const r = gem("help", "commands");
-    assert.match(r.out, /^ {4}help {9}Provide help on the 'gem' command$/m);
-    assert.match(r.out, /^ {4}install {6}Install a gem into the local repository$/m);
-    assert.match(r.out, /^ {4}uninstall {4}Uninstall gems from the local repository$/m);
+    assert.match(r.out, /^ {4}help\s+Provide help on the 'gem' command$/m);
+    assert.match(r.out, /^ {4}install\s+Install a gem into the local repository$/m);
+    assert.match(r.out, /^ {4}uninstall\s+Uninstall gems from the local repository$/m);
     assert.equal(r.status, 0);
   });
 
@@ -186,6 +188,33 @@ describe("the gem command", () => {
     const required = run(RUBY, join(DIR, "nowhere"), {}, ["-e", "require 'hello'; puts Hello.hello"]);
     assert.equal(required.out.trim(), "hello", `${required.out}${required.err}`);
     assert.equal(required.status, 0, required.err);
+
+    // What the repository now answers to the read-only commands.
+    assert.equal(gem("list").out.trim(), "hello (1.0.0)");
+    assert.equal(gem("list", "-i", "hello").out.trim(), "true");
+
+    const notInstalled = gem("list", "-i", "nosuchgem");
+    assert.equal(notInstalled.out.trim(), "false");
+    assert.equal(notInstalled.status, 1);
+
+    const details = gem("list", "--details");
+    assert.match(details.out, /^hello \(1\.0\.0\)\n {4}Author: Opal\n {4}Homepage: https:\/\/example\.com\/hello\n {4}License: MIT\n {4}Installed at: /m, details.out);
+    assert.match(gem("info", "hello").out, /^hello \(1\.0\.0\)\n {4}Author: Opal\n/m);
+
+    const libFile = join(DIR, "repo", "gems", "hello-1.0.0", "lib", "hello.rb");
+    assert.equal(gem("which", "hello").out.trim(), libFile);
+    assert.equal(gem("contents", "hello").out.trim(), libFile);
+    assert.equal(gem("contents", "--no-prefix", "hello").out.trim(), "lib/hello.rb");
+
+    const specYaml = gem("spec", "hello");
+    assert.match(specYaml.out, /^--- !ruby\/object:Gem::Specification\nname: hello\n/, specYaml.out);
+    assert.match(gem("spec", "hello", "summary").out.trim(), /^--- the hello gem$/);
+
+    // A remote query with no source answers nothing rather than reaching the
+    // network or dying on an empty source list.
+    const remote = gem("list", "--remote");
+    assert.equal(remote.out.trim(), "");
+    assert.equal(remote.status, 0, remote.err);
 
     const off = gemIn(gem1.dir, {}, "uninstall", "hello", "-x", "-I");
     assert.match(off.out, /Successfully uninstalled hello-1.0\.0/);
@@ -260,6 +289,19 @@ describe("the gem command", () => {
       assert.match(r.out, /1 gem installed/);
       assert.equal(r.status, 0, `${r.out}${r.err}`);
       assert.ok(existsSync(join(repo, "gems", "tiny-0.1.0", "lib", "tiny.rb")));
+
+      // The same index answers the query commands, with a spec cache of their
+      // own so they have to fetch it rather than read what the install left.
+      const queryEnv = { GEM_SPEC_CACHE: join(DIR, "query-specs"), no_proxy: "127.0.0.1,localhost" };
+      const listed = await runAsync(GEM, DIR, queryEnv,
+        ["list", "--remote", "--clear-sources", "--source", `http://127.0.0.1:${port}/ci/`]);
+      assert.match(listed.out, /^tiny \(0\.1\.0\)$/m, `${listed.out}${listed.err}`);
+      assert.equal(listed.status, 0, `${listed.out}${listed.err}`);
+
+      const searched = await runAsync(GEM, DIR, queryEnv,
+        ["search", "tin", "--clear-sources", "--source", `http://127.0.0.1:${port}/ci/`]);
+      assert.match(searched.out, /^tiny \(0\.1\.0\)$/m, `${searched.out}${searched.err}`);
+      assert.equal(searched.status, 0, `${searched.out}${searched.err}`);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

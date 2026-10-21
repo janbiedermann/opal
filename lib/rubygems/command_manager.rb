@@ -50,9 +50,15 @@ class Gem::CommandManager
   include Gem::UserInteraction
 
   BUILTIN_COMMANDS = [ # :nodoc:
+    :contents,
     :help,
+    :info,
     :install,
+    :list,
+    :search,
+    :specification,
     :uninstall,
+    :which,
   ].freeze
 
   ALIAS_COMMANDS = {
