@@ -25,6 +25,59 @@ class Time
     }
   end
 
+  ##
+  # The ISO-8601 parser CRuby's Time.xmlschema and Time.iso8601 answer: the
+  # extended date form, the time with or without its seconds and fraction, and
+  # the zone as Z, z or a +HH:MM (or +HHMM) offset. A string with no date and no
+  # time is the ArgumentError the callers of these two rescue. A string with no
+  # zone is read as local time, as CRuby reads it.
+
+  ISO8601_PATTERN = %r{
+    \A
+      (?:(\d{4})-(\d{2})-(\d{2}))?
+      (?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:[.,](\d+))?)?)?
+      (?:\s*(Z|z|[+-]\d{2}:?\d{2}))?
+    \z
+  }x
+
+  def self.xmlschema(str)
+    match = ISO8601_PATTERN.match(str)
+    year, month, day, hour, minute, second, fraction, zone = match && match.captures
+
+    if year.nil? && hour.nil?
+      raise ArgumentError, "no time information in #{str.inspect}"
+    end
+
+    # The fraction belongs to the second. Opal's Time keeps microseconds, so
+    # digits past the sixth drop out the way they do when the second is read
+    # back with #usec; CRuby keeps them as a Rational. A second of 60 (a leap
+    # second) rolls into the next minute, which is what Date.UTC makes of it.
+    usec = fraction && !fraction.empty? ? fraction[0, 6].ljust(6, "0").to_i : nil
+    args = [year.to_i, (month || 1).to_i, (day || 1).to_i,
+      hour.to_i, minute.to_i, second.to_i]
+
+    if zone.nil?
+      Time.local(*args, usec)
+    else
+      instant = Time.utc(*args, usec)
+      offset = zone_offset(zone)
+      offset.zero? ? instant : instant - offset
+    end
+  end
+
+  def self.zone_offset(zone) # :nodoc:
+    return 0 if zone == "Z" || zone == "z"
+
+    # delete would read "+-" as a range, and that range covers the digits.
+    digits = zone.gsub(/\D/, "")
+
+    (zone.start_with?("-") ? -1 : 1) * (digits[0, 2].to_i * 3600 + digits[2, 2].to_i * 60)
+  end
+
+  class << self
+    alias iso8601 xmlschema
+  end
+
   def self.def_formatter(name, format, on_utc: false, utc_tz: nil, tz_format: nil, fractions: false, on: self)
     on.define_method name do |fdigits = 0|
       case self

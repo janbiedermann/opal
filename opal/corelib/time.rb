@@ -211,7 +211,7 @@ class ::Time < `Date`
     }
   end
 
-  def self.local(year, month = nil, day = nil, hour = nil, min = nil, sec = nil, millisecond = nil, _dummy1 = nil, _dummy2 = nil, _dummy3 = nil)
+  def self.local(year, month = nil, day = nil, hour = nil, min = nil, sec = nil, usec = nil, _dummy1 = nil, _dummy2 = nil, _dummy3 = nil)
     # The _dummy args are there only because the MRI version accepts up to 10 arguments
     %x{
       var args, result;
@@ -234,7 +234,12 @@ class ::Time < `Date`
       min   = args[4];
       sec   = args[5];
 
-      result = new Date(year, month, day, hour, min, 0, sec * 1000);
+      // MRI's seventh argument is the subsecond, counted in millionths. A
+      // value that is not a number is left out: the C-style call puts place-
+      // holders there, and MRI takes no string as a subsecond either.
+      var subsec = typeof usec === 'number' ? usec / 1000 : 0;
+
+      result = new Date(year, month, day, hour, min, 0, sec * 1000 + subsec);
       if (year < 100) {
         result.setFullYear(year);
       }
@@ -242,7 +247,7 @@ class ::Time < `Date`
     }
   end
 
-  def self.gm(year, month = nil, day = nil, hour = nil, min = nil, sec = nil, millisecond = nil, _dummy1 = nil, _dummy2 = nil, _dummy3 = nil)
+  def self.gm(year, month = nil, day = nil, hour = nil, min = nil, sec = nil, usec = nil, _dummy1 = nil, _dummy2 = nil, _dummy3 = nil)
     # The _dummy args are there only because the MRI version accepts up to 10 arguments
     %x{
       var args, result;
@@ -265,7 +270,12 @@ class ::Time < `Date`
       min   = args[4];
       sec   = args[5];
 
-      result = new Date(Date.UTC(year, month, day, hour, min, 0, sec * 1000));
+      // MRI's seventh argument is the subsecond, counted in millionths. A
+      // value that is not a number is left out: the C-style call puts place-
+      // holders there, and MRI takes no string as a subsecond either.
+      var subsec = typeof usec === 'number' ? usec / 1000 : 0;
+
+      result = new Date(Date.UTC(year, month, day, hour, min, 0, sec * 1000 + subsec));
       if (year < 100) {
         result.setUTCFullYear(year);
       }
