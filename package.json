@@ -24,6 +24,8 @@
     "build-ruby-exe": "node tasks/ruby_exe.mjs",
     "build-gem": "node tasks/gem.mjs",
     "build-gem-exe": "node tasks/gem_exe.mjs",
+    "build-bundler": "node tasks/bundler.mjs",
+    "build-bundler-exe": "node tasks/bundler_exe.mjs",
     "parser:assemble": "node tasks/parser/assemble.mjs"
   },
   "dependencies": {

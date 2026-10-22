@@ -27,6 +27,11 @@ module Bundler
 
     def self.hook(event, *args); end
 
+    # `bundle install` calls this to install the plugins a Gemfile asks for
+    # with its `plugin` directives; with no plugin system there is nothing
+    # to install and the DSL's plugin-directive reader raises on its own.
+    def self.gemfile_install(*_args); end
+
     # Upstream defines its event names in plugin/events.rb; the hooks are
     # no-ops here, the constants only need to exist for the call sites.
     module Events

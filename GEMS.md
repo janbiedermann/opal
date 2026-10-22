@@ -35,8 +35,9 @@ lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
 it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL,
-definition, resolver, settings and installer slices, the `bundle` command
-next.
+definition, resolver, settings, installer and `bundle` command slices -
+`exe/bundler` installs, locks, lists and checks a Gemfile - and its runtime
+setup half (M8.3) and remote sources (M8.4) are what is left of it.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -183,11 +184,10 @@ every one reached through a failing gem path — are listed with their commits i
 What is still open, in the order that unblocks the rest:
 
 1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile,
-   Gemfile DSL, definition and resolver slices are in (M8.1a-M8.2-resolve).
-   The `bundle` command with `installer.rb` and `settings.rb`
-   (M8.2-install) are next. `lock` and
-   the `update` commands - the lockfile and gemdeps machinery Bundler's own
-   support stands on - are its scope now.
+   Gemfile DSL, definition, resolver, settings, install-layer and command
+   slices are in (M8.1a-M8.2). The runtime setup half - `setup.rb`,
+   `exec`/`show`/`info`, `update` - and the remote sources are its scope
+   now.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1447,12 +1447,42 @@ create lock file of M6, which is gone once the block ends. Tested by
 wait for M8.4) against the fixture repository - the already-installed
 gem-source specs answer Using, the path gem gets its binstub under the
 repository's bin dir through `Source::Path::Installer`, and the written
-lock reads back with no re-resolve. What remains:
+lock reads back with no re-resolve.
+The `bundle` command is in too: `exe/bundler`, built by `tasks/bundler.mjs`
+from `tasks/bundler/bundle.mjs` (the `gem` bundle's shape: opal/full, the
+thread shim, rubygems, then `lib/bundler.rb`, with opal-parser requirable
+because a Gemfile and a .gemspec are Ruby source, and the OPAL_HOME and
+`compilerKey()` constants shared with the other bundles), running
+`lib/opal/exe/bundler.rb` inside `Bundler.with_friendly_errors` and
+dispatching through `cli.rb` and `cli/{common,install,lock,list,check,
+clean}.rb`; `tasks/bundler_exe.mjs` makes the single-file executable the
+way the other two do. The deviations are Thor's absence and its satellites:
+`Bundler::CLI` keeps upstream's entry points, aliases and removed-flag
+deprecations but restates every `method_option` in per-command tables a
+hand-rolled scanner turns into the same options hash Thor built (the
+String/Symbol key mix the command classes read is one lookup here, the
+port's Symbol being a String); `help` prints those tables instead of the
+never-bundled man pages; `cli/start`'s self-manager restart and `cli/
+install`'s self-manager and freebsd lines go with the unported halves, the
+two `Fetcher.disable_endpoint` lines wait for M8.4 to give `--full-index`
+its meaning, and the plugin stub gained a no-op `gemfile_install`;
+`friendly_errors.rb` lost its Thor::Error arms (the port's CLI raises
+InvalidOption, a BundlerError whose status_code the surviving arm reads)
+and names the version in the issue template where upstream embeds
+`Bundler::Env.report` (env.rb waits for `bundle env`). `runtime.rb` came
+with the command so `bundle list` and `Bundler.load` can answer, its
+setup/require half still unreachable until M8.3's `set_bundle_environment`
+and activation patches; the root gained `definition`, `load`, `auto_install`
+and `configure_custom_gemfile`. Tested by `spec/lib/gems/bundler_cli.test.mjs`
+(10 hermetic runs against the fixture repository: version, `lock --local`
+then `check`, `install --local` with the path gem's binstub, `list` in
+human/json/name-only forms, aliases and global flags, unknown command and
+option at exit 15, the remembered-flag rejection with its `bundle config`
+replacement, `help`, the unported `exec`/`update`/`config` boundary, and a
+bare `bundle lock` walking into the M8.4 remote seam as documented). What
+remains:
 
-* **M8.2 - the command**: the `tasks/bundler{,.exe}.mjs` bundling with
-  `lib/opal/exe/bundler.rb`, and the `install`/`lock`/`list`/`check`
-  commands over the fixture index.
-* **M8.3 - the runtime half**: `runtime.rb`/`setup.rb`, `exec`/`show`/
+* **M8.3 - the runtime half**: `setup.rb`, `exec`/`show`/
   `info`/`platform`, `update` (the resolver's install side finally earns
   its keep, which also retires `gem update`'s omission), `clean`,
   the `config` command.

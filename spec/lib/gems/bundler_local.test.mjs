@@ -294,8 +294,8 @@ describe("Bundler over a local repository", () => {
     assert.equal(r.status, 0, r.err);
     const answer = JSON.parse(r.out.split("\n").filter((line) => line.startsWith("{")).pop());
 
-    assert.equal(answer.bundle_path, true, "the installer created the bundle path")
-    assert.equal(answer.lock_released, true, "the ProcessLock lock file goes when the block ends")
+    assert.equal(answer.bundle_path, true, "the installer created the bundle path");
+    assert.equal(answer.lock_released, true, "the ProcessLock lock file goes when the block ends");
     assert.deepEqual(answer.post_install_messages, {});
     assert.deepEqual(answer.installed_lock_specs, ["hello-1.0.0", "pathgem-0.1", "world-0.5"]);
     assert.equal(answer.path_bin, true, "the path gem got its binstub");

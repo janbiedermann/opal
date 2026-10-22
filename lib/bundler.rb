@@ -52,6 +52,7 @@ require_relative "bundler/definition"
 require_relative "bundler/resolver"
 require_relative "bundler/gem_version_promoter"
 require_relative "bundler/source/rubygems_aggregate"
+require_relative "bundler/runtime"
 require_relative "bundler/installer"
 require_relative "bundler/rubygems_gem_installer"
 require_relative "bundler/source/path/installer"
@@ -150,6 +151,47 @@ module Bundler
 
     def default_bundle_dir
       SharedHelpers.default_bundle_dir
+    end
+
+    def load
+      @load ||= Runtime.new(root, definition)
+    end
+
+    # @param unlock [Hash, Boolean, nil] Gems that have been requested
+    #   to be updated or true if all gems should be updated
+    # @param lockfile [Pathname] Path to Gemfile.lock
+    # @return [Bundler::Definition]
+    def definition(unlock = nil, lockfile = default_lockfile)
+      @definition = nil if unlock
+      @definition ||= begin
+        configure
+        Definition.build(default_gemfile, lockfile, unlock)
+      end
+    end
+
+    # Note that this method `nil`s out the global Definition object, so it
+    # should be called first, before you instantiate anything like an
+    # `Installer` that'll keep a reference to the old one instead.
+    def auto_install
+      return unless Bundler.settings[:auto_install]
+
+      begin
+        definition.specs
+      rescue GemNotFound, GitError
+        ui.info "Automatically installing missing gems."
+        reset!
+        CLI::Install.new({}).run
+        reset!
+      end
+    end
+
+    def configure_custom_gemfile(custom_gemfile = nil)
+      custom_gemfile ||= Bundler.settings[:gemfile]
+
+      if custom_gemfile && !custom_gemfile.empty?
+        Bundler::SharedHelpers.set_env "BUNDLE_GEMFILE", File.expand_path(custom_gemfile)
+        reset_settings_and_root!
+      end
     end
 
     def app_config_path
