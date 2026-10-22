@@ -289,6 +289,35 @@ module Bundler
       end
     end
 
+    def which(executable)
+      executable_path = find_executable(executable)
+      return executable_path if executable_path
+
+      if (paths = ENV["PATH"])
+        quote = '"'
+        paths.split(File::PATH_SEPARATOR).find do |path|
+          path = path[1..-2] if path.start_with?(quote) && path.end_with?(quote)
+          executable_path = find_executable(File.expand_path(executable, path))
+          return executable_path if executable_path
+        end
+      end
+    end
+
+    def find_executable(path)
+      # Opal: upstream builds its candidates from RbConfig's EXECUTABLE_EXTS
+      # and EXEEXT - the .bat/.exe family - and the port's platforms are the
+      # POSIX ones node runs on, where the bare name is the only candidate.
+      extensions = [""]
+      candidates = extensions.map {|ext| "#{path}#{ext}" }
+
+      candidates.find {|candidate| File.file?(candidate) && File.executable?(candidate) }
+    end
+
+    def git_present?
+      return @git_present if defined?(@git_present)
+      @git_present = Bundler.which("git")
+    end
+
     def system_bindir
       # Gem.bindir doesn't always return the location that RubyGems will install
       # system binaries. If you put '-n foo' in your .gemrc, RubyGems will

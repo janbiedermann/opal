@@ -39,8 +39,8 @@ definition, resolver, settings, installer and `bundle` command slices -
 `exe/bundler` installs, locks, lists and checks a Gemfile - and its runtime
 setup half (M8.3a): `bundler/setup` and `Bundler.setup` activate a bundle
 for `exe/ruby`, and `show`, `info`, `platform` and `clean` answer. The
-`config` and `update` commands came with M8.3b; `exec` (the spawn seam,
-M8.3c) and the remote sources (M8.4) are what is left of it.
+`config`, `update` and `exec` commands (M8.3b-c) complete the command
+set; the remote sources (M8.4) are what is left of it.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -188,8 +188,8 @@ What is still open, in the order that unblocks the rest:
 
 1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile,
    Gemfile DSL, definition, resolver, settings, install-layer, command,
-   runtime-setup and config/update slices are in (M8.1a-M8.3b). What is
-   left is `exec` - the spawn seam - and the remote sources.
+   runtime-setup, config/update and exec slices are in (M8.1a-M8.3c).
+   What is left is the remote sources (M8.4).
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1530,12 +1530,27 @@ NAME` answers `its version stayed the same` when nothing can move, and a
 bare `bundle update` walks into the M8.4 remote seam like bare
 `bundle lock`. Retiring `gem update`'s omission is NOT part of this:
 that command rides `Gem::DependencyResolver`, ported since M5, and stays
-open as a rubygems slice of its own. What remains:
+open as a rubygems slice of its own.
+`exec` landed with it (M8.3c), and it is where `set_bundle_environment`
+finally works: `PATH` gains the repository's `bin`, so
+`bundle exec pathgem-bin` finds the binstub there, the ruby-shebang
+script takes the in-process load path (the compiler is provisioned and
+the binstub runs in this process, activation included), and everything
+else is spawned - a node process cannot exec over itself, so upstream's
+`Kernel.exec` is answered by `Kernel#system` (same spawn, standard
+streams inherited, then exit with the child's status), and node's
+spawn failure gets one "command not found" where upstream split 126
+from 127. The root gained `which`, `find_executable` and `git_present?`,
+without RbConfig's EXEEXT candidate families (the port's platforms are
+the POSIX ones node runs on). The trap of the slice: `Kernel#load` goes
+through `Opal.load`, whose normalize drops the leading "/" of absolute
+paths, so extension-less absolute files - a gem's `bin_file` - miss the
+plain platform loader, which then appends ".rb"; where the port loads an
+exact file it reads it and evaluates it against `TOPLEVEL_BINDING` (the
+exec class and `Gem.activate_and_load_bin_path` both do, and the M4
+binstub cases still pin the wrapper route, which runs under exe/ruby's
+own loader). The M8 commands are all in; what remains:
 
-* **M8.3c - `bundle exec`**: the spawn seam - `cli/exec.rb` over the
-  landed `set_bundle_environment`, the `which`/`find_executable`/
-  `git_present?` helpers, and EnvironmentPreserver's unbundling finally
-  exercised.
 * **M8.4 - remote breadth**: `source/rubygems.rb` over
   `Gem::CompactIndexClient` and the fetch worker - the
   `Source::Rubygems::Remote` and `Bundler::Fetcher` that a plain

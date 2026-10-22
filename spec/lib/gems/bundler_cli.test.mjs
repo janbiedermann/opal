@@ -215,14 +215,38 @@ describe("bundle command over a local repository", () => {
     assert.match(bare.out, /Bundler commands:/);
   });
 
-  test("the unported exec command answers the Thor message", () => {
-    // M8.3b's subprocess half takes over `exec`: until then it is an
-    // unknown command, the answer Thor gives when no bundler-#{name}
-    // executable sits on the PATH either.
+  test("bundle exec loads the bundle's binstub in-process", () => {
+    // set_bundle_environment puts the repository's bin on PATH, the
+    // ruby-shebang binstub goes through the load path, and the gem's bin
+    // file compiles in this process and runs with the bundle activated.
     const dir = app();
-    const r = bundle(dir, "exec", "echo", "hi");
-    assert.equal(r.status, 15);
-    assert.match(r.err, /Could not find command "exec"/);
+    const install = bundle(dir, "install", "--local");
+    assert.equal(install.status, 0, install.err);
+
+    const r = bundle(dir, "exec", "pathgem-bin");
+    assert.equal(r.status, 0, r.err);
+    assert.equal(r.out.trim(), "pathgem");
+  });
+
+  test("bundle exec answers missing commands like Kernel.exec reports", () => {
+    const dir = app();
+
+    const spawned = bundle(dir, "exec", "cat", "Gemfile");
+    assert.equal(spawned.status, 0, spawned.err);
+    assert.match(spawned.out, /gem 'hello'/);
+
+    const none = bundle(dir, "exec");
+    assert.equal(none.status, 128);
+    assert.match(none.err, /exec needs a command to run/);
+
+    const r = bundle(dir, "exec", "nope-xyz");
+    assert.equal(r.status, 127);
+    assert.match(r.err, /bundler: command not found: nope-xyz/);
+    assert.match(r.err, /Install missing gem executables/);
+
+    const removed = bundle(dir, "exec", "--no-keep-file-descriptors", "cat", "Gemfile");
+    assert.equal(removed.status, 15);
+    assert.match(removed.err, /--no-keep-file-descriptors.*has been removed/);
   });
 
   test("a bare lock walks into the unported remote sources, documented by M8.4", () => {

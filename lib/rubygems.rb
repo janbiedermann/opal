@@ -646,7 +646,14 @@ module Gem
   # Activates and loads the binary +exec_name+ of gem +name+.
 
   def self.activate_and_load_bin_path(name, exec_name = nil, *requirements)
-    load find_and_activate_spec_for_exe(name, exec_name, requirements).bin_file(exec_name)
+    bin = find_and_activate_spec_for_exe(name, exec_name, requirements).bin_file(exec_name)
+    # Opal: Kernel#load hands the path to Opal.load, whose normalize drops
+    # the leading "/" of an absolute path; exe/ruby's loader compensates and
+    # the plain platform loader appends ".rb" and misses. The bin file name
+    # is usually extension-less, so the port evaluates the source itself -
+    # what load does - against the toplevel binding. (Kernel#load works
+    # wherever the named feature resolves, or where the loader is exe/ruby's.)
+    eval(File.read(bin), TOPLEVEL_BINDING, bin)
   end
 
   ##

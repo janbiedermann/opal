@@ -81,4 +81,11 @@ describe 'Bundler runtime setup slice' do
     Bundler.rubygems.replace_entrypoints([])
     Gem.respond_to?(:discover_gems_on_require=).should == false
   end
+
+  it "locates executables by name and path" do
+    Bundler.find_executable("/bin/sh").should == "/bin/sh"
+    Bundler.find_executable("nope-xyz-probe").nil?.should == true
+    Bundler.which("sh").nil?.should == false
+    Bundler.which("nope-xyz-probe").nil?.should == true
+  end
 end

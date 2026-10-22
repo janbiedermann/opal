@@ -365,6 +365,16 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   SharedHelpers' `find_file`/`find_directory` need an explicit trailing
   `nil`, because Opal's `while` ends at undefined and CRuby's returns nil,
   and callers do `find_gemfile.to_s`.
+- `Kernel#load` hands the path to `Opal.load`, whose normalize drops the
+  leading "/" of absolute paths; the plain node platform loader then misses
+  and appends `.rb` (exe/ruby's own loader resolves them fine). Extension-less
+  executables - gem `bin_file`s, binstubs - hit this: where the port must
+  load an exact file it uses `eval(File.read(f), TOPLEVEL_BINDING, f)`
+  (`Gem.activate_and_load_bin_path` and `Bundler::CLI::Exec#kernel_load`
+  both do). Kernel.exec has no node shim either (a node process can't exec
+  over itself): `bundle exec` emulates it with Kernel#system (sync spawn,
+  stdio inherited) + exit($?.exitstatus); Process.spawn/system/trap all
+  exist in the node platform.
 - `gem compile` (D7) writes `<gem_dir>/compiled/<full_name>/<digest>/` and
   `BasicSpecification#full_require_paths` prepends that directory when the
   digest matches, so the `.js` wins the directory search (`gem which` shows

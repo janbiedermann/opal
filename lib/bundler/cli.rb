@@ -145,6 +145,10 @@ module Bundler
         "local" => {type: :boolean, desc: "Only change the local config"},
         "delete" => {type: :boolean, desc: "delete"},
       },
+      "exec" => {
+        "keep-file-descriptors" => {type: :boolean, default: true, desc: "Passes all file descriptors to the new processes. Default is true, and setting it to false is not permitted (removed)."},
+        "gemfile" => {type: :string, desc: "Use the specified gemfile instead of Gemfile"},
+      },
       "version" => {},
       "cli_help" => {},
       "help" => {},
@@ -359,6 +363,16 @@ module Bundler
       # shape itself.
       require_relative "cli/config"
       Config.run(@positional, options)
+    end
+
+    def exec
+      if ARGV.include?("--no-keep-file-descriptors")
+        removed_message = "The `--no-keep-file-descriptors` has been removed. `bundle exec` no longer mess with your file descriptors. Close them in the exec'd script if you need to"
+        raise InvalidOption, removed_message
+      end
+
+      require_relative "cli/exec"
+      Exec.new(options, @positional).run
     end
 
     def version
