@@ -9,11 +9,11 @@ require_relative "current_ruby"
 # and requires "bundler/constants" from "bundler.rb", where autoloads would
 # leave it outside a compiled bundle.
 #
-# The subprocess-environment block - set_bundle_environment,
-# set_bundle_variables, set_path, set_rubyopt, set_rubylib, bundle_bin_path,
-# gemspec_path, source_root - waits for M8.3, where `bundle exec` starts
-# handing environments to child processes. set_env comes with the M8.2
-# installer, whose configure_gem_home_and_path writes GEM_HOME/GEM_PATH.
+# The subprocess-environment block - set_bundle_environment and friends -
+# landed with M8.3a. The child processes here are the port's own runners
+# (exe/ruby and the system runner), which read these variables as upstream's
+# ruby children do, except that exe/ruby takes its -r requires from the
+# command line rather than RUBYOPT (M8.3b's exec hands them over that way).
 module Bundler
   module SharedHelpers
     def root
@@ -276,6 +276,91 @@ module Bundler
     end
     public :set_env
 
+    def set_bundle_environment
+      set_bundle_variables
+      set_path
+      set_rubyopt
+      set_rubylib
+    end
+
+    def set_bundle_variables
+      Bundler::SharedHelpers.set_env "BUNDLE_BIN_PATH", bundle_bin_path
+      Bundler::SharedHelpers.set_env "BUNDLE_GEMFILE", find_gemfile.to_s
+      Bundler::SharedHelpers.set_env "BUNDLE_LOCKFILE", default_lockfile.to_s
+      Bundler::SharedHelpers.set_env "BUNDLER_VERSION", Bundler::VERSION
+      Bundler::SharedHelpers.set_env "BUNDLER_SETUP", setup_path
+    end
+
+    # Opal: upstream spells the setup file `File.expand_path("setup", __dir__)`;
+    # a compiled bundle's __dir__ names no file on disk, so the port takes it
+    # from OPAL_HOME - the checkout its loader resolves "bundler/setup"
+    # against - whenever the bundle carries that constant.
+    def setup_path
+      if defined?(OPAL_HOME)
+        File.join(OPAL_HOME, "lib", "bundler", "setup.rb")
+      else
+        File.expand_path("setup", __dir__)
+      end
+    end
+
+    def bundle_bin_path
+      # Opal: the port's executable is exe/bundler (tasks/bundler.mjs), not
+      # exe/bundle, and bundler is no default gem to fall back on; under
+      # OPAL_HOME the file is really there, and the binstub templates that
+      # read this only carry the path.
+      File.join(source_root, "exe", "bundler")
+    end
+
+    # Opal: neither of upstream's other arms can answer - bundler is not an
+    # installed gem here, and there is no Ruby core repository to test - so
+    # the port keeps the default_specifications_dir shape, which points at a
+    # path that does not exist, for the callers that only ever stat it.
+    def gemspec_path
+      gemspec_file = File.join(Gem.default_specifications_dir, "bundler-#{VERSION}.gemspec")
+      gemspec_file
+    end
+
+    # Opal: __dir__ of a compiled bundle names no directory on disk; OPAL_HOME
+    # is the checkout the bundle's sources came from and holds exe/ and lib/.
+    def source_root
+      return OPAL_HOME if defined?(OPAL_HOME)
+      File.expand_path("../..", __dir__)
+    end
+
+    def bundler_ruby_lib
+      # Opal: the port's Bundler lib directory sits at <source_root>/lib -
+      # where $LOAD_PATH already finds it (exe/ruby adds it at boot).
+      File.join(source_root, "lib")
+    end
+
+    def set_path
+      validate_bundle_path
+      paths = (ENV["PATH"] || "").split(File::PATH_SEPARATOR)
+      paths.unshift "#{Bundler.bundle_path}/bin"
+      Bundler::SharedHelpers.set_env "PATH", paths.uniq.join(File::PATH_SEPARATOR)
+    end
+
+    def set_rubyopt
+      rubyopt = [ENV["RUBYOPT"]].compact
+      setup_require = "-rbundler/setup"
+      # Opal: upstream prefers the absolute setup path when it has no spaces
+      # in it; the port always names the feature, since the path belongs to a
+      # bundle's build (setup_path) and the child resolves it through its
+      # $LOAD_PATH anyway. exe/ruby ignores RUBYOPT, so it is M8.3b's exec
+      # that hands this require to children on their command line.
+      return if !rubyopt.empty? && rubyopt.first.include?(setup_require)
+      rubyopt.unshift setup_require
+      Bundler::SharedHelpers.set_env "RUBYOPT", rubyopt.join(" ")
+    end
+
+    def set_rubylib
+      rubylib = (ENV["RUBYLIB"] || "").split(File::PATH_SEPARATOR)
+      # Opal: the guard against duplicating RbConfig's rubylibdir goes - the
+      # port runs no RbConfig, and bundler_ruby_lib names the checkout's lib.
+      rubylib.unshift bundler_ruby_lib
+      Bundler::SharedHelpers.set_env "RUBYLIB", rubylib.uniq.join(File::PATH_SEPARATOR)
+    end
+
     def gemfile_names
       ["gems.rb", "Gemfile"]
     end
@@ -284,12 +369,16 @@ module Bundler
       search_up(*names) do |filename|
         return filename if File.file?(filename)
       end
+      # Opal: search_up's while ends at undefined, which has no to_s for
+      # `find_gemfile.to_s`; CRuby ends it with nil, so the port says nil.
+      nil
     end
 
     def find_directory(*names)
       search_up(*names) do |dirname|
         return dirname if File.directory?(dirname)
       end
+      nil # Opal: the same explicit nil as find_file's
     end
 
     def search_up(*names)

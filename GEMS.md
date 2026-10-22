@@ -37,7 +37,10 @@ Opalfile directive, the compiled trees and `gem install --compile` came with
 it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL,
 definition, resolver, settings, installer and `bundle` command slices -
 `exe/bundler` installs, locks, lists and checks a Gemfile - and its runtime
-setup half (M8.3) and remote sources (M8.4) are what is left of it.
+setup half (M8.3a): `bundler/setup` and `Bundler.setup` activate a bundle
+for `exe/ruby`, and `show`, `info`, `platform` and `clean` answer. The
+subprocess commands (`exec`, `config`, `update`, M8.3b) and the remote
+sources (M8.4) are what is left of it.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -184,10 +187,9 @@ every one reached through a failing gem path — are listed with their commits i
 What is still open, in the order that unblocks the rest:
 
 1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile,
-   Gemfile DSL, definition, resolver, settings, install-layer and command
-   slices are in (M8.1a-M8.2). The runtime setup half - `setup.rb`,
-   `exec`/`show`/`info`, `update` - and the remote sources are its scope
-   now.
+   Gemfile DSL, definition, resolver, settings, install-layer, command and
+   runtime-setup slices are in (M8.1a-M8.3a). What is left is the
+   subprocess half - `exec`, `config`, `update` - and the remote sources.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1479,13 +1481,43 @@ then `check`, `install --local` with the path gem's binstub, `list` in
 human/json/name-only forms, aliases and global flags, unknown command and
 option at exit 15, the remembered-flag rejection with its `bundle config`
 replacement, `help`, the unported `exec`/`update`/`config` boundary, and a
-bare `bundle lock` walking into the M8.4 remote seam as documented). What
-remains:
+bare `bundle lock` walking into the M8.4 remote seam as documented).
+The runtime setup half is in too (M8.3a): the SharedHelpers
+subprocess-environment block (`set_bundle_environment` and its helpers),
+`bundler/setup.rb`, and the root's `setup`, `require`, `original_env` and
+the `ORIGINAL_ENV` constant EnvironmentPreserver snapshots; `find_file`
+and `find_directory` answer an explicit nil where Opal's `while` would
+end at undefined. The activation cluster resolves as a deviation (spelled
+out in `rubygems_integration.rb`): upstream rewrites Kernel#gem/#require
+to police the bundle, while Opal's require is the runtime's own and
+Gem::Specification carries no activation state - isolation comes from the
+load path that `clean_load_path` trims and `Gem.add_to_load_path`
+prepends. That loop closes end to end, because exe/ruby adds
+`$OPAL_HOME/lib` to its boot `$LOAD_PATH` (bundler answers there the way
+it answers as a default gem in CRuby): `node exe/ruby -r bundler/setup
+script.rb` resolves the lockfile and the script requires the gems the
+Gemfile names. `show`, `info`, `platform` and `clean` joined the command
+tables with the positional argument show/info take as Thor arguments;
+`bundler/setup` lost its tty arm (corelib has no IO#tty?, so the
+reporting arm always runs) and its default-gem suggestion (no bundler gem
+is installed), and `bundle show --verbose`'s outdated check walks into
+the M8.4 remote seam like bare `bundle lock` does. The trap of the slice:
+the root's singleton `def require` shadows every bare `require` written
+inside `class << self` - upstream already spells its in-singleton require
+`Kernel.require "psych"`, and eval_gemspec's opal-parser require had to
+learn the same. Tested by `spec/opal/gems/bundler_runtime_spec.rb`
+(5 examples: the environment block, the ORIGINAL_ENV clone,
+add_default_gems_to, and replace_entrypoints touching no Kernel) and
+five more `bundler_cli.test.mjs` runs (`show`/`info`/`platform`/
+`clean --dry-run`, the exe/ruby activation and the missing-bundle report
+with its exit status). What remains:
 
-* **M8.3 - the runtime half**: `setup.rb`, `exec`/`show`/
-  `info`/`platform`, `update` (the resolver's install side finally earns
-  its keep, which also retires `gem update`'s omission), `clean`,
-  the `config` command.
+* **M8.3b - the subprocess half**: `exec` (the spawn seam with
+  `which`/`find_executable`/`git_present?` and EnvironmentPreserver's
+  unbundling finally exercised), the `config` command (hand-written
+  subdispatch over the ported settings), and `update` (the resolver's
+  install side finally earns its keep, which also retires `gem update`'s
+  omission).
 * **M8.4 - remote breadth**: `source/rubygems.rb` over
   `Gem::CompactIndexClient` and the fetch worker - the
   `Source::Rubygems::Remote` and `Bundler::Fetcher` that a plain

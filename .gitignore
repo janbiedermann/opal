@@ -9,6 +9,7 @@ build/
 /cdn
 /exe/ruby.exe
 /exe/gem.exe
+/exe/bundler.exe
 /node_modules
 /gh-pages
 /tmp

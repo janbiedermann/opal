@@ -106,10 +106,27 @@ module Bundler
         "dry-run" => {type: :boolean, default: false, desc: "Only print out changes, do not clean gems"},
         "force" => {type: :boolean, default: false, desc: "Forces cleaning up unused gems even if Bundler is configured to use globally installed gems"},
       },
+      "show" => {
+        "paths" => {type: :boolean, desc: "List the paths of all gems that are required by your Gemfile."},
+        "outdated" => {type: :boolean, desc: "Show verbose output including whether gems are outdated (removed)."},
+        "exact-match" => {type: :boolean, desc: "Only match gems whose names exactly match the given name"},
+      },
+      "info" => {
+        "path" => {type: :boolean, desc: "Print full path to gem"},
+        "version" => {type: :boolean, desc: "Print gem version"},
+        "exact-match" => {type: :boolean, desc: "Only match gems whose names exactly match the given name"},
+      },
+      "platform" => {
+        "ruby" => {type: :boolean, default: false, desc: "only display ruby related platform information"},
+      },
       "version" => {},
       "cli_help" => {},
       "help" => {},
     }.freeze
+
+    # Commands whose Thor method takes a positional gem name (binstubs/add
+    # and the rest join it when those commands do).
+    POSITIONAL_COMMANDS = %w[show info].freeze
 
     def self.start(argv = ARGV, _options = {})
       new(argv).run
@@ -158,6 +175,7 @@ module Bundler
       # @options is set before the parse so the ensure below still has a
       # hash to build the UI from when the parser raises InvalidOption.
       @options = {}
+      @positional = []
       @help_subject = nil
       tokens = argv.clone.map {|t| t.to_s }
 
@@ -275,6 +293,32 @@ module Bundler
       Clean.new(options.dup).run
     end
 
+    def show
+      if ARGV.include?("--outdated")
+        removed_message = "the `--outdated` flag to `bundle show` has been removed in favor of `bundle show --verbose`"
+        raise InvalidOption, removed_message
+      end
+
+      require_relative "cli/show"
+      Show.new(options, @positional.first).run
+    end
+
+    def info
+      # Opal: a missing `info GEM` argument makes Thor raise its
+      # RequiredArgumentMissingError (a Thor::Error, so status 15 like the
+      # port's InvalidOption is); the port answers that itself.
+      gem_name = @positional.first
+      raise InvalidOption, "bundle info requires a GEM argument." unless gem_name
+
+      require_relative "cli/info"
+      Info.new(options, gem_name).run
+    end
+
+    def platform
+      require_relative "cli/platform"
+      Platform.new(options).run
+    end
+
     def version
       # Opal: upstream stamps "(timestamp commit sha)" through the bundler
       # gem's BuildMetadata, stamped at gem-build time; this port runs no
@@ -361,7 +405,12 @@ module Bundler
 
         unless token.start_with?("-")
           # Opal: Thor swept stray positionals into its
-          # UnknownArgumentError message; the port rejects them in place.
+          # UnknownArgumentError message; the port rejects them in place,
+          # and keeps the ones the Thor method does take as arguments.
+          if POSITIONAL_COMMANDS.include?(current_command)
+            @positional << token
+            next
+          end
           raise InvalidOption, "bundle #{current_command} does not take positional argument `#{token}`."
         end
 

@@ -171,12 +171,48 @@ module Bundler
         {}
       end
     end
-    # Opal: upstream's gem-activation cluster - reverse_rubygems_kernel_mixin,
-    # replace_gem, replace_bin_path, replace_entrypoints, add_default_gems_to,
-    # undo_replacements, redefine_method, method_visibility and
-    # stub_rubygems - waits for M8.3's setup/exec, where the port decides how
-    # activation works when require is the runtime's own and Gem::Specification
-    # carries no activation state to steal.
+    # Opal: of upstream's gem-activation cluster - reverse_rubygems_kernel_mixin,
+    # replace_gem, replace_bin_path, undo_replacements, redefine_method,
+    # method_visibility and stub_rubygems - none are ported: they rewrite
+    # Kernel#gem/#require, and in this port require is the runtime's own
+    # (Opal's loader, not rubygems') and Gem::Specification carries no
+    # activation state to steal. Isolation comes instead from the load path:
+    # clean_load_path trims it, Gem.add_to_load_path puts the bundle's specs
+    # on it, and a gem outside the bundle simply is not there to find. (The
+    # exe/ruby loader's gem-activation fallback still answers requires of
+    # gems outside the Gemfile - strictness like replace_gem's would patch
+    # that seam, and no suite asks for it yet.) replace_entrypoints and
+    # add_default_gems_to survive in the shapes below.
+    def replace_entrypoints(specs)
+      # Opal: the bundled_gems probe (Ruby >= 3.3's default-gem protocol)
+      # goes - this port runs no bundled gems, and the builder would resolve
+      # that literal require at build time.
+      add_default_gems_to(specs)
+
+      Gem.clear_paths
+    end
+
+    def default_stubs
+      Gem::Specification.default_stubs("*.gemspec")
+    end
+
+    def add_default_gems_to(specs)
+      specs_by_name = specs.reduce({}) do |h, s|
+        h[s.name] = s
+        h
+      end
+
+      Bundler.rubygems.default_stubs.each do |stub|
+        default_spec = stub.to_spec
+        default_spec_name = default_spec.name
+        next if specs_by_name.key?(default_spec_name)
+
+        specs_by_name[default_spec_name] = default_spec
+      end
+
+      specs_by_name
+    end
+
     def plain_specs
       Gem::Specification._all
     end

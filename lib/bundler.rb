@@ -78,6 +78,11 @@ require_relative "bundler/process_lock"
 # of loaded and required modules.
 #
 module Bundler
+  environment_preserver = EnvironmentPreserver.from_env
+  ORIGINAL_ENV = environment_preserver.restore
+  environment_preserver.replace_with_backup
+  SUDO_MUTEX = Thread::Mutex.new
+
   class << self
     def ui
       (defined?(@ui) && @ui) || (self.ui = UI::Shell.new)
@@ -155,6 +160,35 @@ module Bundler
 
     def load
       @load ||= Runtime.new(root, definition)
+    end
+
+    # Makes the given groups (all of them when empty) available: the
+    # definition is resolved, its specs' load paths are put on $LOAD_PATH and
+    # Bundler::Runtime#setup does the rest. Subsequent calls with no groups
+    # are a no-op once every group has been set up.
+    def setup(*groups)
+      # Return if all groups are already loaded
+      return @setup if defined?(@setup) && @setup
+
+      configure_custom_gemfile
+      definition.validate_runtime!
+
+      SharedHelpers.print_major_deprecations!
+
+      if groups.empty?
+        # Load all groups, but only once
+        @setup = load.setup
+      else
+        load.setup(*groups)
+      end
+    end
+
+    def require(*groups)
+      setup(*groups).require(*groups)
+    end
+
+    def original_env
+      ORIGINAL_ENV.clone
     end
 
     # @param unlock [Hash, Boolean, nil] Gems that have been requested
@@ -434,7 +468,9 @@ module Bundler
           # Box; Opal has no Ruby::Box, so the port always takes the plain
           # TOPLEVEL_BINDING path. eval needs the parser provisioned, and the
           # require is dynamic so bundles that never eval stay without it.
-          require "opal-parser"
+          # Kernel.require spelled as it is upstream (637's psych): this is
+          # the singleton scope, where the bare name finds Bundler.require.
+          Kernel.require "opal-parser"
           eval(contents, TOPLEVEL_BINDING.dup, path.to_s)
         end
       end

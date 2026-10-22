@@ -315,8 +315,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 - `exe/ruby` builds `opal/full` and `stdlib/thread.rb` into its bundle, so
   `FileTest`, `Marshal`, `pack`/`unpack`, `ObjectSpace`, `Set` and
   `caller_locations` work with no `-I` and no require; `$LOAD_PATH` also gets
-  `$OPAL_HOME`, `$OPAL_HOME/opal` and `$OPAL_HOME/stdlib`, and `find_feature`
-  loads a `<path>.js` as it stands. Its `caller_locations` frames are
+  `$OPAL_HOME`, `$OPAL_HOME/opal`, `$OPAL_HOME/stdlib` and `$OPAL_HOME/lib`
+  (the last joins so `require 'bundler'`/`'bundler/setup'` resolve, bundler
+  answering as the default gem it is in CRuby; stdlib goes first so it wins
+  any shared name); and `find_feature` finds a `<path>.js` as it stands. Its `caller_locations` frames are
   JavaScript ones: the script runs through `eval`, so a script frame names the
   bundle, not the `.rb` file.
 - `--compile-to-exe node` runs `node --build-sea=config.json` on Node.js 26 or
@@ -355,6 +357,14 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   through it with `|| name`; and an unported command must skip option
   parsing so it reaches the "Could not find command" answer instead of the
   stray-positional one.
+- The Bundler root's singleton `def require(*groups)` shadows every bare
+  `require` written *inside* `class << self` - `eval_gemspec`'s
+  `require "opal-parser"` became infinite recursion through `Bundler.require`
+  once that method existed. Spell in-singleton requires `Kernel.require`
+  (upstream itself does this for psych, bundler.rb:637). Same family:
+  SharedHelpers' `find_file`/`find_directory` need an explicit trailing
+  `nil`, because Opal's `while` ends at undefined and CRuby's returns nil,
+  and callers do `find_gemfile.to_s`.
 - `gem compile` (D7) writes `<gem_dir>/compiled/<full_name>/<digest>/` and
   `BasicSpecification#full_require_paths` prepends that directory when the
   digest matches, so the `.js` wins the directory search (`gem which` shows

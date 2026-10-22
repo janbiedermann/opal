@@ -30,10 +30,13 @@ module RubyCommand
       # that scripts can require them at runtime; OPAL_HOME is set by
       # tasks/ruby.mjs at build time. <home>/opal holds opal/full.rb and the
       # corelib files the autoloads registered by the bundle point at, and
-      # <home> itself is what makes `require 'opal/full'` resolve.
+      # <home> itself is what makes `require 'opal/full'` resolve. <home>/lib
+      # joins last (stdlib winning any shared name): it is what makes
+      # `require 'bundler'` and `require 'bundler/setup'` resolve, the way
+      # bundler answers as a default gem in CRuby.
       home = defined?(OPAL_HOME) ? OPAL_HOME : nil
       if home
-        [File.join(home, 'stdlib'), File.join(home, 'opal'), home].each do |dir|
+        [File.join(home, 'stdlib'), File.join(home, 'opal'), home, File.join(home, 'lib')].each do |dir|
           $LOAD_PATH << dir if File.directory?(dir)
         end
       end

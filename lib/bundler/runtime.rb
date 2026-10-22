@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Opal: Runtime lands with M8.2 because `bundle list`, `Bundler.load` and the
-# install layer ask it for specs, cache and clean. The setup/require half is
-# not reachable yet: setup calls SharedHelpers.set_bundle_environment and the
-# rubygems activation patches (replace_entrypoints, mark_loaded's counterpart,
-# Gem.add_to_load_path), clean calls add_default_gems_to, and those arrive
-# with M8.3's `bundle exec` and setup; until then those two methods raise at
-# the missing call while the rest of the class runs.
+# Opal: Runtime landed with M8.2 because `bundle list`, `Bundler.load` and the
+# install layer ask it for specs, cache and clean; M8.3a made its setup half
+# reachable too: SharedHelpers.set_bundle_environment arrived, and
+# replace_entrypoints/add_default_gems_to answered in their simplified ported
+# shapes (load-path isolation, no Kernel patches - see the deviation note in
+# rubygems_integration.rb). What stays out of setup is the same as everywhere
+# else: no Gem activation exists here to perform.
 module Bundler
   class Runtime
     include SharedHelpers

@@ -237,4 +237,82 @@ describe("bundle command over a local repository", () => {
     assert.match(r.err, /Bundler::Source::Rubygems::Remote|unexpected error/);
     assert.ok(!existsSync(join(dir, "Gemfile.lock")), "no lockfile was written");
   });
+
+  test("show, info and platform read the installed bundle", () => {
+    const dir = app();
+    const install = bundle(dir, "install", "--local");
+    assert.equal(install.status, 0, install.err);
+
+    const show = bundle(dir, "show");
+    assert.equal(show.status, 0, show.err);
+    assert.match(show.out, /Gems included by the bundle:/);
+    assert.match(show.out, /\* hello \(1\.0\.0\)/);
+
+    const path = bundle(dir, "show", "pathgem");
+    assert.equal(path.status, 0, path.err);
+    assert.equal(path.out.trim(), join(dir, "pathgem"));
+
+    const info = bundle(dir, "info", "world");
+    assert.equal(info.status, 0, info.err);
+    assert.match(info.out, /world \(0\.5\)/);
+    assert.match(info.out, /Summary: the world gem/);
+
+    const depended = bundle(dir, "info", "hello");
+    assert.equal(depended.status, 0, depended.err);
+    assert.match(depended.out, /world \(0\.5\) depends on hello/);
+
+    const version = bundle(dir, "info", "world", "--version");
+    assert.equal(version.status, 0, version.err);
+    assert.equal(version.out.trim(), "0.5");
+
+    const plat = bundle(dir, "platform");
+    assert.equal(plat.status, 0, plat.err);
+    assert.match(plat.out, /Your platform is:/);
+
+    const ruby = bundle(dir, "platform", "--ruby");
+    assert.equal(ruby.status, 0, ruby.err);
+    assert.equal(ruby.out.trim(), "No ruby version specified");
+  });
+
+  test("show bundler names the checkout the executable came from", () => {
+    const dir = app();
+    const r = bundle(dir, "show", "bundler");
+    assert.equal(r.status, 0, r.err);
+    assert.equal(r.out.trim(), OPAL_ROOT);
+  });
+
+  test("clean --dry-run has nothing to remove after a fresh install", () => {
+    const dir = app();
+    const install = bundle(dir, "install", "--local");
+    assert.equal(install.status, 0, install.err);
+    const r = bundle(dir, "clean", "--dry-run");
+    assert.equal(r.status, 0, r.err);
+    assert.doesNotMatch(r.out, /Removing/);
+  });
+
+  test("bundler/setup activates the bundle for exe/ruby", () => {
+    // the exit test of the M8.3a setup half: exe/ruby finds
+    // -r bundler/setup through the OPAL_HOME/lib it puts on $LOAD_PATH,
+    // Bundler.setup resolves the lockfile and puts the bundle's load paths
+    // on $LOAD_PATH, and the script's requires answer from the gems.
+    const dir = app();
+    const install = bundle(dir, "install", "--local");
+    assert.equal(install.status, 0, install.err);
+    const r = run(RUBY, dir, {}, ["-r", "bundler/setup", "-e",
+      'require "hello"; require "world"; require "pathgem"; puts "activated"']);
+    assert.equal(r.status, 0, r.err);
+    assert.match(r.out, /activated/);
+  });
+
+  test("bundler/setup reports a missing bundle and exits with its status", () => {
+    const dir = app();
+    const empty = join(DIR, "empty-repo");
+    mkdirSync(empty, { recursive: true });
+    const r = run(RUBY, dir, { GEM_HOME: empty, GEM_PATH: empty },
+      ["-r", "bundler/setup", "-e", 'puts "unreachable"']);
+    assert.notEqual(r.status, 0);
+    assert.match(r.err, /Could not find|install missing gems/);
+    assert.match(r.err, /exe\/bundler install|bundle install/);
+    assert.doesNotMatch(r.out, /unreachable/);
+  });
 });
