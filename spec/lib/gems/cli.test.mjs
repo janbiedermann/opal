@@ -442,4 +442,31 @@ describe("the gem command", () => {
       await new Promise((resolve) => server.close(resolve));
     }
   });
+
+  test("the opal command reads installed gems through --gem, compiled tree first", () => {
+    const greet = builtGem("greet", "1.0.0");
+    const installed = gemIn(greet.dir, {}, "install", "./greet-1.0.0.gem", "--no-document");
+    assert.equal(installed.status, 0, `${installed.out}${installed.err}`);
+
+    const OPAL = join(OPAL_ROOT, "exe", "opal");
+    let r = run(OPAL, DIR, {}, ["--gem", "greet", "-e", "require 'greet'; puts Greet.hello"]);
+    assert.equal(r.out.trim(), "greet", `${r.out}${r.err}`);
+    assert.equal(r.status, 0, r.err);
+
+    // With the source removed, only the compiled tree can answer - the
+    // toolchain trusts that tree (its M7 contract: gem_paths.mjs says why),
+    // so this also proves --gem put it in front and the require did not
+    // quietly find another copy.
+    assert.equal(gem("compile", "greet").status, 0);
+    rmSync(join(DIR, "repo", "gems", "greet-1.0.0", "lib", "greet.rb"));
+    r = run(OPAL, DIR, {}, ["--gem", "greet", "-e", "require 'greet'; puts Greet.hello"]);
+    assert.equal(r.out.trim(), "greet", `${r.out}${r.err}`);
+    assert.equal(r.status, 0, r.err);
+
+    // A name no repository owns warns, and the build runs on.
+    const missing = run(OPAL, DIR, {}, ["--gem", "nosuchgem", "-e", "puts 1"]);
+    assert.match(missing.err, /gem nosuchgem is not installed in the gem repositories/, missing.err);
+    assert.equal(missing.out.trim(), "1");
+    assert.equal(missing.status, 0, missing.err);
+  });
 });

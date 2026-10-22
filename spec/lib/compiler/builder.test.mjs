@@ -168,12 +168,15 @@ describe("processors", () => {
   test("JsProcessor maps to one fragment per line", () => {
     const processor = new JsProcessor("line1\n line2\n  line3", "file.js");
     const map = processor.sourceMap;
-    assert.deepEqual(map.fragments.map((f) => f.code), ["line1\n", " line2\n", "  line3\n", 'Opal.loaded("file.js");']);
+    assert.deepEqual(map.fragments.map((f) => f.code), ["line1\n", " line2\n", "  line3\n", '(function () {if (Opal.modules["file"] == null) {Opal.loaded("file.js");}})();']);
   });
 
   test("JsProcessor adds loading code at the end of the source", () => {
     const processor = new JsProcessor("line1\n line2\n  line3", "file.js");
-    assert.equal(processor.source, 'line1\n line2\n  line3\nOpal.loaded("file.js");');
+    // the mark is conditional: a JS file that registered a module of that
+    // name (a gem's compiled file, D7) is still to be required by whoever
+    // asked for it
+    assert.equal(processor.source, 'line1\n line2\n  line3\n(function () {if (Opal.modules["file"] == null) {Opal.loaded("file.js");}})();');
   });
 
   test("RubyProcessor compiles ruby to js", () => {
@@ -195,7 +198,7 @@ describe("processors", () => {
       writeFileSync(join(dir, "dep.mjs"), "export const answer = 42;\nexport function double(x) { return x * 2; }\n");
       writeFileSync(join(dir, "main.mjs"), 'import { answer, double as twice } from "./dep.mjs";\nexport const result = twice(answer);\nexport { answer };\n');
       const processor = new JsProcessor(readFileSync(join(dir, "main.mjs"), "utf8"), "lib/main.mjs", join(dir, "main.mjs"));
-      const Opal = { loaded() {} };
+      const Opal = { loaded() {}, modules: {} };
       new Function("Opal", processor.source)(Opal);
       assert.deepEqual({ ...Opal.esm["lib/main"] }, { result: 84, answer: 42 });
     } finally {
@@ -219,7 +222,7 @@ describe("ES modules in a build", () => {
       const b = builder.processed.find((p) => p.filename.endsWith("b.mjs")).source;
       assert.equal(a.split("shared.mjs\"] = function").length - 1, 1);
       assert.equal(b.split("shared.mjs\"] = function").length - 1, 0);
-      const Opal = { loaded() {} };
+      const Opal = { loaded() {}, modules: {} };
       new Function("Opal", a + b)(Opal);
       assert.deepEqual([Opal.esm.a.a, Opal.esm.b.b, Opal.esm.b.box.count], [1, 2, 2]);
     } finally {
@@ -249,7 +252,7 @@ describe("ES modules in a pruned build (esmPrune)", () => {
       assert.match(code, /__modules\["[^"]*shared\.mjs#[0-9a-f]+"\]/);
       const a = builder.processed.find((p) => p.filename.endsWith("a.mjs")).source;
       const b = builder.processed.find((p) => p.filename.endsWith("b.mjs")).source;
-      const Opal = { loaded() {} };
+      const Opal = { loaded() {}, modules: {} };
       new Function("Opal", a + b)(Opal);
       assert.deepEqual([Opal.esm.a.a, Opal.esm.b.b], [5, 2]);
       // without esmPrune all exports stay
