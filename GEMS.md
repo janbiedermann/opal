@@ -1284,7 +1284,28 @@ to drop, the second already works.
 **Status: not started**, nothing of `lib/bundler` is ported. It inherits both
 M5's resolver and transport and M6's option-parsing classes; its `Gemfile` and
 lockfile parsing is the part that can be tested offline first, against a
-resolver sitting on a local source.
+resolver sitting on a local source. The slices, each committable green:
+
+* **M8.1 - the Gemfile half, offline**: `errors.rb`, `shared_helpers.rb`,
+  `current_ruby.rb`, `dependency.rb`, `dsl.rb` + `ruby_dsl.rb`,
+  `source_list.rb`/`source_map.rb`/`source.rb` (the local ones),
+  `index.rb`, `spec_set.rb`, `lazy_specification.rb`, `definition.rb` over
+  an installed-gems source, `lockfile_parser.rb`. Test: parse a fixture
+  Gemfile + Gemfile.lock and resolve them against a repository built by
+  `exe/gem` - all hermetic, `GEM_SOURCES` empty.
+* **M8.2 - resolve and install**: `resolver/*` glue over the ported PubGrub
+  (upstream's vendored copy goes, the way M3 took `Gem::PubGrub`),
+  `lockfile_generator.rb`, `installer.rb` delegating to `Gem::Installer`,
+  the `tasks/bundler{,.exe}.mjs` bundling with `lib/opal/exe/bundler.rb`,
+  and the `install`/`lock`/`list`/`check` commands over the fixture index.
+* **M8.3 - the runtime half**: `runtime.rb`/`setup.rb`, `exec`/`show`/
+  `info`/`platform`, `update` (the resolver's install side finally earns
+  its keep, which also retires `gem update`'s omission), `clean`,
+  `config`/settings.
+* **M8.4 - remote breadth**: `source/rubygems.rb` over
+  `Gem::CompactIndexClient` and the fetch worker, `inject`/`add`/`remove`,
+  `source`/`binstubs`/`init`; only here does Bundler reach the network in
+  tests, and only against the fixture server.
 
 ### Suggested ordering rationale
 
