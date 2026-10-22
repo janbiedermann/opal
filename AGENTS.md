@@ -55,8 +55,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 ## Linting
 - Run `node tasks/lint.mjs` (or `yarn lint`) to check the JavaScript style. It
   checks that `lib/opal/parser/parser.mjs` matches its parts, runs ESLint on
-  the parser, the compiler and the tasks, then builds the corelib and stdlib and
-  lints the result.
+  the parser, the compiler, `lib/opal/gems`, the JS specs under `spec/lib`
+  (the compiler step covers `spec/lib/gems` - bundler specs once failed its
+  semicolon rule after the commit) and the tasks, then builds the corelib
+  and stdlib and lints the result.
 - After editing `lib/opal/parser/parts/*.mjs`, regenerate `parser.mjs` with
   `node tasks/parser/assemble.mjs`.
 - The Ruby code style is described by `.rubocop.yml`; checking it needs a Ruby
@@ -338,6 +340,21 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `lib/rubygems.rb`, which is also why `Gem::CommandManager` no longer requires
   a command by name: a require path with an interpolation in it still reads as
   static to the builder, which then asks for `rubygems/commands/_command`.
+- `exe/bundler` is `tasks/bundler.mjs` (bundle in `tasks/bundler/bundle.mjs`,
+  single-file executable in `tasks/bundler_exe.mjs`): the gem bundle's shape
+  plus `lib/bundler.rb` at boot and `lib/opal/exe/bundler.rb` as the program.
+  Thor is not vendored, so `Bundler::CLI` restates every `method_option` in
+  per-command tables and a hand-rolled scanner builds the same options hash
+  (Opal's Symbol == String makes the String/Symbol key mix the command
+  classes read one lookup). Traps found building it: CLI's initialize rebuilds
+  the UI in an `ensure`, so `@options` must be set before its parser raises
+  InvalidOption or the ensure dies on nil; upstream's `options =
+  self.options.dup` in `CLI#install` would hoist a local over the `options`
+  reader across the whole method, so the copy keeps its own name; the
+  `all_aliases` table maps alias->command, so a canonical name must pass
+  through it with `|| name`; and an unported command must skip option
+  parsing so it reaches the "Could not find command" answer instead of the
+  stray-positional one.
 - `gem compile` (D7) writes `<gem_dir>/compiled/<full_name>/<digest>/` and
   `BasicSpecification#full_require_paths` prepends that directory when the
   digest matches, so the `.js` wins the directory search (`gem which` shows
