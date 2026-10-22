@@ -15,8 +15,18 @@ require_relative "bundler/rubygems_ext"
 require_relative "bundler/constants"
 require_relative "bundler/current_ruby"
 require_relative "bundler/match_platform"
+require_relative "bundler/match_metadata"
+require_relative "bundler/match_remote_metadata"
+require_relative "bundler/override"
 require_relative "bundler/shared_helpers"
 require_relative "bundler/dependency"
+require_relative "bundler/index"
+require_relative "bundler/lazy_specification"
+require_relative "bundler/remote_specification"
+require_relative "bundler/stub_specification"
+require_relative "bundler/endpoint_specification"
+require_relative "bundler/materialization"
+require_relative "bundler/spec_set"
 
 # Bundler provides a consistent environment for Ruby projects by
 # tracking and installing the exact gems and versions that are needed.

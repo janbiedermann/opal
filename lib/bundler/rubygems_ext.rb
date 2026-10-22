@@ -6,8 +6,8 @@ require "rubygems/stub_specification"
 # Opal: a partial port of upstream's rubygems_ext.rb. Upstream patches a host
 # RubyGems it does not control; the port sits on the ported one, so only the
 # additions Bundler's own files expect go on top. The Platform, Specification,
-# BasicSpecification, NameTuple and compact-index sections arrive with their
-# consumers (M8.1's sources and lockfile, M8.4's remote index), and the
+# BasicSpecification and compact-index sections arrive with their consumers
+# (M8.1's sources and lockfile, M8.4's remote index), and the
 # FilterIgnoredSpecs backport goes: the port's Gem is 4.1, beyond the version
 # that needed it.
 module Gem
@@ -54,6 +54,20 @@ module Gem
         out += " (#{reqs.join(", ")})"
       end
       out
+    end
+  end
+
+  class NameTuple
+    # Opal: upstream's two initialize backport guards read Method#parameters,
+    # which corelib only fills for keyword-taking methods, and the port's Gem
+    # is 4.1 - both signatures are already the modern ones - so the backports
+    # go and only lock_name, the piece Bundler adds, comes.
+    def lock_name
+      if platform == Gem::Platform::RUBY
+        "#{name} (#{version})"
+      else
+        "#{name} (#{version}-#{platform})"
+      end
     end
   end
 end

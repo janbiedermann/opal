@@ -1292,20 +1292,35 @@ section of `rubygems_ext.rb`, tested by `spec/opal/gems/bundler_spec.rb`
 `Gem::VERSION`; `rubygems_ext.rb` comes trimmed to the `Gem::Dependency`
 patches (`to_lock`, source/groups accessors, `eql?` bound to `==`,
 ForcePlatform) plus the `StubSpecification` permission wrapper - the Platform,
-Specification, BasicSpecification and NameTuple sections arrive with their
-consumers, and the FilterIgnoredSpecs backport goes, the port's Gem being
-past the version that needed it; `pwd`/`chdir` run without the ext_lock the
-extension builds need (the port builds none); `md5_available?` answers true
-outright (no openssl stdlib to probe, and the corelib's digest ships the MD5
-that upstream's LoadError branch then answers with); the `local_platform`
-settings guard returns with M8.2; `constants.rb` lacks NULL; `String#<<`
-concatenates (corelib has no mutable String append); and shared_helpers'
+Specification and BasicSpecification sections arrive with their consumers, and
+the FilterIgnoredSpecs backport goes, the port's Gem being past the version
+that needed it; `pwd`/`chdir` run without the ext_lock the extension builds
+need (the port builds none); `md5_available?` answers true outright (no
+openssl stdlib to probe, and the corelib's digest ships the MD5 that
+upstream's LoadError branch then answers with); the `local_platform` settings
+guard returns with M8.2; `constants.rb` lacks NULL; `String#<<` concatenates
+(corelib has no mutable String append); and shared_helpers'
 subprocess-environment block (`set_env`, `set_path`, `set_rubyopt`, the
-bin/gemspec path finders) waits for M8.3's exec. The rest of the slices:
+bin/gemspec path finders) waits for M8.3's exec.
 
-* **M8.1b - the Gemfile half, offline**: `dsl.rb` + `ruby_dsl.rb`,
+M8.1b's matching layer is in too: `index.rb`, the four specification shapes
+(`lazy_specification.rb`, `remote_specification.rb`, `stub_specification.rb`,
+`endpoint_specification.rb`), `match_metadata.rb`/`match_remote_metadata.rb`,
+`spec_set.rb` with `materialization.rb`, and `override.rb`, tested by
+`spec/opal/gems/bundler_matching_spec.rb` (21 examples). Its deviations:
+`SpecSet` includes stdlib's TSort under its own name, as `request_set.rb`
+does; `rubygems_ext` grew `Gem::NameTuple#lock_name` but dropped the two
+NameTuple initialize backports upstream guards with `Method#parameters` -
+corelib answers that only for keyword methods, and the port's Gem needs no
+backport anyway; `LazySpecification#to_lock` concatenates like the other lock
+writers; and `Index#spec_names` keeps upstream's quirk of appending each
+source's names as one array, harmless for the leaf indexes `source_map`
+actually consumes. The rest of the slices:
+
+* **M8.1b - the Gemfile half, offline** (the matching layer landed, above):
+  `dsl.rb` + `ruby_dsl.rb`,
   `source_list.rb`/`source_map.rb`/`source.rb` (the local ones),
-  `index.rb`, `spec_set.rb`, `lazy_specification.rb`, `definition.rb` over
+  `definition.rb` over
   an installed-gems source, `lockfile_parser.rb`. Test: parse a fixture
   Gemfile + Gemfile.lock and resolve them against a repository built by
   `exe/gem` - all hermetic, `GEM_SOURCES` empty.
