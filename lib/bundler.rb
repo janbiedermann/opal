@@ -349,6 +349,10 @@ module Bundler
       Pathname.new(ENV.fetch(env_var, &fallback))
     end
 
+    def user_cache
+      user_bundle_path("cache")
+    end
+
     def configure_gem_home_and_path(path = bundle_path)
       configure_gem_path
       configure_gem_home(path)

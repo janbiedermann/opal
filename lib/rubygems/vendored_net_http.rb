@@ -67,6 +67,12 @@ module Gem
           @headers[name.to_s.downcase]
         end
 
+        # Net::HTTP's spelling, which Bundler's GemRemoteFetcher calls to drop
+        # the RubyGems User-Agent when its own is set.
+        def delete(name)
+          @headers.delete(name.to_s.downcase)
+        end
+
         # Upstream fills this from the URI's userinfo; the base64 is done here
         # because Opal has neither Base64 nor String#pack.
         def basic_auth(user, password)

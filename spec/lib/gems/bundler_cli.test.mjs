@@ -10,7 +10,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
 const GEM = join(OPAL_ROOT, "exe", "gem");
@@ -33,6 +35,21 @@ function env(extra = {}) {
 function run(command, cwd, extra, args) {
   const started = spawnSync(process.execPath, [command, ...args], { cwd, env: env(extra), encoding: "utf8" });
   return { out: started.stdout, err: started.stderr, status: started.status };
+}
+
+// The same run without blocking the event loop: a test that answers the
+// command's own requests from this process needs it, or the child waits for
+// an answer that cannot arrive (cli.test.mjs says the same for exe/gem).
+function runAsync(command, cwd, extra, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, env: env(extra) });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (chunk) => { out += chunk; });
+    child.stderr.on("data", (chunk) => { err += chunk; });
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ out, err, status }));
+  });
 }
 
 function bundle(cwd, ...args) {
@@ -249,14 +266,19 @@ describe("bundle command over a local repository", () => {
     assert.match(removed.err, /--no-keep-file-descriptors.*has been removed/);
   });
 
-  test("a bare lock walks into the unported remote sources, documented by M8.4", () => {
-    // setup_domain! asks the rubygems source to go remote, and the
-    // Remote/Fetcher pair is M8.4's; the run ends in the unexpected-error
-    // report rather than a lockfile.
-    const dir = app();
-    const r = bundle(dir, "lock");
-    assert.equal(r.status, 1);
-    assert.match(r.err, /Bundler::Source::Rubygems::Remote|unexpected error/);
+  test("a source that refuses connection is reported as a network failure", () => {
+    // the remote story's offline answer: the transport's failed fetch becomes
+    // a NetworkDownError, an HTTPError subclass, so the run ends with its
+    // friendly report (status 17) rather than a lockfile or a crash.
+    const dir = join(DIR, `unreach${appCount++}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "Gemfile"), "source 'http://127.0.0.1:1/ci/'\ngem 'tiny'\n");
+    const r = run(BUNDLE, dir, { BUNDLE_RETRY: "0" }, ["lock"]);
+    assert.equal(r.status, 17);
+    // which of the three fetch probes dies first is the transport's choice,
+    // so either the compact-index/dependency HTTPError or the full-index one
+    // answers; both spellings pin the same failed loop.
+    assert.match(r.err, /Could not fetch specs from|Could not reach host/);
     assert.ok(!existsSync(join(dir, "Gemfile.lock")), "no lockfile was written");
   });
 
@@ -413,14 +435,105 @@ describe("bundle command over a local repository", () => {
     assert.match(conflict.err, /Cannot specify --all along with specific options/);
   });
 
-  test("a bare bundle update walks into the remote sources of M8.4", () => {
-    // like bare `bundle lock`: resolution asks the rubygems source to go
-    // remote, and the Remote/Fetcher pair is M8.4's.
-    const dir = app();
-    const install = bundle(dir, "install", "--local");
-    assert.equal(install.status, 0, install.err);
-    const r = bundle(dir, "update");
-    assert.equal(r.status, 1);
-    assert.match(r.err, /Source::Rubygems::Remote|unexpected error/);
+  test("lock, install and setup ride the fetcher over a compact index", async () => {
+    // M8.4's exit loop: bare (non-local) resolution reaches Bundler::Fetcher
+    // and Gem::CompactIndexClient over the port's own transport, answered by
+    // the fixture server of the M5 specs; install then downloads the .gem and
+    // bundler/setup activates what the loop put in the repository.
+    const gemBytes = readFileSync(builtGem("tiny", "0.1.0"));
+    const info = "0.1.0 \n";
+    const routes = new Map([
+      ["/ci/names", [Buffer.from("tiny\n"), "text/plain"]],
+      ["/ci/versions", [Buffer.from(`tiny 0.1.0 ${createHash("md5").update(info).digest("hex")}\n`), "text/plain"]],
+      ["/ci/info/tiny", [Buffer.from(info), "text/plain"]],
+      ["/ci/gems/tiny-0.1.0.gem", [gemBytes, "application/octet-stream"]],
+    ]);
+    const server = createServer((req, res) => {
+      const route = routes.get(req.url);
+      if (!route) {
+        res.writeHead(404, { "content-type": "text/plain" });
+        res.end("no such route");
+        return;
+      }
+      const [body, contentType] = route;
+      res.writeHead(200, { "content-type": contentType });
+      res.end(body);
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address();
+    const dir = join(DIR, `remote${appCount++}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "Gemfile"), `source 'http://127.0.0.1:${port}/ci/'\ngem 'tiny'\n`);
+    const remoteEnv = { no_proxy: "127.0.0.1,localhost" };
+
+    try {
+      const lock = await runAsync(BUNDLE, dir, remoteEnv, ["lock"]);
+      assert.equal(lock.status, 0, `${lock.out}${lock.err}`);
+      assert.match(lock.out, /Writing lockfile/);
+      const lockfile = readFileSync(join(dir, "Gemfile.lock"), "utf8");
+      assert.match(lockfile, new RegExp(`remote: http://127\\.0\\.0\\.1:${port}/ci/`));
+      assert.match(lockfile, /tiny \(0\.1\.0\)/);
+
+      const install = await runAsync(BUNDLE, dir, remoteEnv, ["install"]);
+      assert.equal(install.status, 0, `${install.out}${install.err}`);
+      assert.match(install.out, /Installing tiny 0\.1\.0/);
+      assert.match(install.out, /Bundle complete!/);
+      assert.ok(existsSync(join(DIR, "repo", "gems", "tiny-0.1.0", "lib", "tiny.rb")));
+
+      const setup = run(RUBY, dir, remoteEnv,
+        ["-r", "bundler/setup", "-e", 'require "tiny"; puts "tiny activated"']);
+      assert.equal(setup.status, 0, setup.err);
+      assert.match(setup.out, /tiny activated/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  test("the mirror setting reroutes a remote source and names the origin", async () => {
+    // Remote#initialize applies settings.mirror_for, and the Gemfile's own
+    // URI travels to the mirror in X-Gemfile-Source. The mirror routes answer
+    // only when they see that header, and the Gemfile's path answers nothing,
+    // so a successful install pins both halves of the story.
+    const gemBytes = readFileSync(builtGem("tiny", "0.1.0"));
+    const info = "0.1.0 \n";
+    const files = new Map([
+      ["/names", Buffer.from("tiny\n")],
+      ["/versions", Buffer.from(`tiny 0.1.0 ${createHash("md5").update(info).digest("hex")}\n`)],
+      ["/info/tiny", Buffer.from(info)],
+      ["/gems/tiny-0.1.0.gem", gemBytes],
+    ]);
+    let originSeen = null;
+    const server = createServer((req, res) => {
+      const path = req.url.replace(/^\/mirror/, "");
+      const body = files.get(path);
+      const origin = req.headers["x-gemfile-source"];
+      if (!body || !origin) {
+        res.writeHead(404, { "content-type": "text/plain" });
+        res.end("no such route");
+        return;
+      }
+      originSeen = origin;
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end(body);
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address();
+    const dir = join(DIR, `mirror${appCount++}`);
+    mkdirSync(dir, { recursive: true });
+    const ciUrl = `http://127.0.0.1:${port}/ci/`;
+    writeFileSync(join(dir, "Gemfile"), `source '${ciUrl}'\ngem 'tiny'\n`);
+    const remoteEnv = { no_proxy: "127.0.0.1,localhost" };
+
+    try {
+      const mirror = bundle(dir, "config", "set", "--local", `mirror.${ciUrl}`, `http://127.0.0.1:${port}/mirror/`);
+      assert.equal(mirror.status, 0, mirror.err);
+
+      const install = await runAsync(BUNDLE, dir, remoteEnv, ["install"]);
+      assert.equal(install.status, 0, `${install.out}${install.err}`);
+      assert.match(install.out, /Bundle complete!/);
+      assert.equal(originSeen, ciUrl);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });

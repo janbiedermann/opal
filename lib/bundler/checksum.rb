@@ -23,8 +23,11 @@ module Bundler
 
       def from_gem(io, pathname, algo = DEFAULT_ALGORITHM)
         digest = Bundler::SharedHelpers.digest(algo.upcase).new
-        buf = String.new(capacity: DEFAULT_BLOCK_SIZE)
-        digest << io.readpartial(DEFAULT_BLOCK_SIZE, buf) until io.eof?
+        # Opal: corelib's String.new takes no capacity: keyword (the compiler
+        # hands it as a Hash and the coercion dies), so the preallocated
+        # buffer - readpartial accepts but does not need - goes; the loop
+        # reads block by block either way.
+        digest << io.readpartial(DEFAULT_BLOCK_SIZE) until io.eof?
         Checksum.new(algo, digest.hexdigest!, Source.new(:gem, pathname))
       end
 

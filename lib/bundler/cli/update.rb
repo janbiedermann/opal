@@ -2,10 +2,10 @@
 
 # Opal: the self-manager line (restart under a --bundler-requested version)
 # goes - there is no installed bundler to switch to, so `--bundler` parses
-# and stays unused, as the other removed-flag arms do. So does
-# `Bundler::Fetcher.disable_endpoint = options["full-index"]`: Fetcher joins
-# the port with M8.4's remote sources, which will restore this line and the
-# matching ones in install.rb and lock.rb.
+# and stays unused, as the other removed-flag arms do. The
+# `Bundler::Fetcher.disable_endpoint = options["full-index"]` line came back
+# with M8.4's fetcher, together with the matching ones in install.rb and
+# lock.rb.
 module Bundler
   class CLI::Update
     attr_reader :options, :gems
@@ -69,6 +69,9 @@ module Bundler
       Bundler.definition(unlock)
 
       Bundler::CLI::Common.configure_gem_version_promoter(Bundler.definition, options)
+
+      require_relative "../fetcher" # Opal: upstream autoloads Fetcher from the bundler root
+      Bundler::Fetcher.disable_endpoint = options["full-index"]
 
       opts = options.dup
       opts["update"] = true

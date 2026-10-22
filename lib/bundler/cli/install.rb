@@ -33,9 +33,8 @@ module Bundler
 
       normalize_settings
 
-      # Opal: the Fetcher this configures (and the `--full-index` flag that
-      # feeds it) waits for M8.4's remote sources; the flag is parsed and
-      # ignored here.
+      require_relative "../fetcher" # Opal: upstream autoloads Fetcher from the bundler root
+      Bundler::Fetcher.disable_endpoint = options["full-index"]
 
       Plugin.gemfile_install(Bundler.default_gemfile, Bundler.default_lockfile) if Bundler.settings[:plugins]
 

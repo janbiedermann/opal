@@ -40,7 +40,11 @@ definition, resolver, settings, installer and `bundle` command slices -
 setup half (M8.3a): `bundler/setup` and `Bundler.setup` activate a bundle
 for `exe/ruby`, and `show`, `info`, `platform` and `clean` answer. The
 `config`, `update` and `exec` commands (M8.3b-c) complete the command
-set; the remote sources (M8.4) are what is left of it.
+set; the remote sources landed with M8.4a - a bare (non-local) `bundle
+lock`/`install` resolves and downloads through `Bundler::Fetcher` over the
+port's own transport, and mirror settings reroute a source. The command
+breadth around them (`add`/`inject`/`remove`, `binstubs`, `init`, the
+rest of M8.4) is what is left.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -188,8 +192,9 @@ What is still open, in the order that unblocks the rest:
 
 1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile,
    Gemfile DSL, definition, resolver, settings, install-layer, command,
-   runtime-setup, config/update and exec slices are in (M8.1a-M8.3c).
-   What is left is the remote sources (M8.4).
+   runtime-setup, config/update and exec slices are in (M8.1a-M8.3c), and
+   so are the remote sources (M8.4a). What is left is the command breadth
+   around them: `add`/`inject`/`remove`, `binstubs`, `init`.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1482,7 +1487,8 @@ then `check`, `install --local` with the path gem's binstub, `list` in
 human/json/name-only forms, aliases and global flags, unknown command and
 option at exit 15, the remembered-flag rejection with its `bundle config`
 replacement, `help`, the unported `exec` boundary, and a
-bare `bundle lock` walking into the M8.4 remote seam as documented).
+bare `bundle lock` walking into the then-unported remote seam - a pin
+M8.4a replaced when that seam began to answer).
 The runtime setup half is in too (M8.3a): the SharedHelpers
 subprocess-environment block (`set_bundle_environment` and its helpers),
 `bundler/setup.rb`, and the root's `setup`, `require`, `original_env` and
@@ -1549,12 +1555,37 @@ plain platform loader, which then appends ".rb"; where the port loads an
 exact file it reads it and evaluates it against `TOPLEVEL_BINDING` (the
 exec class and `Gem.activate_and_load_bin_path` both do, and the M4
 binstub cases still pin the wrapper route, which runs under exe/ruby's
-own loader). The M8 commands are all in; what remains:
+own loader). The remote sources came next (M8.4a).
+`Source::Rubygems::Remote` is upstream's verbatim - mirror lookup,
+fallback credentials, the digest cache slug - and the `Fetcher` stack
+rides the port's own transport, the one every remote gem read has used
+since M5: the response shim `rubygems/vendored_net_http.rb` supplies the
+`Gem::Net::HTTP*` classes Downloader's response state machine branches
+on, and `ConnectionPools` shrinks to the request `Gem::RemoteFetcher`
+builds, because the connection itself lives on the http.mjs Worker. The
+substitution moves the deviations: the downloader's error lists drop the
+Socket/Errno/net-http names that have no class here (a never-completed
+fetch always answers a `FetchError`, whose message carries the cause's
+code, so `Downloader#request` matches those codes and answers
+`NetworkDownError` where upstream read the Errno classes); `FAIL_ERRORS`
+keeps only status classes the shim defines; the 416 arm takes the
+shim's real net/http name; and the openssl probe that once guarded
+https goes, Node verifying against its own trust store. `Retry` and
+`CIDetector` are verbatim ports, `user_agent` concatenates rather than
+`String#<<`s, and the `Fetcher.disable_endpoint` lines return to
+install/lock/update, so `--full-index` answers again. The slice's traps:
+`Checksum.from_gem`'s `String.new(capacity:)` - the compiler hands the
+keyword as a positional Hash and corelib's `String.new` coerces it -
+and `Bundler.user_cache`, the compact index cache directory the root
+had not needed until now. Tested by `spec/opal/gems/bundler_remote_spec.rb`
+(6 examples: Remote's URIs, slug and cooldown, Retry's loop, the
+`disable_endpoint` switch) and three more `bundler_cli.test.mjs` runs:
+bare `lock` + `install` + setup-activation over the fixture compact
+index, the mirror reroute answering only when it sees the origin's
+`X-Gemfile-Source`, and a source that refuses connection leaving the
+HTTPError status 17. What remains:
 
-* **M8.4 - remote breadth**: `source/rubygems.rb` over
-  `Gem::CompactIndexClient` and the fetch worker - the
-  `Source::Rubygems::Remote` and `Bundler::Fetcher` that a plain
-  (non-local) `bundle install` reaches at `setup_domain!` -,
+* **M8.4b - the command breadth around the remote sources**:
   `inject`/`add`/`remove`, `source`/`binstubs`/init; only here does
   Bundler reach the network in tests, and only against the fixture
   server.

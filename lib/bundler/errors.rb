@@ -39,7 +39,6 @@ module Bundler
   class HTTPError < BundlerError
     status_code(17)
     def filter_uri(uri)
-      # Opal: URICredentialsFilter arrives with M8.4's remote sources.
       URICredentialsFilter.credential_filtered_uri(uri)
     end
   end

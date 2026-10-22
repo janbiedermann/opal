@@ -8,9 +8,13 @@ require "thread"
 module Bundler
   class Source
     class Rubygems < Source
-      # Opal: Source::Rubygems::Remote (bundler's per-URI fetch settings) and
-      # the fetcher behind it arrive with M8.4's remote sources; only
-      # remote_fetchers and its callers touch them.
+      # Opal: upstream autoloads Remote (used below) and reaches
+      # Bundler::Fetcher through the bundler root's autoload; this port
+      # resolves requires at compile time, so Remote is required here and
+      # Fetcher at its first use - its file reads Bundler.settings when it
+      # loads, and this file loads while the bundler root is still being
+      # defined.
+      require_relative "rubygems/remote"
 
       # Ask for X gems per API request
       API_REQUEST_SIZE = 100
@@ -295,6 +299,7 @@ module Bundler
       end
 
       def remote_fetchers
+        require_relative "../fetcher" # Opal: the autoload shape, see the file header
         @remote_fetchers ||= remotes.to_h do |uri|
           remote = Source::Rubygems::Remote.new(uri, cooldown: cooldown_for(uri))
           [remote, Bundler::Fetcher.new(remote)]

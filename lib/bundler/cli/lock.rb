@@ -22,8 +22,8 @@ module Bundler
       previous_output_stream = Bundler.ui.output_stream
       Bundler.ui.output_stream = :stderr if print
 
-      # Opal: like install's, the Fetcher this configures waits for M8.4;
-      # `--full-index` is parsed and ignored.
+      require_relative "../fetcher" # Opal: upstream autoloads Fetcher from the bundler root
+      Bundler::Fetcher.disable_endpoint = options["full-index"]
 
       update = options[:update]
       # --update is repeatable, so it parses as an array with one entry per
