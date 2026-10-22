@@ -34,8 +34,8 @@ Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
 lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
-it; M8 is starting, its foundation slice (errors, versions, current-ruby, the
-Dependency plumbing) first.
+it; M8 is in with its foundation, matching and source/lockfile slices, the
+Gemfile DSL and the resolver glue next.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -181,11 +181,11 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M8 - Bundler is in** (§8), starting with its foundation slice M8.1a. The
-   Gemfile half (M8.1b: DSL, index, definition, lockfile parser) is next, then
-   the resolver glue and the `bundle` command. `lock` and the `update`
-   commands - the lockfile and gemdeps machinery Bundler's own support stands
-   on - are its scope now.
+1. **M8 - Bundler is in** (§8): the foundation, matching and source/lockfile
+   slices (M8.1a-M8.1b) are in. The Gemfile DSL and definition (M8.1c) and
+   the resolver glue plus the `bundle` command (M8.2) are next. `lock` and the
+   `update` commands - the lockfile and gemdeps machinery Bundler's own
+   support stands on - are its scope now.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1315,15 +1315,47 @@ corelib answers that only for keyword methods, and the port's Gem needs no
 backport anyway; `LazySpecification#to_lock` concatenates like the other lock
 writers; and `Index#spec_names` keeps upstream's quirk of appending each
 source's names as one array, harmless for the leaf indexes `source_map`
-actually consumes. The rest of the slices:
+actually consumes.
 
-* **M8.1b - the Gemfile half, offline** (the matching layer landed, above):
-  `dsl.rb` + `ruby_dsl.rb`,
-  `source_list.rb`/`source_map.rb`/`source.rb` (the local ones),
-  `definition.rb` over
-  an installed-gems source, `lockfile_parser.rb`. Test: parse a fixture
-  Gemfile + Gemfile.lock and resolve them against a repository built by
-  `exe/gem` - all hermetic, `GEM_SOURCES` empty.
+M8.1b's source and lockfile layer is in as well: `source.rb` and the source
+classes it drives (`source/rubygems.rb`, `source/path.rb`, `source/gemspec.rb`,
+`source/metadata.rb`), `source_list.rb`, `source_map.rb`, `checksum.rb`,
+`lockfile_parser.rb`, `ruby_version.rb`, `uri_normalizer.rb`,
+`uri_credentials_filter.rb`, `ui/silent.rb`, the stub `plugin.rb`, and
+`rubygems_integration.rb`; `rubygems_ext.rb` grew its `Gem::Specification`
+section, which the stub and path sources drive. Tested by
+`spec/opal/gems/bundler_sources_spec.rb` (20 examples - the lockfile parser,
+checksums, source dispatch) and by `spec/lib/gems/bundler_local.test.mjs`:
+an exe/opal run parses a fixture Gemfile.lock and resolves its names against
+the repository `exe gem` installed in a temporary GEM_HOME, then reads a path
+gem through its `.gemspec` - hermetic, `GEM_SOURCES` empty. Its deviations:
+the git source is a stub that answers GitError (upstream's drives the `git`
+command; no slice claims it yet) and the plugin system is not ported, so
+`Plugin.from_lock`/`Plugin.source` raise PluginError, its fetch hooks do
+nothing, and `source_list_for` drops the plugin `when` arm; `Bundler.ui`
+answers upstream's Silent UI until the command layer brings the Shell (and
+with it the RGProxy into Gem's user interaction); `app_cache` answers the
+default `vendor/cache` because settings is M8.2; the two NAME_VERSION regexes
+and `RubyVersion::PATTERN` are written in single-line form - Opal drops the
+/x flag silently, and a `/xo` pattern would match literal spaces and comments;
+the parser's `strip!`s answer stripped copies; `eval_gemspec` drops psych (the
+ported `Gem::Specification.from_yaml` parses through the ported
+YAMLSerializer) and requires opal-parser for the eval; the installer require
+in `Source::Rubygems#rubygems_gem_installer` waits for that class in M8.2;
+`rubygems_integration.rb` keeps its remote and spec-reading methods but drops
+the gem-activation cluster (`replace_gem`, `replace_entrypoints` and friends)
+for M8.3 to decide, and its EXT_LOCK is a Mutex - no vendored monitor; and
+the Metadata source sets no `loaded_from`, the port having no installed
+bundler.gemspec. The `rubygems_ext.rb` Specification section - the
+AllowSettingSource prepend, the full_gem_path/loaded_from/extension_dir/
+load_paths overrides, `lock_name`, `installation_missing?` - skips upstream's
+`@@array_attributes` repair (the ported Specification declares its attributes)
+and its remove_method-before-gem_dir (redefining shadows the ported answer
+without caring who owns it). The rest of the slices:
+
+* **M8.1c - the Gemfile DSL**: `dsl.rb` + `ruby_dsl.rb` and `definition.rb`;
+  definition's resolve calls the `Bundler::Resolver` M8.2 brings, so this
+  slice lands with M8.2's first resolution.
 * **M8.2 - resolve and install**: `resolver/*` glue over the ported PubGrub
   (upstream's vendored copy goes, the way M3 took `Gem::PubGrub`),
   `lockfile_generator.rb`, `installer.rb` delegating to `Gem::Installer`,

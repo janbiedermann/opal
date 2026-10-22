@@ -8,6 +8,7 @@
 # autoload would leave the constant outside a compiled bundle.
 require "rubygems"
 require "pathname"
+require "fileutils"
 
 require_relative "bundler/version"
 require_relative "bundler/errors"
@@ -27,6 +28,22 @@ require_relative "bundler/stub_specification"
 require_relative "bundler/endpoint_specification"
 require_relative "bundler/materialization"
 require_relative "bundler/spec_set"
+require_relative "bundler/ui/silent"
+require_relative "bundler/uri_normalizer"
+require_relative "bundler/uri_credentials_filter"
+require_relative "bundler/plugin"
+require_relative "bundler/checksum"
+require_relative "bundler/ruby_version"
+require_relative "bundler/rubygems_integration"
+require_relative "bundler/source"
+require_relative "bundler/source/metadata"
+require_relative "bundler/source/path"
+require_relative "bundler/source/gemspec"
+require_relative "bundler/source/git"
+require_relative "bundler/source/rubygems"
+require_relative "bundler/source_list"
+require_relative "bundler/source_map"
+require_relative "bundler/lockfile_parser"
 
 # Bundler provides a consistent environment for Ruby projects by
 # tracking and installing the exact gems and versions that are needed.
@@ -49,6 +66,20 @@ require_relative "bundler/spec_set"
 #
 module Bundler
   class << self
+    # Opal: the interactive Shell UI (and with it the RGProxy that mirrors it
+    # into Gem's user interaction) arrives with the command layer in M8.2;
+    # until then callers only log, so this answers upstream's Silent UI - the
+    # same one upstream's --silent runs use.
+    def ui
+      @ui ||= UI::Silent.new
+    end
+
+    def ui=(ui)
+      # Opal: upstream also wires UI::RGProxy.new(ui) into Gem's user
+      # interaction; that comes with the Shell UI in M8.2.
+      @ui = ui
+    end
+
     # Opal: upstream's `local_platform` first obeys settings'
     # :force_ruby_platform; settings arrives with M8.2 and the guard comes
     # back with it. Nothing else to ask here: the port's platform is the
@@ -86,5 +117,126 @@ module Bundler
     # Opal: bundle_path, specs_path, user_home, configure, ui and the reset
     # family wait for M8.2, where settings and the bundle directory become
     # live code.
+
+    def read_file(file)
+      SharedHelpers.filesystem_access(file, :read) do
+        File.open(file, "r:UTF-8", &:read)
+      end
+    end
+
+    def safe_load_marshal(data)
+      if Gem.respond_to?(:load_safe_marshal)
+        Gem.load_safe_marshal
+        begin
+          Gem::SafeMarshal.safe_load(data)
+        rescue Gem::SafeMarshal::Reader::Error, Gem::SafeMarshal::Visitors::ToRuby::Error => e
+          raise MarshalError, "#{e.class}: #{e.message}"
+        end
+      else
+        load_marshal(data, marshal_proc: SafeMarshal.proc)
+      end
+    end
+
+    def load_gemspec(file, validate = false)
+      @gemspec_cache ||= {}
+      key = File.expand_path(file)
+      @gemspec_cache[key] ||= load_gemspec_uncached(file, validate)
+      # Protect against caching side-effected gemspecs by returning a
+      # new instance each time.
+      @gemspec_cache[key]&.dup
+    end
+
+    def load_gemspec_uncached(file, validate = false)
+      path = Pathname.new(file).expand_path
+      contents = read_file(path.to_s)
+      spec = eval_gemspec(path, contents)
+      return unless spec
+      spec.loaded_from = path.to_s
+      Bundler.rubygems.validate(spec) if validate
+      spec
+    end
+
+    def clear_gemspec_cache
+      @gemspec_cache = {}
+    end
+
+    def user_home
+      @user_home ||= begin
+        home = Bundler.rubygems.user_home
+        bundle_home = home ? File.join(home, ".bundle") : nil
+
+        warning = if home.nil?
+          "Your home directory is not set."
+        elsif !File.directory?(home)
+          "`#{home}` is not a directory."
+        elsif !File.writable?(home) && (!File.directory?(bundle_home) || !File.writable?(bundle_home))
+          "`#{home}` is not writable."
+        end
+
+        if warning
+          Bundler.ui.warn "#{warning}\n"
+          user_home = tmp_home_path
+          Bundler.ui.warn "Bundler will use `#{user_home}' as your home directory temporarily.\n"
+          user_home
+        else
+          Pathname.new(home)
+        end
+      end
+    end
+
+    def tmp_home_path
+      Kernel.send(:require, "tmpdir")
+      SharedHelpers.filesystem_access(Dir.tmpdir) do
+        path = Bundler.tmp
+        at_exit { Bundler.rm_rf(path) }
+        path
+      end
+    end
+
+    def tmp(name = Process.pid.to_s)
+      Kernel.send(:require, "tmpdir")
+      Pathname.new(Dir.mktmpdir(["bundler", name]))
+    end
+
+    def rm_rf(path)
+      FileUtils.remove_entry_secure(path) if path && File.exist?(path)
+    end
+
+    # Opal: upstream asks settings for the cache directory name; settings
+    # arrives with M8.2, and until then this answers its default.
+    def app_cache(custom_path = nil)
+      path = custom_path || root
+      Pathname.new(path).join("vendor", "cache")
+    end
+
+    def eval_yaml_gemspec(path, contents)
+      # Opal: psych is not vendored; the port's Gem::Specification.from_yaml
+      # parses through the ported Gem::YAMLSerializer instead, which is what
+      # upstream reaches for after loading psych anyway.
+      Gem::Specification.from_yaml(contents)
+    end
+
+    def eval_gemspec(path, contents)
+      if contents.start_with?("---") # YAML header
+        eval_yaml_gemspec(path, contents)
+      else
+        # Eval the gemspec from its parent directory, because some gemspecs
+        # depend on "./" relative paths. The caller expands `path` first,
+        # expanding it here would resolve against the gemspec directory once
+        # the chdir is active.
+        SharedHelpers.chdir(path.dirname.to_s) do
+          # Opal: the upstream Ruby::Box branch picks a binding inside a
+          # Box; Opal has no Ruby::Box, so the port always takes the plain
+          # TOPLEVEL_BINDING path. eval needs the parser provisioned, and the
+          # require is dynamic so bundles that never eval stay without it.
+          require "opal-parser"
+          eval(contents, TOPLEVEL_BINDING.dup, path.to_s)
+        end
+      end
+    rescue ScriptError, StandardError => e
+      msg = "There was an error while loading `#{path.basename}`: #{e.message}"
+
+      raise GemspecError, Dsl::DSLError.new(msg, path.to_s, e.backtrace, contents)
+    end
   end
 end
