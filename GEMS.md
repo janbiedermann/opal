@@ -32,9 +32,10 @@ manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
 `unpack`, `env`, `sources`, `outdated`, `dependency`, `cleanup` and the
 Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
 lockfile and gemdeps machinery, and the `update` commands, out with the
-dependency resolver's install side (M8). M8 has not been started; M7 is in -
-the builder's `--gem`, the Opalfile directive, the compiled trees and
-`gem install --compile` came with it.
+dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
+Opalfile directive, the compiled trees and `gem install --compile` came with
+it; M8 is starting, its foundation slice (errors, versions, current-ruby, the
+Dependency plumbing) first.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -180,10 +181,11 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **Next is M8 - Bundler** (§8): the Gemfile DSL, setup and require on top
-   of the resolver this port already has, and the `bundle` command. `lock`
-   and the `update` commands - the lockfile and gemdeps machinery Bundler's
-   own support stands on - are its scope now.
+1. **M8 - Bundler is in** (§8), starting with its foundation slice M8.1a. The
+   Gemfile half (M8.1b: DSL, index, definition, lockfile parser) is next, then
+   the resolver glue and the `bundle` command. `lock` and the `update`
+   commands - the lockfile and gemdeps machinery Bundler's own support stands
+   on - are its scope now.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1248,7 +1250,7 @@ came with it: `--[no-]compile` on install compiles each spec the run
 installed, reporting - rather than failing - a file the compiler cannot read,
 whose `.rb` then answers as it did before.
 
-### M8 — Bundler (~3500 lines) — **not started**
+### M8 — Bundler (~3500 lines) — **in**
 
 `lib/opal/exe/bundler.rb`, `lib/bundler/`: `bundler.rb` (root, `root`,
 `bundle_path`, `load`, `setup`, `require`, `ui`), `dsl.rb` (Gemfile: `source`,
@@ -1281,13 +1283,27 @@ to drop, the second already works.
 `exe/bundler install`, `exe/bundler exec ruby -e "require '…'"`,
 `exe/bundler update --conservative`, `exe/bundler list`, lockfile round-trip.
 
-**Status: not started**, nothing of `lib/bundler` is ported. It inherits both
-M5's resolver and transport and M6's option-parsing classes; its `Gemfile` and
-lockfile parsing is the part that can be tested offline first, against a
-resolver sitting on a local source. The slices, each committable green:
+**Status: in**. M8.1a is in - the leaf files of `lib/bundler`: `lib/bundler.rb`
+(eager requires, no autoloads, the bundle rule), `version.rb`, `errors.rb`,
+`current_ruby.rb`, `match_platform.rb`, `constants.rb`, `deprecate.rb`,
+`force_platform.rb`, `shared_helpers.rb`, `dependency.rb` and the Dependency
+section of `rubygems_ext.rb`, tested by `spec/opal/gems/bundler_spec.rb`
+(23 examples). Its deviations, each with an `Opal:` comment: `VERSION` follows
+`Gem::VERSION`; `rubygems_ext.rb` comes trimmed to the `Gem::Dependency`
+patches (`to_lock`, source/groups accessors, `eql?` bound to `==`,
+ForcePlatform) plus the `StubSpecification` permission wrapper - the Platform,
+Specification, BasicSpecification and NameTuple sections arrive with their
+consumers, and the FilterIgnoredSpecs backport goes, the port's Gem being
+past the version that needed it; `pwd`/`chdir` run without the ext_lock the
+extension builds need (the port builds none); `md5_available?` answers true
+outright (no openssl stdlib to probe, and the corelib's digest ships the MD5
+that upstream's LoadError branch then answers with); the `local_platform`
+settings guard returns with M8.2; `constants.rb` lacks NULL; `String#<<`
+concatenates (corelib has no mutable String append); and shared_helpers'
+subprocess-environment block (`set_env`, `set_path`, `set_rubyopt`, the
+bin/gemspec path finders) waits for M8.3's exec. The rest of the slices:
 
-* **M8.1 - the Gemfile half, offline**: `errors.rb`, `shared_helpers.rb`,
-  `current_ruby.rb`, `dependency.rb`, `dsl.rb` + `ruby_dsl.rb`,
+* **M8.1b - the Gemfile half, offline**: `dsl.rb` + `ruby_dsl.rb`,
   `source_list.rb`/`source_map.rb`/`source.rb` (the local ones),
   `index.rb`, `spec_set.rb`, `lazy_specification.rb`, `definition.rb` over
   an installed-gems source, `lockfile_parser.rb`. Test: parse a fixture

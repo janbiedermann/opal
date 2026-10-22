@@ -269,6 +269,25 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   nodes. Beware: `bin/opal` on `master` is still a Ruby script, so building a
   bundle with `> file` after checking out master leaves an empty bundle - the
   shell truncates the file before the command fails.
+- The builder resolves every literal `require` at build time even inside a
+  method body or an unreachable branch: `require "openssl"` in a rescue'd
+  probe fails the whole bundle with MissingRequire when the stdlib is not
+  vendored. A non-literal require name passes the scan, but at run time the
+  platform loader *silently skips* an unresolved require - no LoadError - so
+  the probe's later constant use dies with NameError instead. Answer such
+  guards directly instead of probing for a missing stdlib (bundler's
+  `md5_available?` does). Also: corelib `Module#method_defined?` takes only
+  the name, no inherit flag; `p` of a JS `undefined` returned by a Ruby
+  method crashes, so don't assert on implicit returns.
+- Ruby code style for the port keeps upstream's `# frozen_string_literal:`
+  headers, but corelib has no mutable `String#<<`: lock/pretty-printer
+  builders (`Gem::Dependency#to_lock`, `Bundler::SharedHelpers
+  .pretty_dependency`) must concatenate (`msg += ...`), and `Array(hash)` in
+  Opal is `[hash]`, which upstream's `Array(x || [])` relies on.
+- `node tasks/test.mjs compiler` once showed a stale failure referencing
+  files that did not exist in the tree; a rerun passed. Suspect the
+  `~/.cache/opal-js` FileCache before chasing ghosts: probe edits with
+  `exe/opal --no-cache`.
 - On a machine in UTC, time zone bugs stay hidden; run the ruby/spec suite in
   other zones too (`TZ=America/Los_Angeles`, `TZ=Pacific/Chatham`) after
   changes to Time, Date or DateTime.
