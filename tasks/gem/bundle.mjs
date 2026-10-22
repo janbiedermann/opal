@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { Builder } from "../../lib/opal/compiler/builder/builder.mjs";
 import { minifyJs } from "../../lib/opal/compiler/cli/minify.mjs";
 import { ROOT } from "../testing/common.mjs";
+import { compilerKey } from "../ruby/bundle.mjs";
 
 export async function buildGemBundle() {
   // dynamic_require_severity: Gem::CommandManager loads a command with a
@@ -43,6 +44,11 @@ export async function buildGemBundle() {
   // (Gem::HTTPTransport.transport_path) finds lib/opal/gems/http.mjs through it,
   // and a bundle has no source tree of its own to look in.
   builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
+  // The compiled-tree digest of `gem compile` (Gem::CompiledTree) names its
+  // output with this key, and the exe/ruby loader re-computes it to find the
+  // tree back: both bundles carry the same compiler, so both stamp the same
+  // value (tasks/ruby/bundle.mjs exports the digest for exactly this).
+  builder.buildStr(`OPAL_COMPILER_KEY = ${JSON.stringify(compilerKey())}\n`, "(opal-compiler-key)", { no_export: true });
   builder.buildStr(readFileSync(join(ROOT, "lib", "opal", "exe", "gem.rb"), "utf8"), "lib/opal/exe/gem.rb");
   builder.buildStr("::Kernel.exit", "(exit)", { no_export: true });
 

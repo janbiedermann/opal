@@ -14,8 +14,11 @@ import { ROOT } from "../testing/common.mjs";
 
 // The compiler sources the bundle embeds, digested by content: unlike the
 // builder's runtimeKey (sizes and mtimes, see builder/cache.mjs) this
-// survives checkouts that don't change the compiler.
-function compilerKey() {
+// survives checkouts that don't change the compiler. Exported for
+// tasks/gem/bundle.mjs, whose bundle has to stamp the same key: the digest
+// that names a gem's compiled tree (Gem::CompiledTree) is read back by the
+// exe/ruby loader, and both bundles have to mean the same compiler by it.
+export function compilerKey() {
   const hash = createHash("sha256");
   const walk = (dir) => {
     const entries = readdirSync(dir, { withFileTypes: true });

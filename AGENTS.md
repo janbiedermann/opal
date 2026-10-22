@@ -307,10 +307,20 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   tasks share): opal, opal/full, thread and rubygems at boot, opal-parser
   requirable, and the `OPAL_HOME` constant `Gem::HTTPTransport` needs to find
   `lib/opal/gems/http.mjs` - without it a bundle's first fetch raises
-  `TransportMissing`. The command classes are required eagerly by
+  `TransportMissing` - plus `OPAL_COMPILER_KEY` (below, for compiled trees). The command classes are required eagerly by
   `lib/rubygems.rb`, which is also why `Gem::CommandManager` no longer requires
   a command by name: a require path with an interpolation in it still reads as
   static to the builder, which then asks for `rubygems/commands/_command`.
+- `gem compile` (D7) writes `<gem_dir>/compiled/<full_name>/<digest>/` and
+  `BasicSpecification#full_require_paths` prepends that directory when the
+  digest matches, so the `.js` wins the directory search (`gem which` shows
+  it). The digest hashes the gem's on-disk sources *and* `OPAL_COMPILER_KEY`,
+  which both bundles stamp from the one `compilerKey()` in
+  `tasks/ruby/bundle.mjs` - if they disagreed, `exe/gem compile` would write a
+  tree `exe/ruby` could never find. Editing an installed gem's `.rb` therefore
+  invalidates its compiled tree by design and the `.rb` answers again;
+  *deleting* the `.rb` makes that require a LoadError, which is the digest
+  working, not a loader bug.
 - A `spec/lib/gems/*.test.mjs` case that runs `exe/gem` and answers its HTTP
   requests from the test process must spawn it asynchronously: `spawnSync`
   blocks the event loop that serves the fixture, the child waits for a response

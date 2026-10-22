@@ -26,14 +26,16 @@ core files the work has changed so far.
 *and* through the command line — `exe/gem install ./hello-1.0.0.gem` then
 `exe/ruby -e "require 'hello'"`, and `exe/gem install tiny --source <fixture
 server>` over the compact index (`spec/lib/gems/cli.test.mjs`).
-M6 is in with its plumbing and seventeen commands — the runner, the command
+M6 is in with its plumbing and eighteen commands — the runner, the command
 manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
 `help`, `list`, `search`, `info`, `contents`, `which`, `spec`, `build`, `fetch`,
-`unpack`, `env`, `sources`, `outdated`, `dependency` and `cleanup`. What is
-left of §8's M6 list is `lock`, out with the lockfile and gemdeps machinery,
-and the `update` commands, out with the dependency resolver's install side
-(M8); the Opal-only `compile` command (D7) is the one M6 item still to write.
-M8 has not been started; M7 is half in, its `exe/ruby` side came with M0 and M4.
+`unpack`, `env`, `sources`, `outdated`, `dependency`, `cleanup` and the
+Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
+lockfile and gemdeps machinery, and the `update` commands, out with the
+dependency resolver's install side (M8); `gem install --compile` is the one
+D7 entry point not wired yet. M8 has not been started; M7 is half in, its
+`exe/ruby` side came with M0 and M4 and its compiled-gem tree, the loader half
+of D7, came with `compile`.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -179,10 +181,13 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M6's last piece is the Opal-only `compile` command** (D7). Every upstream
-   command this port has a body for is registered; `lock` and the `update`
-   commands are out with the lockfile, the gemdeps machinery and the
-   resolver's install side (M8).
+1. **M6 is in** - the Opal-only `compile` command (D7) was its last piece, and
+   the loader half of the compiled tree came with it. Next is **M7's other
+   half**: `lib/opal/compiler/builder/gem_paths.mjs`, `--gem`/`-g` on the CLI
+   and `add_gem_dependency` in the Opalfile, and `gem install --compile`; the
+   `exe/ruby` half came with M0 and M4. `lock` and the `update` commands are
+   out with the lockfile, the gemdeps machinery and the resolver's install
+   side (M8).
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -529,6 +534,13 @@ prefer `.js` over `.rb`: the builder already sorts by extension order
 `.js` before `.rb`. A `.js` is `eval`ed directly — no compiler, no parse.
 The `<digest>` is a hash of the gem's sources + `OPAL_COMPILER_KEY`, so stale
 output can never be picked up.
+*(In with M6: `Gem::CompiledTree` writes the tree and names it with that
+digest — exe/gem and exe/ruby stamp the same `OPAL_COMPILER_KEY`, imported
+from one `compilerKey()` — and `BasicSpecification#full_require_paths` puts
+the matching directory in front of the gem's source paths, so it is the
+directory order that prefers `.js`; `exe/ruby` already loaded a plain `.js`
+as it stands (M0). The builder consulting the tree, and `gem install
+--compile`, stay with M7.)*
 
 **D8 — `Gem::Platform.local` is `Gem::Platform::RUBY` on Opal.** Opal runs
 pure-Ruby gems; `ruby`-platform selection is the only sane default, and
@@ -1134,9 +1146,17 @@ Two read-only batches have gone in since: `Gem::QueryUtils` with `list`,
 an installed repository answers: `list -i`, `--details`, `contents -l`,
 `spec FIELD`), and the packaging trio `build`, `fetch` and `unpack` with
 `Gem::GemspecHelpers`. Since then `environment`, `sources`, `outdated`,
-`dependency` and `cleanup` came in, which is every command §8 lists except
-`lock` (out with the lockfile and gemdeps machinery) and the `update` commands
-(out with the resolver's install side, M8). The read-only
+`dependency`, `cleanup` and the Opal-only `compile` came in, which is every
+command §8 lists except `lock` (out with the lockfile and gemdeps machinery)
+and the `update` commands (out with the resolver's install side, M8).
+`gem compile NAME` (D7) writes the gem's requirable files as JavaScript under
+`<gem_dir>/compiled/<full_name>/<digest>/` (`Gem::CompiledTree`,
+`Gem::Commands::CompileCommand`), and `BasicSpecification#full_require_paths`
+puts that tree in front of the gem's source paths when the digest - the gem's
+sources plus the compiler of the program that compiled it, `OPAL_COMPILER_KEY`
+stamped by both bundles - still matches, so a require meets a `.js` with no
+parser on the way and an edited gem is simply read from its `.rb` again. The
+read-only
 query path also runs against rubygems.org by hand: `gem search rake` answers
 from the live compact index, `gem fetch rake` writes the package where it
 runs, and `gem install rake` / `gem install addressable` (two gems, a real
@@ -1191,6 +1211,10 @@ What the batch leaves out, each traceable to §1 or a later milestone:
 * `DependencyCommand`'s `-p` is the local/remote options' `--http-proxy`, which
   registers it after the command's own `--pipe`; `--pipe` is the form that
   reaches the pipe format. That collision is upstream's, comment and all.
+* Of D7's two entry points only `gem compile` is wired: `gem install --compile`
+  waits for M7, where the precompiled tree becomes something the builder reads
+  too. `compile` also has no upstream counterpart - CRuby has no ahead-of-time
+  compiler - and takes a `--all` in exchange for upstream's per-option groups.
 
 ### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **partly done**
 
@@ -1202,7 +1226,9 @@ What the batch leaves out, each traceable to §1 or a later milestone:
 * `--gem NAME` / `-g` implemented (drop the "not available in Node.js" warning);
   `Opalfile`'s `add_gem_dependency` implemented.
 * `exe/ruby`: gem-aware loader (M4) + `.js` preference (M0) + `--gem`.
-* `gem compile` / `gem install --compile` writing the `compiled/` tree.
+* `gem compile` writing the `compiled/` tree and the loader reading it back
+  (the digest, the path preference): in with M6. `gem install --compile` and
+  the builder consulting the tree remain.
 
 *Exit test:* `exe/opal --gem rake -e "require 'rake'; puts Rake::VERSION"`;
 `exe/ruby -e "require 'rake'"` measurably faster with the compiled tree
@@ -1383,11 +1409,12 @@ created_at needs (§8's M6 status).
 | `lib/opal/compiler/transforms/operator_assignment.mjs`, `nodes/if.mjs`, `nodes/begin.mjs`, `transforms/conditionals.mjs` | f950e0ed8 | M5. For a variable target the transform rewrote `@x ||= rhs` into `@x = (@x || rhs)`, a write in *both* branches; MRI assigns only where the short circuit reaches the right-hand side. A memo on a frozen object therefore raised (`Gem::Version` freezes itself and pre-caches its `||=` memos, and `Gem::Version.new` caches instances in `@@all`, so one frozen Version poisoned every `'1.0.0'` in the process; `@unset &&= v` likewise defined an ivar MRI leaves undefined). The write now sits inside the Or/And branch, and `if.mjs` renders an operator assignment as a ternary in every position while `begin.mjs` and `conditionals.mjs` keep the statement shape a right-hand side can have — a memoized `begin` with a guard clause, a `rescue` or a statement `%x{}` stays an IIFE, which is what makes those compile. Same commit: the `case` switch subject is parenthesized, so `case f(x)` over a `&&`-joined subject no longer misparses. Specs: `spec/opal/core/language/memoization_spec.rb`, `.../case_spec.rb`, and the compiler fixtures for `assignment/operators` and `control/case`. |
 | `lib/opal/exe/gem.rb` | 0bbcc9fa7 | M6, new. The `gem` command's program: `Gem::GemRunner.new.run ARGV.clone`, which is upstream's `exe/gem` — a command ends with `terminate_interaction`, which raises `Gem::SystemExitException`, and an uncaught `SystemExit` ends an Opal program with that status, so nothing here translates it. `tasks/gem.mjs` bundles it with opal, opal/full, thread, rubygems and opal-parser as a requirable module, plus the `OPAL_HOME` constant `Gem::HTTPTransport` reads to find `lib/opal/gems/http.mjs`; `tasks/gem_exe.mjs` makes the single-file executable, sharing the SEA re-run helper `tasks/sea_exe.mjs` with `tasks/ruby_exe.mjs`. |
 
-Outside those two trees sits one tracked build artifact: `exe/ruby`, the
-compiled bundle of the core plus the port, rebuilt by every commit that changed
-either (`git log --oneline -- exe/ruby` lists them). It is a file to diff, not
-to edit, and a change to `lib/opal/exe/ruby.rb` or to `lib/rubygems/` is only
-finished once `node tasks/ruby.mjs` has rewritten it.
+Outside those two trees sit two tracked build artifacts: `exe/ruby` and
+`exe/gem`, the compiled bundles of the core plus the port, rebuilt by every
+commit that changed either (`git log --oneline -- exe/ruby exe/gem` lists
+them). They are files to diff, not to edit, and a change to
+`lib/opal/exe/ruby.rb` or to `lib/rubygems/` is only finished once
+`node tasks/ruby.mjs` and `node tasks/gem.mjs` have rewritten them.
 
 Nothing else moved in the two trees. The entry points are untouched —
 `opal/base.rb`, `opal/mini.rb` and `opal/full.rb` needed no change, `exe/ruby`

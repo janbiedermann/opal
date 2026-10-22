@@ -7,7 +7,7 @@
 // `install nosuchgem` from reaching rubygems.org.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, copyFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, copyFileSync, readdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -228,6 +228,44 @@ describe("the gem command", () => {
     const stale = gem("outdated");
     assert.equal(stale.out.trim(), "");
     assert.equal(stale.status, 0, stale.err);
+
+    // D7: compiling the gem ahead of time. The output lives under
+    // <gem_dir>/compiled/<full_name>/<digest>/ keeping the required paths,
+    // and an activated gem is searched from there before its sources.
+    const compiledRun = gem("compile", "hello");
+    assert.equal(compiledRun.status, 0, compiledRun.err);
+    assert.match(compiledRun.out, /^Compiling hello-1\.0\.0\.\.\.\n {2}1 file compiled$/m, compiledRun.out);
+
+    const compiledRoot = join(DIR, "repo", "gems", "hello-1.0.0", "compiled", "hello-1.0.0");
+    const digests = readdirSync(compiledRoot);
+    assert.equal(digests.length, 1, compiledRoot);
+    const jsFile = join(compiledRoot, digests[0], "hello.js");
+    assert.ok(existsSync(jsFile), jsFile);
+
+    // the same path search a require does now answers the compiled file.
+    assert.equal(gem("which", "hello").out.trim(), jsFile);
+    const compiledRequire = run(RUBY, join(DIR, "nowhere"), {}, ["-e", "require 'hello'; puts Hello.hello"]);
+    assert.equal(compiledRequire.out.trim(), "hello", `${compiledRequire.out}${compiledRequire.err}`);
+
+    // and a source edited afterwards makes that tree stale - the digest
+    // names the sources it was made from - so the loader passes it by and
+    // reads the .rb, which is the safety the digest is there for.
+    const helloRb = join(DIR, "repo", "gems", "hello-1.0.0", "lib", "hello.rb");
+    writeFileSync(helloRb, readFileSync(helloRb, "utf8").replace('"hello"', '"hello edited"'));
+    const edited = run(RUBY, join(DIR, "nowhere"), {}, ["-e", "require 'hello'; puts Hello.hello"]);
+    assert.equal(edited.out.trim(), "hello edited", `${edited.out}${edited.err}`);
+    assert.equal(gem("which", "hello").out.trim(), helloRb);
+
+    // recompiling answers a new digest directory and drops the old one.
+    const recompiled = gem("compile", "hello");
+    assert.match(recompiled.out, /1 file compiled/, `${recompiled.out}${recompiled.err}`);
+    const digestsAgain = readdirSync(compiledRoot);
+    assert.equal(digestsAgain.length, 1, "one compiled directory survives per gem");
+    assert.notDeepEqual(digestsAgain, digests);
+
+    const compileMissing = gem("compile", "nosuchgem");
+    assert.match(compileMissing.err, /Can't compile gem 'nosuchgem', probably not installed\?/, compileMissing.err);
+    assert.equal(compileMissing.status, 1);
 
     // A remote query with no source answers nothing rather than reaching the
     // network or dying on an empty source list.

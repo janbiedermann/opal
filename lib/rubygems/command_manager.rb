@@ -39,7 +39,9 @@ require_relative "text"
 #   open, rdoc, pristine, rebuild, update, generate_index and owner commands are
 #   out with signing, documentation, and the git/lock/vendor machinery, and a
 #   command that is not listed here is not loaded - it answers UnknownCommand.
-#   The list grows as the milestones port them.
+#   The list grows as the milestones port them. To it the port adds one name
+#   upstream has no counterpart for: `compile`, Opal's ahead-of-time compile
+#   of an installed gem (D7).
 # * the plugin hook above cannot fire: no plugins (§1).
 # * upstream requires its vendored Timeout for the `Gem::Timeout::Error` the
 #   rescue below catches; this port's transport defines that name
@@ -52,6 +54,7 @@ class Gem::CommandManager
   BUILTIN_COMMANDS = [ # :nodoc:
     :build,
     :cleanup,
+    :compile,
     :contents,
     :dependency,
     :environment,

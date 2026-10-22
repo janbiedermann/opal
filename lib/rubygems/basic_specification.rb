@@ -190,6 +190,15 @@ class Gem::BasicSpecification
 
         full_paths << extension_dir if have_extensions?
 
+        # Opal: D7. When the gem has a compiled tree that matches its sources
+        # and this compiler (Gem::CompiledTree reads the digest back to check),
+        # it goes in front of the source paths, so an activated gem is found
+        # as .js before the .rb that was compiled into it. No tree, no cost
+        # beyond one directory test; a tree made from other sources, or by
+        # another build of the compiler, is simply not the path this asks for.
+        compiled = Gem::CompiledTree.dir(self)
+        full_paths.unshift compiled if compiled
+
         full_paths
       end
   end
