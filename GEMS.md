@@ -39,8 +39,8 @@ definition, resolver, settings, installer and `bundle` command slices -
 `exe/bundler` installs, locks, lists and checks a Gemfile - and its runtime
 setup half (M8.3a): `bundler/setup` and `Bundler.setup` activate a bundle
 for `exe/ruby`, and `show`, `info`, `platform` and `clean` answer. The
-subprocess commands (`exec`, `config`, `update`, M8.3b) and the remote
-sources (M8.4) are what is left of it.
+`config` and `update` commands came with M8.3b; `exec` (the spawn seam,
+M8.3c) and the remote sources (M8.4) are what is left of it.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -187,9 +187,9 @@ every one reached through a failing gem path — are listed with their commits i
 What is still open, in the order that unblocks the rest:
 
 1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile,
-   Gemfile DSL, definition, resolver, settings, install-layer, command and
-   runtime-setup slices are in (M8.1a-M8.3a). What is left is the
-   subprocess half - `exec`, `config`, `update` - and the remote sources.
+   Gemfile DSL, definition, resolver, settings, install-layer, command,
+   runtime-setup and config/update slices are in (M8.1a-M8.3b). What is
+   left is `exec` - the spawn seam - and the remote sources.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1476,11 +1476,12 @@ with the command so `bundle list` and `Bundler.load` can answer, its
 setup/require half still unreachable until M8.3's `set_bundle_environment`
 and activation patches; the root gained `definition`, `load`, `auto_install`
 and `configure_custom_gemfile`. Tested by `spec/lib/gems/bundler_cli.test.mjs`
-(10 hermetic runs against the fixture repository: version, `lock --local`
+(20 hermetic runs by now against the fixture repository: version,
+`lock --local`
 then `check`, `install --local` with the path gem's binstub, `list` in
 human/json/name-only forms, aliases and global flags, unknown command and
 option at exit 15, the remembered-flag rejection with its `bundle config`
-replacement, `help`, the unported `exec`/`update`/`config` boundary, and a
+replacement, `help`, the unported `exec` boundary, and a
 bare `bundle lock` walking into the M8.4 remote seam as documented).
 The runtime setup half is in too (M8.3a): the SharedHelpers
 subprocess-environment block (`set_bundle_environment` and its helpers),
@@ -1510,14 +1511,31 @@ learn the same. Tested by `spec/opal/gems/bundler_runtime_spec.rb`
 add_default_gems_to, and replace_entrypoints touching no Kernel) and
 five more `bundler_cli.test.mjs` runs (`show`/`info`/`platform`/
 `clean --dry-run`, the exe/ruby activation and the missing-bundle report
-with its exit status). What remains:
+with its exit status).
+The `config` and `update` commands landed next (M8.3b). Thor had made
+config a subcommand class - list/get/set/unset plus a hidden default task
+that still translates the Bundler 1 interface (`bundle config NAME
+[VALUE]`, `--delete`) - and the port's CLI hands the positional tokens to
+`CLI::Config`, which rebuilds those shapes and Thor's missing-argument
+guards as InvalidOption (status 15 like Thor's); the scope choice (local
+inside an app, global outside, `--global`/`--local` exclusive) and the
+Base output are upstream's, and the `thor.with_padding` wrappers go -
+they never styled the `Bundler.ui` lines printed inside them. `update`
+is upstream's file with the usual two arms gone: the self-manager's
+`--bundler` restart (the flag parses and stays unused) and
+`Fetcher.disable_endpoint` (M8.4 restores it together with the matching
+lines in install.rb and lock.rb). `bundle update --local` re-resolves
+against the fixture repository and rewrites the lockfile, `bundle update
+NAME` answers `its version stayed the same` when nothing can move, and a
+bare `bundle update` walks into the M8.4 remote seam like bare
+`bundle lock`. Retiring `gem update`'s omission is NOT part of this:
+that command rides `Gem::DependencyResolver`, ported since M5, and stays
+open as a rubygems slice of its own. What remains:
 
-* **M8.3b - the subprocess half**: `exec` (the spawn seam with
-  `which`/`find_executable`/`git_present?` and EnvironmentPreserver's
-  unbundling finally exercised), the `config` command (hand-written
-  subdispatch over the ported settings), and `update` (the resolver's
-  install side finally earns its keep, which also retires `gem update`'s
-  omission).
+* **M8.3c - `bundle exec`**: the spawn seam - `cli/exec.rb` over the
+  landed `set_bundle_environment`, the `which`/`find_executable`/
+  `git_present?` helpers, and EnvironmentPreserver's unbundling finally
+  exercised.
 * **M8.4 - remote breadth**: `source/rubygems.rb` over
   `Gem::CompactIndexClient` and the fetch worker - the
   `Source::Rubygems::Remote` and `Bundler::Fetcher` that a plain

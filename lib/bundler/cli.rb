@@ -119,14 +119,41 @@ module Bundler
       "platform" => {
         "ruby" => {type: :boolean, default: false, desc: "only display ruby related platform information"},
       },
+      "update" => {
+        "full-index" => {type: :boolean, desc: "Fall back to using the single-file index of all gems"},
+        "gemfile" => {type: :string, desc: "Use the specified gemfile instead of Gemfile"},
+        "group" => {type: :array, switches: ["-g"], desc: "Update a specific group"},
+        "jobs" => {type: :numeric, switches: ["-j"], desc: "Specify the number of jobs to run in parallel"},
+        "local" => {type: :boolean, desc: "Do not attempt to fetch gems remotely and use the gem cache instead"},
+        "quiet" => {type: :boolean, desc: "Only output warnings and errors."},
+        "source" => {type: :array, desc: "Update a specific source (and all gems associated with it)"},
+        "force" => {type: :boolean, switches: ["--redownload"], desc: "Force reinstalling every gem, even if already installed"},
+        "ruby" => {type: :boolean, desc: "Update ruby specified in Gemfile.lock"},
+        "bundler" => {type: :string, lazy_default: ">= #{Bundler::VERSION}", desc: "Update the locked version of bundler"},
+        "patch" => {type: :boolean, desc: "Prefer updating only to next patch version"},
+        "minor" => {type: :boolean, desc: "Prefer updating only to next minor version"},
+        "major" => {type: :boolean, desc: "Prefer updating to latest major version (default)"},
+        "pre" => {type: :boolean, desc: "Always choose the highest allowed version when updating gems, regardless of prerelease status"},
+        "strict" => {type: :boolean, desc: "Do not allow any gem to be updated past latest --patch | --minor | --major"},
+        "conservative" => {type: :boolean, desc: "Use bundle install conservative update behavior and do not allow shared dependencies to be updated."},
+        "all" => {type: :boolean, desc: "Update everything."},
+        "cooldown" => {type: :numeric, desc: "Only consider gem versions published at least N days ago. Use 0 to disable."},
+      },
+      "config" => {
+        "parseable" => {type: :boolean, desc: "Use minimal formatting for more parseable output"},
+        "global" => {type: :boolean, desc: "Only change the global config"},
+        "local" => {type: :boolean, desc: "Only change the local config"},
+        "delete" => {type: :boolean, desc: "delete"},
+      },
       "version" => {},
       "cli_help" => {},
       "help" => {},
     }.freeze
 
-    # Commands whose Thor method takes a positional gem name (binstubs/add
-    # and the rest join it when those commands do).
-    POSITIONAL_COMMANDS = %w[show info].freeze
+    # Commands whose Thor method takes positional arguments (show/info get
+    # a gem name, update/exec a list, and config its subcommand line;
+    # binstubs/add and the rest join it when those commands do).
+    POSITIONAL_COMMANDS = %w[show info update config exec].freeze
 
     def self.start(argv = ARGV, _options = {})
       new(argv).run
@@ -317,6 +344,21 @@ module Bundler
     def platform
       require_relative "cli/platform"
       Platform.new(options).run
+    end
+
+    def update
+      require_relative "cli/update"
+      Bundler.settings.temporary(no_install: false) do
+        Update.new(options, @positional).run
+      end
+    end
+
+    def config
+      # Opal: Thor made this a subcommand class; the port hands the tokens
+      # to CLI::Config, which dispatches list/get/set/unset and the 1.x
+      # shape itself.
+      require_relative "cli/config"
+      Config.run(@positional, options)
     end
 
     def version
