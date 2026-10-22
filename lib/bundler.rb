@@ -20,6 +20,7 @@ require_relative "bundler/match_metadata"
 require_relative "bundler/match_remote_metadata"
 require_relative "bundler/override"
 require_relative "bundler/shared_helpers"
+require_relative "bundler/environment_preserver"
 require_relative "bundler/dependency"
 require_relative "bundler/index"
 require_relative "bundler/lazy_specification"
@@ -28,7 +29,7 @@ require_relative "bundler/stub_specification"
 require_relative "bundler/endpoint_specification"
 require_relative "bundler/materialization"
 require_relative "bundler/spec_set"
-require_relative "bundler/ui/silent"
+require_relative "bundler/ui"
 require_relative "bundler/uri_normalizer"
 require_relative "bundler/uri_credentials_filter"
 require_relative "bundler/plugin"
@@ -51,6 +52,10 @@ require_relative "bundler/definition"
 require_relative "bundler/resolver"
 require_relative "bundler/gem_version_promoter"
 require_relative "bundler/source/rubygems_aggregate"
+require_relative "bundler/installer"
+require_relative "bundler/rubygems_gem_installer"
+require_relative "bundler/source/path/installer"
+require_relative "bundler/process_lock"
 
 # Bundler provides a consistent environment for Ruby projects by
 # tracking and installing the exact gems and versions that are needed.
@@ -73,17 +78,12 @@ require_relative "bundler/source/rubygems_aggregate"
 #
 module Bundler
   class << self
-    # Opal: the interactive Shell UI (and with it the RGProxy that mirrors it
-    # into Gem's user interaction) arrives with the command layer in M8.2;
-    # until then callers only log, so this answers upstream's Silent UI - the
-    # same one upstream's --silent runs use.
     def ui
-      @ui ||= UI::Silent.new
+      (defined?(@ui) && @ui) || (self.ui = UI::Shell.new)
     end
 
     def ui=(ui)
-      # Opal: upstream also wires UI::RGProxy.new(ui) into Gem's user
-      # interaction; that comes with the Shell UI in M8.2.
+      Bundler.rubygems.ui = UI::RGProxy.new(ui)
       @ui = ui
     end
 
@@ -183,9 +183,89 @@ module Bundler
       "#{Bundler.rubygems.ruby_engine}/#{RUBY_VERSION}"
     end
 
-    # Opal: bundle_path, specs_path, user_home, configure, ui and the reset
-    # family wait for M8.2, where settings and the bundle directory become
-    # live code.
+    def configure
+      @configure ||= configure_gem_home_and_path
+    end
+
+    # Returns absolute path of where gems are installed on the filesystem.
+    def bundle_path
+      @bundle_path ||= Pathname.new(configured_bundle_path.path).expand_path(root)
+    end
+
+    def create_bundle_path
+      mkdir_p(bundle_path) unless bundle_path.exist?
+
+      @bundle_path = bundle_path.realpath
+    rescue Errno::EEXIST
+      raise PathError, "Could not install to path `#{bundle_path}` " \
+        "because a file already exists at that path. Either remove or rename the file so the directory can be created."
+    end
+
+    def configured_bundle_path
+      @configured_bundle_path ||= Bundler.settings.path.tap(&:validate!)
+    end
+
+    # Returns absolute location of where binstubs are installed to.
+    def bin_path
+      @bin_path ||= begin
+        path = Bundler.settings[:bin] || "bin"
+        Pathname.new(path).expand_path(root).expand_path
+      end
+    end
+
+    def system_bindir
+      # Gem.bindir doesn't always return the location that RubyGems will install
+      # system binaries. If you put '-n foo' in your .gemrc, RubyGems will
+      # install binstubs there instead. Unfortunately, RubyGems doesn't expose
+      # that directory at all, so rather than parse .gemrc ourselves, we allow
+      # the directory to be set as well, via `bundle config set --local bindir foo`.
+      Bundler.settings[:system_bindir] || Bundler.rubygems.gem_bindir
+    end
+
+    def use_system_gems?
+      configured_bundle_path.use_system_gems?
+    end
+
+    def user_bundle_path(dir = "home")
+      env_var, fallback = case dir
+                          when "home"
+                            ["BUNDLE_USER_HOME", proc { Pathname.new(user_home).join(".bundle") }]
+                          when "cache"
+                            ["BUNDLE_USER_CACHE", proc { user_bundle_path.join("cache") }]
+                          when "config"
+                            ["BUNDLE_USER_CONFIG", proc { user_bundle_path.join("config") }]
+                          when "plugin"
+                            ["BUNDLE_USER_PLUGIN", proc { user_bundle_path.join("plugin") }]
+                          else
+                            raise BundlerError, "Unknown user path requested: #{dir}"
+      end
+      # `fallback` will already be a Pathname, but Pathname.new() is
+      # idempotent so it's OK
+      Pathname.new(ENV.fetch(env_var, &fallback))
+    end
+
+    def configure_gem_home_and_path(path = bundle_path)
+      configure_gem_path
+      configure_gem_home(path)
+      Bundler.rubygems.clear_paths
+    end
+
+    def configure_gem_path
+      unless use_system_gems?
+        # this needs to be empty string to cause
+        # PathSupport.split_gem_path to only load up the
+        # Bundler --path setting as the GEM_PATH.
+        Bundler::SharedHelpers.set_env "GEM_PATH", ""
+      end
+    end
+
+    def configure_gem_home(path)
+      Bundler::SharedHelpers.set_env "GEM_HOME", path.to_s
+    end
+
+    def specs_path
+      bundle_path.join("specifications")
+    end
 
     def read_file(file)
       SharedHelpers.filesystem_access(file, :read) do
@@ -269,6 +349,12 @@ module Bundler
 
     def rm_rf(path)
       FileUtils.remove_entry_secure(path) if path && File.exist?(path)
+    end
+
+    def mkdir_p(path)
+      SharedHelpers.filesystem_access(path, :create) do |p|
+        FileUtils.mkdir_p(p)
+      end
     end
 
     def locked_gems

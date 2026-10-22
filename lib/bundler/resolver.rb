@@ -82,10 +82,8 @@ module Bundler
 
       @cached_dependencies[root] = { root_version => root_dependencies }
 
-      # Opal: UI::Shell arrives with the command slices; until then the
-      # resolver's logger is a Silent UI, which drops the debug and warn
-      # lines the Shell would print (level= has nothing to turn up).
-      logger = Bundler::UI::Silent.new
+      logger = Bundler::UI::Shell.new
+      logger.level = debug? ? "debug" : "warn"
 
       [root, logger]
     end

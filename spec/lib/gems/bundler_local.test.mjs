@@ -166,6 +166,39 @@ end
 puts JSON.generate(out)
 `;
 
+// `bundle install`'s run, in --local form so the sources stay off the
+// fetcher that M8.4 has not ported: the definition installs (the gem-source
+// specs are already in the repository, the path source generates its
+// binstub), writes the lockfile - here install.lock, so the fixture lock
+// stays for the other probes - and that lock reads back with no re-resolve.
+const INSTALL_PROBE = String.raw`require "json"
+require "bundler"
+
+out = {}
+Bundler.reset_settings_and_root!
+
+defn = Bundler::Definition.build("Gemfile", "install.lock", true)
+installer = Bundler::Installer.new(Dir.pwd, defn)
+installer.run({ local: true })
+out["post_install_messages"] = installer.post_install_messages
+
+lock = File.read("install.lock")
+parsed = Bundler::LockfileParser.new(lock)
+out["installed_lock_specs"] = parsed.specs.map(&:full_name).sort
+
+bin = File.join(Bundler.rubygems.gem_dir, "bin", "pathgem-bin")
+out["path_bin"] = File.exist?(bin)
+out["path_bin_ruby"] = out["path_bin"] ? File.read(bin).include?("ruby") : false
+# the bundle path was created and its bundler.lock is gone with the lock
+out["bundle_path"] = Dir.exist?(Bundler.bundle_path.to_s)
+out["lock_released"] = !File.exist?(File.join(Bundler.bundle_path.to_s, "bundler.lock"))
+
+defn2 = Bundler::Definition.build("Gemfile", "install.lock", nil)
+out["resolve_needed_after"] = !!defn2.resolve_needed?
+
+puts JSON.generate(out)
+`;
+
 describe("Bundler over a local repository", () => {
   let app;
 
@@ -191,8 +224,18 @@ describe("Bundler over a local repository", () => {
       mkdirSync(join(app, "pathgem", "lib"), { recursive: true });
       writeFileSync(join(app, "pathgem", f), readFileSync(join(pathgem, f)));
     }
+    writeFileSync(join(app, "pathgem", "pathgem.gemspec"), readFileSync(join(pathgem, "pathgem.gemspec")).toString()
+      .replace(
+        '  s.files = ["lib/pathgem.rb"]',
+        '  s.files = ["lib/pathgem.rb", "bin/pathgem-bin"]\n  s.executables = ["pathgem-bin"]',
+      ));
+    // An executable for the install slice: Bundler generates a binstub for
+    // the path source, so the path gem declares one.
+    mkdirSync(join(app, "pathgem", "bin"), { recursive: true });
+    writeFileSync(join(app, "pathgem", "bin", "pathgem-bin"), "puts :pathgem\n");
     writeFileSync(join(DIR, "bundler_probe.rb"), PROBE);
     writeFileSync(join(DIR, "bundler_resolve_probe.rb"), RESOLVE_PROBE);
+    writeFileSync(join(DIR, "bundler_install_probe.rb"), INSTALL_PROBE);
   });
 
   after(() => rmSync(DIR, { recursive: true, force: true }));
@@ -242,5 +285,25 @@ describe("Bundler over a local repository", () => {
     assert.deepEqual(answer.resolved2, answer.resolved);
     // hello (~> 2.0) is not in the repository, and the solver reports it
     assert.deepEqual(answer.bad, ["Bundler::GemNotFound", true]);
+  });
+
+  test("the installer installs, binstubs the path gem and writes a readable lock", () => {
+    // DEBUG raises the Shell UI level so the debug print_using_message lines
+    // are visible, as with upstream's bundle install runs.
+    const r = run(OPAL, app, { DEBUG: "1" }, [join(DIR, "bundler_install_probe.rb")]);
+    assert.equal(r.status, 0, r.err);
+    const answer = JSON.parse(r.out.split("\n").filter((line) => line.startsWith("{")).pop());
+
+    assert.equal(answer.bundle_path, true, "the installer created the bundle path")
+    assert.equal(answer.lock_released, true, "the ProcessLock lock file goes when the block ends")
+    assert.deepEqual(answer.post_install_messages, {});
+    assert.deepEqual(answer.installed_lock_specs, ["hello-1.0.0", "pathgem-0.1", "world-0.5"]);
+    assert.equal(answer.path_bin, true, "the path gem got its binstub");
+    assert.equal(answer.path_bin_ruby, true, "the binstub runs the port's ruby command");
+    // the install wrote a lock the Gemfile reads back with no re-resolve
+    assert.equal(answer.resolve_needed_after, false);
+    // the Shell UI told what it used
+    assert.match(r.out, /Using hello 1\.0\.0/);
+    assert.match(r.out, /Using pathgem 0\.1 from/);
   });
 });

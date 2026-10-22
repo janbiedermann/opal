@@ -208,6 +208,14 @@ module Gem
     Gem::Specification.dirs = @paths.path
   end
 
+  # Lazily loads DefaultUserInteraction and returns the default UI.
+
+  def self.ui
+    require_relative "rubygems/user_interaction"
+
+    Gem::DefaultUserInteraction.ui
+  end
+
   ##
   # Point the paths at the +home+ and +paths+ a command line asked for, in the
   # shape PathSupport reads the environment from. A nil home leaves GEM_HOME

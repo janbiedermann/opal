@@ -35,7 +35,7 @@ lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
 it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL,
-definition, resolver and settings slices, the `bundle` command and installer
+definition, resolver, settings and installer slices, the `bundle` command
 next.
 
 What runs now, with no `-I` and no network beyond a fixture server on
@@ -1334,16 +1334,13 @@ gem through its `.gemspec` - hermetic, `GEM_SOURCES` empty. Its deviations:
 the git source is a stub that answers GitError (upstream's drives the `git`
 command; no slice claims it yet) and the plugin system is not ported, so
 `Plugin.from_lock`/`Plugin.source` raise PluginError, its fetch hooks do
-nothing, and `source_list_for` drops the plugin `when` arm; `Bundler.ui`
-answers upstream's Silent UI until the command layer brings the Shell (and
-with it the RGProxy into Gem's user interaction); the lockfile parser's two
+nothing, and `source_list_for` drops the plugin `when` arm; the lockfile parser's two
 extended NAME_VERSION regexps keep their shape but write their literal
 spaces escaped (`\ `) instead of upstream's `#{space}` interpolation, which
 Opal's `$regexp` breaks under /x; the parser's `strip!`s answer stripped
 copies; `eval_gemspec` drops psych (the
 ported `Gem::Specification.from_yaml` parses through the ported
-YAMLSerializer) and requires opal-parser for the eval; the installer require
-in `Source::Rubygems#rubygems_gem_installer` waits for that class in M8.2;
+YAMLSerializer) and requires opal-parser for the eval;
 `rubygems_integration.rb` keeps its remote and spec-reading methods but drops
 the gem-activation cluster (`replace_gem`, `replace_entrypoints` and friends)
 for M8.3 to decide, and its EXT_LOCK is a Mutex - no vendored monitor; and
@@ -1382,8 +1379,7 @@ PubGrub copy and delegates to RubyGems' through a `vendored_pub_grub.rb`
 that is byte-identical to the port's `rubygems/vendored_pub_grub`, so the
 `Gem::PubGrub` namespace the resolver code speaks is the one M3 vendored.
 The deviations are small: the `require` goes through that rubygems
-bootstrap; the resolution logger is the Silent UI until `UI::Shell` arrives
-with the command slices; `Bundler.locked_gems` joined the root methods
+bootstrap; `Bundler.locked_gems` joined the root methods
 for the platform-mismatch hint; and the message chains concatenate.
 Resolution is tested end to end: `bundler_local.test.mjs` now solves a
 Gemfile (a normal gem, a gem pulling a second one through its dependency,
@@ -1414,20 +1410,59 @@ corelib has no mutating `String#gsub!`/`upcase!`/`downcase!` (nor
 expression rewrites keeping upstream's ___-before-__ order; and `ruby_scope`
 takes its interpreter half from `RUBY_VERSION` (RbConfig is not defined).
 Tested by `spec/opal/gems/bundler_settings_spec.rb` (11 examples).
-What remains:
+The install layer is in too: `installer.rb` and its three companions
+(`installer/parallel_installer.rb`, `installer/gem_installer.rb`,
+`installer/standalone.rb`), `rubygems_gem_installer.rb`,
+`source/path/installer.rb`, `process_lock.rb`, the `ui.rb`/`UI::Shell`/
+`UI::RGProxy` cluster, and `environment_preserver.rb` with the
+`SharedHelpers.set_env` that `configure_gem_home_and_path` pulls along;
+`Gem.open_file_with_lock` and `Gem::Specification.reset` already carried
+the lockfile dance and the cache invalidation from M6. The root gained
+`configure`, `bundle_path`, `create_bundle_path`, `configured_bundle_path`,
+`bin_path`, `system_bindir`, `specs_path`, `user_bundle_path`,
+`use_system_gems?`, `mkdir_p` and the gem-home configurers, and its `ui`/
+`ui=` went back to the faithful Shell-and-RGProxy bodies (the resolver's
+logger likewise to the faithful `UI::Shell.new` with a level from
+`debug?`); `Gem.ui` - the lazy `DefaultUserInteraction` getter the port
+had dropped - returned to `lib/rubygems.rb`, where the verbose `Gem.time`
+needs it. The deviations: `Bundler::Installer` names `Gem.ruby` where
+upstream asks vendored Thor for the ruby command, and the binstub
+templates stay un-bundled (the builder bundles no non-Ruby files; the
+M8.4 `binstubs` command would embed them); `load_plugins` is empty like
+the port's pluginless RubyGems; `RubyGemsGemInstaller` drops the
+extension build (the ported installer refuses gems that declare
+extensions) and the plugin fork of `#install` along with the jobserver
+slotting, and `Source::Path::Installer` skips the build arm of
+`post_install` for the same reason; `ParallelInstaller` always runs
+upstream's `size == 1` serial path, since the two pools' shared response
+queue and blocking deq have nothing to interleave behind the sequential
+Worker (and its `with_jobserver` just yields); and `UI::Shell` is
+rewritten over plain `$stdout`/`$stderr` - no vendored Thor, no colors
+(corelib has no `tty?`), 80-column word wrap, and a plain `@level` where
+upstream keeps a thread-local one. `ProcessLock` rides the exclusive-
+create lock file of M6, which is gone once the block ends. Tested by
+`spec/opal/gems/bundler_installer_spec.rb` (6 examples) and by a fourth
+`bundler_local.test.mjs` run: `Installer#run` in --local form (a bare
+`bundle install` would call `sources.remote!`, whose `Remote`/Fetcher
+wait for M8.4) against the fixture repository - the already-installed
+gem-source specs answer Using, the path gem gets its binstub under the
+repository's bin dir through `Source::Path::Installer`, and the written
+lock reads back with no re-resolve. What remains:
 
-* **M8.2 - install and command**: `installer.rb` delegating to
-  `Gem::Installer`, the `UI::Shell`, the `tasks/bundler{,.exe}.mjs` bundling
-  with `lib/opal/exe/bundler.rb`, and the `install`/`lock`/`list`/`check`
+* **M8.2 - the command**: the `tasks/bundler{,.exe}.mjs` bundling with
+  `lib/opal/exe/bundler.rb`, and the `install`/`lock`/`list`/`check`
   commands over the fixture index.
 * **M8.3 - the runtime half**: `runtime.rb`/`setup.rb`, `exec`/`show`/
   `info`/`platform`, `update` (the resolver's install side finally earns
   its keep, which also retires `gem update`'s omission), `clean`,
   the `config` command.
 * **M8.4 - remote breadth**: `source/rubygems.rb` over
-  `Gem::CompactIndexClient` and the fetch worker, `inject`/`add`/`remove`,
-  `source`/`binstubs`/`init`; only here does Bundler reach the network in
-  tests, and only against the fixture server.
+  `Gem::CompactIndexClient` and the fetch worker - the
+  `Source::Rubygems::Remote` and `Bundler::Fetcher` that a plain
+  (non-local) `bundle install` reaches at `setup_domain!` -,
+  `inject`/`add`/`remove`, `source`/`binstubs`/init; only here does
+  Bundler reach the network in tests, and only against the fixture
+  server.
 
 ### Suggested ordering rationale
 

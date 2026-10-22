@@ -4,8 +4,8 @@ module Bundler
   class Source
     class Path < Source
       # Opal: upstream autoloads Source::Path::Installer (path/installer.rb,
-      # which generates bins and would build extensions); it arrives with
-      # M8.2's install path, and only generate_bin reaches it.
+      # which generates bins and would build extensions); the port loads it
+      # eagerly through bundler.rb.
 
       attr_reader :path, :options, :root_path, :original_path
       attr_writer :name

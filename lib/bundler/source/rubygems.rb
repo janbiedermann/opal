@@ -626,10 +626,8 @@ module Bundler
           path = fetch_gem_if_possible(spec, options[:previous_spec])
           raise GemNotFound, "Could not find #{spec.file_name} for installation" unless path
 
-          # Opal: upstream requires its own installer subclass (a Gem::Installer
-          # that rewrites paths for git/path gems) here. That file arrives with
-          # M8.2's install path; a static require of the absent file would
-          # break every bundle that loads this source.
+          REQUIRE_MUTEX.synchronize { require_relative "../rubygems_gem_installer" }
+
           installer = Bundler::RubyGemsGemInstaller.at(
             path,
             content_address: (spec.content_address if Gem::ContentAddress.content_addressed?(spec, validate_ruby_abi: false)),

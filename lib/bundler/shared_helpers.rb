@@ -9,10 +9,11 @@ require_relative "current_ruby"
 # and requires "bundler/constants" from "bundler.rb", where autoloads would
 # leave it outside a compiled bundle.
 #
-# The subprocess-environment block - set_bundle_environment, set_env,
+# The subprocess-environment block - set_bundle_environment,
 # set_bundle_variables, set_path, set_rubyopt, set_rubylib, bundle_bin_path,
-# gemspec_path, source_root - waits for M8.3, where `bundle exec` and the
-# installer start handing environments to child processes.
+# gemspec_path, source_root - waits for M8.3, where `bundle exec` starts
+# handing environments to child processes. set_env comes with the M8.2
+# installer, whose configure_gem_home_and_path writes GEM_HOME/GEM_PATH.
 module Bundler
   module SharedHelpers
     def root
@@ -263,6 +264,17 @@ module Bundler
       return given if given && !given.empty?
       find_file(*gemfile_names)
     end
+
+    def set_env(key, value)
+      raise ArgumentError, "new key #{key}" unless EnvironmentPreserver::BUNDLER_KEYS.include?(key)
+      orig_key = "#{EnvironmentPreserver::BUNDLER_PREFIX}#{key}"
+      orig = ENV[key]
+      orig ||= EnvironmentPreserver::INTENTIONALLY_NIL
+      ENV[orig_key] ||= orig
+
+      ENV[key] = value
+    end
+    public :set_env
 
     def gemfile_names
       ["gems.rb", "Gemfile"]
