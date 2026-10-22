@@ -34,8 +34,8 @@ Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
 lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
-it; M8 is in with its foundation, matching, source/lockfile and Gemfile DSL
-slices, the definition and the resolver glue next.
+it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL and
+definition slices, the resolver glue and the `bundle` command next.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -182,8 +182,8 @@ every one reached through a failing gem path — are listed with their commits i
 What is still open, in the order that unblocks the rest:
 
 1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile and
-   Gemfile DSL slices (M8.1a-M8.1c-first-half) are in. `definition.rb` and
-   the resolver glue plus the `bundle` command (M8.2) are next. `lock` and
+   Gemfile DSL/definition slices (M8.1a-M8.1c) are in. The resolver glue plus
+   the `bundle` command and `settings.rb` (M8.2) are next. `lock` and
    the `update` commands - the lockfile and gemdeps machinery Bundler's own
    support stands on - are its scope now.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
@@ -1367,13 +1367,26 @@ before evaluating a Gemfile; and a `DSLError` snippet depends on a backtrace
 frame naming the Gemfile, which Opal's eval frames do not, so the message
 arrives without the quoted line. The Errno classes those paths rescue -
 `ENOSPC`, `EPROTO`, `EROFS`, `ENOTSUP` - were missing from corelib and joined
-its Errno table (§11). What's left of the slice:
+its Errno table (§11). M8.1c's second half landed with it: `definition.rb`
+and the pieces it needs - `lockfile_generator.rb` (it arrives early because
+the builder resolves `to_lock`'s `require_relative` at compile time), the
+`GemVersionPromoter`, `Source::RubygemsAggregate`, the full `Plugin::Events`
+set, and upstream's `reset_paths!`/`reset_settings_and_root!` (`reset!` only
+covers paths: plugins are not ported and undoing RubyGems' activations is
+M8.3's job). `worker.rb` lands as a sequential queue behind the same
+`enq`/`deq`/`stop` surface - Opal has no preemptive threads. The settings
+Definition consults during construction answer as documented deviations until
+`bundle config` arrives: `frozen_bundle?` answers false, `converge_locals`
+walks `{}`, and `lockfile_checksums` defaults off; call sites the resolve
+commands reach first - `setup_domain!`'s `set_command_option`,
+`requested_groups`, `locations("frozen")` - raise until `settings.rb` lands.
+Definition is tested by `spec/opal/gems/bundler_definition_spec.rb`
+(8 examples); its `resolve` still raises NameError for the unported
+`Bundler::Resolver`, which is the next slice. What remains:
 
-* **M8.1c - definition**: `definition.rb`; its resolve calls the
-  `Bundler::Resolver` M8.2 brings, so it lands with M8.2's first resolution.
 * **M8.2 - resolve and install**: `resolver/*` glue over the ported PubGrub
   (upstream's vendored copy goes, the way M3 took `Gem::PubGrub`),
-  `lockfile_generator.rb`, `installer.rb` delegating to `Gem::Installer`,
+  `installer.rb` delegating to `Gem::Installer`,
   the `tasks/bundler{,.exe}.mjs` bundling with `lib/opal/exe/bundler.rb`,
   and the `install`/`lock`/`list`/`check` commands over the fixture index.
 * **M8.3 - the runtime half**: `runtime.rb`/`setup.rb`, `exec`/`show`/

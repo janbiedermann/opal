@@ -45,6 +45,9 @@ require_relative "bundler/source_list"
 require_relative "bundler/source_map"
 require_relative "bundler/lockfile_parser"
 require_relative "bundler/dsl"
+require_relative "bundler/definition"
+require_relative "bundler/gem_version_promoter"
+require_relative "bundler/source/rubygems_aggregate"
 
 # Bundler provides a consistent environment for Ruby projects by
 # tracking and installing the exact gems and versions that are needed.
@@ -91,6 +94,41 @@ module Bundler
 
     def generic_local_platform
       Gem::Platform.generic(local_platform)
+    end
+
+    # Opal: upstream answers settings[:frozen] and falls back to
+    # settings[:deployment]; Bundler.settings is not ported yet (it lands
+    # with the `bundle` command slices), so the settings default - not
+    # frozen - answers until then.
+    def frozen_bundle?
+      false
+    end
+
+    # Opal: upstream's reset! also resets the plugin system (not ported) and
+    # undoes the RubyGems activation patches (they arrive with M8.3's setup),
+    # so reset! is just reset_paths! for now. The path resets matter because
+    # specs need to be able to drop the memoized root.
+    def reset!
+      reset_paths!
+    end
+
+    def reset_settings_and_root!
+      @settings = nil
+      @root = nil
+    end
+
+    def reset_paths!
+      @bin_path = nil
+      @bundle_path = nil
+      @configure = nil
+      @configured_bundle_path = nil
+      @definition = nil
+      @load = nil
+      @locked_gems = nil
+      @root = nil
+      @settings = nil
+      @setup = nil
+      @user_home = nil
     end
 
     def root

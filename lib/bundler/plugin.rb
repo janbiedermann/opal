@@ -27,9 +27,23 @@ module Bundler
 
     def self.hook(event, *args); end
 
+    # Upstream defines its event names in plugin/events.rb; the hooks are
+    # no-ops here, the constants only need to exist for the call sites.
     module Events
-      GEM_BEFORE_FETCH = :gem_before_fetch
-      GEM_AFTER_FETCH = :gem_after_fetch
+      GEM_BEFORE_EVAL = "before-eval"
+      GEM_AFTER_EVAL = "after-eval"
+      GEM_BEFORE_INSTALL_ALL = "before-install-all"
+      GEM_BEFORE_FETCH = "before-fetch"
+      GEM_AFTER_FETCH = "after-fetch"
+      GIT_BEFORE_FETCH = "before-git-fetch"
+      GIT_AFTER_FETCH = "after-git-fetch"
+      GEM_BEFORE_INSTALL = "before-install"
+      GEM_AFTER_INSTALL = "after-install"
+      GEM_AFTER_INSTALL_ALL = "after-install-all"
+      GEM_BEFORE_REQUIRE_ALL = "before-require-all"
+      GEM_BEFORE_REQUIRE = "before-require"
+      GEM_AFTER_REQUIRE = "after-require"
+      GEM_AFTER_REQUIRE_ALL = "after-require-all"
     end
   end
 end
