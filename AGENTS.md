@@ -321,6 +321,14 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   invalidates its compiled tree by design and the `.rb` answers again;
   *deleting* the `.rb` makes that require a LoadError, which is the digest
   working, not a loader bug.
+- The builder's `--gem NAME`/`-g` and `add_gem_dependency` resolve installed
+  gems through `lib/opal/compiler/builder/gem_paths.mjs` (GEM_PATH/GEM_HOME,
+  stub gemspecs parsed by regex, compiled digest dirs first). The toolchain
+  has no `OPAL_COMPILER_KEY`, so it trusts the compiled tree without the
+  digest check. A bundled `.js` ends with a *conditional* `Opal.loaded` mark
+  (`processors.mjs`): unconditional marking of module-form JS turned the next
+  require into a silent no-op, because `Opal.normalize("./greet.js")` is the
+  very name `require 'greet'` asks with.
 - A `spec/lib/gems/*.test.mjs` case that runs `exe/gem` and answers its HTTP
   requests from the test process must spawn it asynchronously: `spawnSync`
   blocks the event loop that serves the fixture, the child waits for a response

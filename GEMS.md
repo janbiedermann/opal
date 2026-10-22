@@ -33,9 +33,8 @@ manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
 Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
 lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8); `gem install --compile` is the one
-D7 entry point not wired yet. M8 has not been started; M7 is half in, its
-`exe/ruby` side came with M0 and M4 and its compiled-gem tree, the loader half
-of D7, came with `compile`.
+D7 entry point not wired yet. M8 has not been started; M7 is in except `gem install --compile` - the
+builder's `--gem`, the Opalfile directive and the compiled trees came with it.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -181,13 +180,12 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M6 is in** - the Opal-only `compile` command (D7) was its last piece, and
-   the loader half of the compiled tree came with it. Next is **M7's other
-   half**: `lib/opal/compiler/builder/gem_paths.mjs`, `--gem`/`-g` on the CLI
-   and `add_gem_dependency` in the Opalfile, and `gem install --compile`; the
-   `exe/ruby` half came with M0 and M4. `lock` and the `update` commands are
-   out with the lockfile, the gemdeps machinery and the resolver's install
-   side (M8).
+1. **M7's remainder is `gem install --compile`** - the compile command, both
+   loaders and the builder's `--gem`/`add_gem_dependency` are in. Next is
+   **M8 - Bundler** (§8): the Gemfile DSL, setup and require on top of the
+   resolver this port already has, and the `bundle` command. `lock` and the
+   `update` commands stay out with the lockfile, the gemdeps machinery and
+   the resolver's install side.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1216,7 +1214,7 @@ What the batch leaves out, each traceable to §1 or a later milestone:
   too. `compile` also has no upstream counterpart - CRuby has no ahead-of-time
   compiler - and takes a `--all` in exchange for upstream's per-option groups.
 
-### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **partly done**
+### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **in**, `gem install --compile` left
 
 * `lib/opal/compiler/builder/gem_paths.mjs`: read the gemspec stubs of
   `<gem_home>/specifications` — RubyGems 4.1 has no `index.json` and rescans
@@ -1234,13 +1232,20 @@ What the batch leaves out, each traceable to §1 or a later milestone:
 `exe/ruby -e "require 'rake'"` measurably faster with the compiled tree
 (`benchmark/`-style measurement, not a gate).
 
-**Status: partly done.** The third bullet's `exe/ruby` is finished — its
-loader is gem-aware (M4) and it loads a plain `.js` feature that registers no
-Opal module (M0). The other three have not started: `cli.mjs` and `options.mjs`
-still say `--gem` is "not available in Node.js" and ignore it, the builder's
-`Opalfile` reader warns that `add_gem_dependency` is ignored
-(`lib/opal/compiler/builder/project.mjs`), and nothing writes a `compiled/`
-tree.
+**Status: in.** `exe/ruby` was already there: its loader is gem-aware (M4), it
+loads a plain `.js` feature that registers no Opal module (M0), and it verifies
+the compiled tree's digest before preferring it (`compile`, M6).
+`gem_paths.mjs` is new (§11), `--gem` and `add_gem_dependency` now resolve
+through it, and the builder marks a bundled `.js` as loaded only when that file
+registered no module of the asked name - the condition a gem's compiled tree
+exposed, see §11's processors.mjs row. The exit test ran in its port-shaped
+form, offline: `exe/opal --gem greet` on a gem the port built and installed,
+including the compiled tree as the only thing that can answer and the
+not-installed warning (`spec/lib/gems/cli.test.mjs`, with unit coverage in
+`spec/lib/compiler/gem_paths.test.mjs`). The speed check, recorded with
+`5835b3e3a`: 346 -> 332 ms requiring one small gem against an uncached
+compile - the boot of the runtime dominates a gem that small, and the saving
+grows with the gem's size.
 
 ### M8 — Bundler (~3500 lines) — **not started**
 
@@ -1357,7 +1362,7 @@ M8 is the largest and depends on all of the above.
 The port itself is plain Ruby and lives outside the core trees (`lib/rubygems/`,
 its specs under `spec/opal/gems/` and `spec/lib/gems/`, the bundling in
 `tasks/ruby/bundle.mjs` and `tasks/gem/bundle.mjs`).
-What it did change inside `opal/` and `lib/opal/` is 25 files, +652/−136 lines
+What it did change inside `opal/` and `lib/opal/` is 29 files, +839/−142 lines
 since the branch base `6b22c1080`. Every one of them was reached by running gem
 code — reading a `.gem`, a gemspec, a binstub — or by running ruby/spec over
 the stdlib pieces the port needs, and each comes with a test: a case under
@@ -1408,6 +1413,9 @@ created_at needs (§8's M6 status).
 | `lib/opal/compiler/cli/runners/nodejs.mjs` | fec5398bf | the node runner publishes `OPAL_HOME` the way `tasks/ruby/bundle.mjs` bakes it into `exe/ruby`. A program compiled from source had no directory for its libraries — `__dir__` inside a required file names the load-path entry, not a path — and the transport reaches `lib/opal/gems/http.mjs` by path, since a Ruby file under `lib/opal/` is not a name a program can require (`opal/` is the runtime's namespace). |
 | `lib/opal/compiler/transforms/operator_assignment.mjs`, `nodes/if.mjs`, `nodes/begin.mjs`, `transforms/conditionals.mjs` | f950e0ed8 | M5. For a variable target the transform rewrote `@x ||= rhs` into `@x = (@x || rhs)`, a write in *both* branches; MRI assigns only where the short circuit reaches the right-hand side. A memo on a frozen object therefore raised (`Gem::Version` freezes itself and pre-caches its `||=` memos, and `Gem::Version.new` caches instances in `@@all`, so one frozen Version poisoned every `'1.0.0'` in the process; `@unset &&= v` likewise defined an ivar MRI leaves undefined). The write now sits inside the Or/And branch, and `if.mjs` renders an operator assignment as a ternary in every position while `begin.mjs` and `conditionals.mjs` keep the statement shape a right-hand side can have — a memoized `begin` with a guard clause, a `rescue` or a statement `%x{}` stays an IIFE, which is what makes those compile. Same commit: the `case` switch subject is parenthesized, so `case f(x)` over a `&&`-joined subject no longer misparses. Specs: `spec/opal/core/language/memoization_spec.rb`, `.../case_spec.rb`, and the compiler fixtures for `assignment/operators` and `control/case`. |
 | `lib/opal/exe/gem.rb` | 0bbcc9fa7 | M6, new. The `gem` command's program: `Gem::GemRunner.new.run ARGV.clone`, which is upstream's `exe/gem` — a command ends with `terminate_interaction`, which raises `Gem::SystemExitException`, and an uncaught `SystemExit` ends an Opal program with that status, so nothing here translates it. `tasks/gem.mjs` bundles it with opal, opal/full, thread, rubygems and opal-parser as a requirable module, plus the `OPAL_HOME` constant `Gem::HTTPTransport` reads to find `lib/opal/gems/http.mjs`; `tasks/gem_exe.mjs` makes the single-file executable, sharing the SEA re-run helper `tasks/sea_exe.mjs` with `tasks/ruby_exe.mjs`. |
+| `lib/opal/compiler/builder/gem_paths.mjs` | 5835b3e3a | M7, new. Installed gems as builder load paths in plain Node: the GEM_PATH/GEM_HOME repositories (defaulting to the user gem directory, which a test checks against `Gem.user_dir` so the two sides cannot drift), `specifications/*.gemspec` stubs read for name, version and require paths, and the answer puts a gem's compiled digest directories before its require paths, newest first. |
+| `lib/opal/compiler/builder/processors.mjs` | 5835b3e3a | M7. The `Opal.loaded(<file>)` mark a bundled `.js` ends with is conditional on the file not having registered `Opal.modules[<normalized name>]`: for a side-effect library the mark is right, but for a gem's compiled tree - module form - claiming it loaded turned the later require into a silent no-op that answered without running the module. |
+| `lib/opal/compiler/builder/project.mjs`, `cli/cli.mjs`, `cli/options.mjs` | 5835b3e3a | M7. `--gem NAME`/`-g` and the Opalfile's `add_gem_dependency` resolve through gem_paths.mjs instead of warning that gems are not available in Node.js; an unowned name warns and the build runs on. |
 
 Outside those two trees sit two tracked build artifacts: `exe/ruby` and
 `exe/gem`, the compiled bundles of the core plus the port, rebuilt by every
