@@ -156,6 +156,8 @@ You can use `i` command instead of `install`.
 
     exit_code = install_gems
 
+    compile_installed if options[:compile]
+
     show_installed
 
     terminate_interaction exit_code
@@ -224,6 +226,26 @@ You can use `i` command instead of `install`.
       msg = "Unable to pull data from '#{Gem::Uri.redact(x.source.uri)}': #{x.error.message}"
 
       alert_warning msg
+    end
+  end
+
+  # Opal: what --compile asks for (D7) - run gem compile's work over each
+  # spec this run installed. The gems are installed by the time this runs
+  # and the compile is an optimization: a file the compiler cannot read is
+  # reported and left out, its .rb answering that require, and neither a
+  # failure nor anything else changes the exit status of an install that
+  # succeeded, the way `gem compile` alone would answer for it.
+  def compile_installed # :nodoc:
+    require "opal-parser" # the compiler the output is made of, as CompileCommand takes it
+
+    @installed_specs.each do |spec|
+      written, failed = Gem::CompiledTree.compile(spec)
+
+      failed.each do |logical, e|
+        alert_warning "Cannot compile #{logical} of #{spec.full_name}: #{e.class}: #{e.message}"
+      end
+
+      verbose { "Compiled #{written} #{written == 1 ? "file" : "files"} for #{spec.full_name}" }
     end
   end
 

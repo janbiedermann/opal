@@ -108,6 +108,15 @@ module Gem::InstallUpdateOptions
       options[:ignore_dependencies] = value
     end
 
+    # Opal: D7. `gem compile` on everything this run installs, so the gem is
+    # found as JavaScript from the moment it lands. There is nothing like it
+    # upstream - CRuby has no ahead-of-time compiler.
+    add_option(:"Install/Update", "--[no-]compile",
+               "Compile the installed gems to JavaScript",
+               "after installing them (Opal only)") do |value, options|
+      options[:compile] = value
+    end
+
     add_option(:"Install/Update", "--[no-]format-executable",
                "Make installed executable names match Ruby.",
                "If Ruby is ruby18, foo_exec will be",

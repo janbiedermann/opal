@@ -32,9 +32,9 @@ manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
 `unpack`, `env`, `sources`, `outdated`, `dependency`, `cleanup` and the
 Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
 lockfile and gemdeps machinery, and the `update` commands, out with the
-dependency resolver's install side (M8); `gem install --compile` is the one
-D7 entry point not wired yet. M8 has not been started; M7 is in except `gem install --compile` - the
-builder's `--gem`, the Opalfile directive and the compiled trees came with it.
+dependency resolver's install side (M8). M8 has not been started; M7 is in -
+the builder's `--gem`, the Opalfile directive, the compiled trees and
+`gem install --compile` came with it.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -180,12 +180,10 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M7's remainder is `gem install --compile`** - the compile command, both
-   loaders and the builder's `--gem`/`add_gem_dependency` are in. Next is
-   **M8 - Bundler** (§8): the Gemfile DSL, setup and require on top of the
-   resolver this port already has, and the `bundle` command. `lock` and the
-   `update` commands stay out with the lockfile, the gemdeps machinery and
-   the resolver's install side.
+1. **Next is M8 - Bundler** (§8): the Gemfile DSL, setup and require on top
+   of the resolver this port already has, and the `bundle` command. `lock`
+   and the `update` commands - the lockfile and gemdeps machinery Bundler's
+   own support stands on - are its scope now.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
@@ -1209,12 +1207,12 @@ What the batch leaves out, each traceable to §1 or a later milestone:
 * `DependencyCommand`'s `-p` is the local/remote options' `--http-proxy`, which
   registers it after the command's own `--pipe`; `--pipe` is the form that
   reaches the pipe format. That collision is upstream's, comment and all.
-* Of D7's two entry points only `gem compile` is wired: `gem install --compile`
-  waits for M7, where the precompiled tree becomes something the builder reads
-  too. `compile` also has no upstream counterpart - CRuby has no ahead-of-time
-  compiler - and takes a `--all` in exchange for upstream's per-option groups.
+* Of D7's two entry points, M6 wired `gem compile`; the other, `gem install
+  --compile`, came with M7. `compile` has no upstream counterpart - CRuby has
+  no ahead-of-time compiler - and takes a `--all` in exchange for upstream's
+  per-option groups.
 
-### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **in**, `gem install --compile` left
+### M7 — `opal`/`ruby` find gems, and precompilation (~900 lines) — **done**
 
 * `lib/opal/compiler/builder/gem_paths.mjs`: read the gemspec stubs of
   `<gem_home>/specifications` — RubyGems 4.1 has no `index.json` and rescans
@@ -1245,7 +1243,10 @@ not-installed warning (`spec/lib/gems/cli.test.mjs`, with unit coverage in
 `spec/lib/compiler/gem_paths.test.mjs`). The speed check, recorded with
 `5835b3e3a`: 346 -> 332 ms requiring one small gem against an uncached
 compile - the boot of the runtime dominates a gem that small, and the saving
-grows with the gem's size.
+grows with the gem's size. `gem install --compile`, the last D7 entry point,
+came with it: `--[no-]compile` on install compiles each spec the run
+installed, reporting - rather than failing - a file the compiler cannot read,
+whose `.rb` then answers as it did before.
 
 ### M8 — Bundler (~3500 lines) — **not started**
 

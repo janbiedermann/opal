@@ -469,4 +469,19 @@ describe("the gem command", () => {
     assert.equal(missing.out.trim(), "1");
     assert.equal(missing.status, 0, missing.err);
   });
+
+  test("--compile writes the compiled tree while installing", () => {
+    const stamp = builtGem("stamp", "0.1.0");
+    const installed = gemIn(stamp.dir, {}, "install", "./stamp-0.1.0.gem", "--no-document", "--compile");
+    assert.match(installed.out, /1 gem installed/, `${installed.out}${installed.err}`);
+    assert.equal(installed.status, 0, installed.err);
+
+    const compiledRoot = join(DIR, "repo", "gems", "stamp-0.1.0", "compiled", "stamp-0.1.0");
+    const digests = readdirSync(compiledRoot);
+    assert.equal(digests.length, 1, compiledRoot);
+    assert.ok(existsSync(join(compiledRoot, digests[0], "stamp.js")), compiledRoot);
+
+    const required = run(RUBY, join(DIR, "nowhere"), {}, ["-e", "require 'stamp'; puts Stamp.hello"]);
+    assert.equal(required.out.trim(), "stamp", `${required.out}${required.err}`);
+  });
 });
