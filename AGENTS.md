@@ -75,6 +75,14 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   IE11 and other ES5-era engines are not supported, so generated code and the
   runtime may use `?.`, `??`, `??=`, class fields, `Object.hasOwn`, `Array.at`,
   `Object.groupBy`, `Promise.withResolvers` and the RegExp `v` flag.
+- Opal transpiles the Ruby `/x` (extended) regexp flag - statically through
+  `opal/runtime/regexp_transpiler.mjs`; only `/o` is dropped, with a warning.
+  Ruby's line-anchored `^`/`$` and Ruby `/m` (dotAll) work too. But a `/x`
+  pattern that interpolates another Regexp (`space = / /` then `#{space}{2}`,
+  as upstream's lockfile parser does) breaks at run time: `$regexp` inserts
+  the interpolated source unguarded, the x-transpile drops that space and
+  leaves the `{n}` quantifier dangling ("Nothing to repeat"). Write those
+  literals as escaped spaces (`\ {2}`) in the extended pattern instead.
 - The list of MSpec files is in `spec/selection/common` (with per-platform
   additions/exclusions in `spec/selection/<platform>`, `!` lines exclude) and
   filters live in

@@ -44,6 +44,7 @@ require_relative "bundler/source/rubygems"
 require_relative "bundler/source_list"
 require_relative "bundler/source_map"
 require_relative "bundler/lockfile_parser"
+require_relative "bundler/dsl"
 
 # Bundler provides a consistent environment for Ruby projects by
 # tracking and installing the exact gems and versions that are needed.

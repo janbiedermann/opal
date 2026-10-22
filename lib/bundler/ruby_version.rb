@@ -49,10 +49,12 @@ module Bundler
     end
 
     # @private
-    # Opal: upstream writes this with /xo; Opal drops /x silently, so it goes
-    # in single-line form. Upstream extended shape:
-    #   ruby\s (\d+\.\d+\.\d+(?:\.\S+)?) (?:p(-?\d+))? (?:\s\((\S+)\s(.+)\))?
-    PATTERN = /ruby\s(\d+\.\d+\.\d+(?:\.\S+)?)(?:p(-?\d+))?(?:\s\((\S+)\s(.+)\))?/
+    PATTERN = /
+      ruby\s
+      (\d+\.\d+\.\d+(?:\.\S+)?) # ruby version
+      (?:p(-?\d+))? # optional patchlevel
+      (?:\s\((\S+)\s(.+)\))? # optional engine info
+    /xo
 
     # Returns a RubyVersion from the given string.
     # @param [String] the version string to match.

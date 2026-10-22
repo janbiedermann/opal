@@ -18,14 +18,19 @@ module ::Errno
     [:EISDIR, 'Is a directory', 21],
     [:EINVAL, 'Invalid argument', 22],
     [:EMFILE, 'Too many open files', 24],
+    [:ENOSPC, 'No space left on device', 28],
     [:ESPIPE, 'Illegal seek', 29],
+    [:EROFS, 'Read-only file system', 30],
     [:EPIPE, 'Broken pipe', 32],
     [:ENAMETOOLONG, 'File name too long', 36],
     [:ENOTEMPTY, 'Directory not empty', 39],
     [:ELOOP, 'Too many symbolic links encountered', 40],
+    [:EPROTO, 'Protocol error', 71],
     [:EFTYPE, 'Inappropriate file type or format', 79],
     [:EILSEQ, 'Illegal byte sequence', 84],
-    [:EOPNOTSUPP, 'Operation not supported on transport endpoint', 95]
+    [:EOPNOTSUPP, 'Operation not supported on transport endpoint', 95],
+    # CRuby defines ENOTSUP alongside EOPNOTSUPP, both code 95 on Linux.
+    [:ENOTSUP, 'Operation not supported', 95]
   ]
 
   klass = nil

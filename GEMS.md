@@ -34,8 +34,8 @@ Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
 lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
-it; M8 is in with its foundation, matching and source/lockfile slices, the
-Gemfile DSL and the resolver glue next.
+it; M8 is in with its foundation, matching, source/lockfile and Gemfile DSL
+slices, the definition and the resolver glue next.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -181,10 +181,10 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M8 - Bundler is in** (§8): the foundation, matching and source/lockfile
-   slices (M8.1a-M8.1b) are in. The Gemfile DSL and definition (M8.1c) and
-   the resolver glue plus the `bundle` command (M8.2) are next. `lock` and the
-   `update` commands - the lockfile and gemdeps machinery Bundler's own
+1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile and
+   Gemfile DSL slices (M8.1a-M8.1c-first-half) are in. `definition.rb` and
+   the resolver glue plus the `bundle` command (M8.2) are next. `lock` and
+   the `update` commands - the lockfile and gemdeps machinery Bundler's own
    support stands on - are its scope now.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
@@ -1335,10 +1335,11 @@ command; no slice claims it yet) and the plugin system is not ported, so
 nothing, and `source_list_for` drops the plugin `when` arm; `Bundler.ui`
 answers upstream's Silent UI until the command layer brings the Shell (and
 with it the RGProxy into Gem's user interaction); `app_cache` answers the
-default `vendor/cache` because settings is M8.2; the two NAME_VERSION regexes
-and `RubyVersion::PATTERN` are written in single-line form - Opal drops the
-/x flag silently, and a `/xo` pattern would match literal spaces and comments;
-the parser's `strip!`s answer stripped copies; `eval_gemspec` drops psych (the
+default `vendor/cache` because settings is M8.2; the lockfile parser's two
+extended NAME_VERSION regexps keep their shape but write their literal
+spaces escaped (`\ `) instead of upstream's `#{space}` interpolation, which
+Opal's `$regexp` breaks under /x; the parser's `strip!`s answer stripped
+copies; `eval_gemspec` drops psych (the
 ported `Gem::Specification.from_yaml` parses through the ported
 YAMLSerializer) and requires opal-parser for the eval; the installer require
 in `Source::Rubygems#rubygems_gem_installer` waits for that class in M8.2;
@@ -1351,11 +1352,25 @@ AllowSettingSource prepend, the full_gem_path/loaded_from/extension_dir/
 load_paths overrides, `lock_name`, `installation_missing?` - skips upstream's
 `@@array_attributes` repair (the ported Specification declares its attributes)
 and its remove_method-before-gem_dir (redefining shadows the ported answer
-without caring who owns it). The rest of the slices:
+without caring who owns it).
 
-* **M8.1c - the Gemfile DSL**: `dsl.rb` + `ruby_dsl.rb` and `definition.rb`;
-  definition's resolve calls the `Bundler::Resolver` M8.2 brings, so this
-  slice lands with M8.2's first resolution.
+M8.1c's first half, the Gemfile DSL, is in too: `dsl.rb` (with `DSLError`)
+and `ruby_dsl.rb`, tested by `spec/opal/gems/bundler_dsl_spec.rb`
+(12 examples). Its deviations: corelib's Symbol is String, so the guards that
+discriminate Symbols answer by shape - `validate_gem_name!`'s Symbol-name arm
+goes (it would reject every name) and `override`'s operation arms collapse to
+"named operation by value, anything else parses as a requirement"; the
+Injector marker string goes inline (no `bundle inject`); the gemspec-conflict
+arm loads the port's PubGrub through `rubygems/vendored_pub_grub` instead of
+the vendored copy; `eval_gemfile` requires opal-parser for the `instance_eval`
+before evaluating a Gemfile; and a `DSLError` snippet depends on a backtrace
+frame naming the Gemfile, which Opal's eval frames do not, so the message
+arrives without the quoted line. The Errno classes those paths rescue -
+`ENOSPC`, `EPROTO`, `EROFS`, `ENOTSUP` - were missing from corelib and joined
+its Errno table (§11). What's left of the slice:
+
+* **M8.1c - definition**: `definition.rb`; its resolve calls the
+  `Bundler::Resolver` M8.2 brings, so it lands with M8.2's first resolution.
 * **M8.2 - resolve and install**: `resolver/*` glue over the ported PubGrub
   (upstream's vendored copy goes, the way M3 took `Gem::PubGrub`),
   `lockfile_generator.rb`, `installer.rb` delegating to `Gem::Installer`,

@@ -18,6 +18,13 @@ module Bundler
       raise PluginError, NOT_PORTED
     end
 
+    # The DSL's `source ..., type:` asks which plugin provides a source type;
+    # with no plugin system the answer is always none, and the DSL then
+    # raises InvalidOption for the requested type.
+    def self.source_plugin(type)
+      nil
+    end
+
     def self.hook(event, *args); end
 
     module Events

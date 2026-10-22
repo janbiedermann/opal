@@ -220,23 +220,30 @@ module Bundler
       end
     end
 
-    # Opal: upstream writes these two with /xo (extended + once); Opal drops
-    # /x silently, so they go in single-line form with literal spaces. The
-    # upstream extended shape, for reference:
-    #   ^(#{space}{2}|#{space}{4}|#{space}{6})(?!#{space})   # 2, 4 or 6 spaces
-    #   (.*?)                                                # name
-    #   (?:#{space}\(([^-]*                                 # version
-    #   (?:-(.*))?\))?                                       # optional platform
-    #   (!)?                                                 # pinned marker
-    #   (?:#{space}([^ ]+))?                                 # optional checksum
-    #   $
-    NAME_VERSION = /^(  |    |      )(?! )(.*?)(?: \(([^-]*)(?:-(.*))?\))?(!)?(?: ([^ ]+))?$/
+    # Opal: upstream interpolates `space = / /` into these two patterns, but
+    # the run-time $regexp helper inserts an interpolated Regexp's source
+    # without a wrapper, and the /x transpile then drops those spaces and
+    # leaves the `{n}` quantifiers dangling. The literals go in as escaped
+    # spaces instead; the shape is the same.
+    NAME_VERSION = /
+      ^(\ {2}|\ {4}|\ {6})(?!\ ) # Exactly 2, 4, or 6 spaces at the start of the line
+      (.*?)                      # Name
+      (?:\ \(([^-]*)             # Space, followed by version
+      (?:-(.*))?\))?             # Optional platform
+      (!)?                       # Optional pinned marker
+      (?:\ ([^ ]+))?             # Optional checksum
+      $                          # Line end
+    /xo
 
-    # Upstream extended shape:
-    #   ^#{space}{2}(?!#{space})(.*?)#{space}\(([^-]*)-(.*)\) # name (version-platform)
-    #   #{space}([0-9a-f]{8,64})                             # content address
-    #   (?:#{space}([^ ]+))?$                                # optional checksums
-    NAME_VERSION_CONTENT_ADDRESS = /^  (?! )(.*?) \(([^-]*)-(.*)\) ([0-9a-f]{8,64})(?: ([^ ]+))?$/
+    NAME_VERSION_CONTENT_ADDRESS = /
+      ^\ {2}(?!\ )               # Exactly 2 spaces at the start of the line
+      (.*?)                      # Name
+      \ \(([^-]*)                # Space, followed by version
+      -(.*)\)                    # Platform, always present for content-addressable gems
+      \ ([0-9a-f]{8,64})         # Content address
+      (?:\ ([^ ]+))?             # Optional checksums
+      $                          # Line end
+    /xo
 
     def parse_dependency(line)
       return unless line =~ NAME_VERSION
