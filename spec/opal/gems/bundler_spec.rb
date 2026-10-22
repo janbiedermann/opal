@@ -114,6 +114,10 @@ describe 'Bundler' do
 
   describe 'SharedHelpers gemfile finding' do
     before :each do
+      # Bundler.root is memoized (local_platform's settings guard reaches it
+      # through Bundler.settings), so this example needs a fresh one under its
+      # BUNDLE_GEMFILE; the reset after keeps this tmp root from leaking.
+      Bundler.reset_settings_and_root!
       @dir = tmp('bundler_gemfiles')
       FileUtils.mkdir_p(@dir)
       @gemfile = File.join(@dir, 'Gemfile')
@@ -135,6 +139,7 @@ describe 'Bundler' do
       else
         ENV.delete 'BUNDLE_LOCKFILE'
       end
+      Bundler.reset_settings_and_root!
     end
 
     it "takes the gemfile from BUNDLE_GEMFILE" do

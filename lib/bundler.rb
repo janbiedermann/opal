@@ -34,6 +34,8 @@ require_relative "bundler/uri_credentials_filter"
 require_relative "bundler/plugin"
 require_relative "bundler/checksum"
 require_relative "bundler/ruby_version"
+require_relative "bundler/feature_flag"
+require_relative "bundler/settings"
 require_relative "bundler/rubygems_integration"
 require_relative "bundler/source"
 require_relative "bundler/source/metadata"
@@ -85,11 +87,8 @@ module Bundler
       @ui = ui
     end
 
-    # Opal: upstream's `local_platform` first obeys settings'
-    # :force_ruby_platform; settings arrives with M8.2 and the guard comes
-    # back with it. Nothing else to ask here: the port's platform is the
-    # plain "ruby" one (see Gem::Platform.local).
     def local_platform
+      return Gem::Platform::RUBY if Bundler.settings[:force_ruby_platform]
       Gem::Platform.local
     end
 
@@ -97,12 +96,11 @@ module Bundler
       Gem::Platform.generic(local_platform)
     end
 
-    # Opal: upstream answers settings[:frozen] and falls back to
-    # settings[:deployment]; Bundler.settings is not ported yet (it lands
-    # with the `bundle` command slices), so the settings default - not
-    # frozen - answers until then.
     def frozen_bundle?
-      false
+      frozen = Bundler.settings[:frozen]
+      return frozen unless frozen.nil?
+
+      Bundler.settings[:deployment]
     end
 
     # Opal: upstream's reset! also resets the plugin system (not ported) and
@@ -152,6 +150,37 @@ module Bundler
 
     def default_bundle_dir
       SharedHelpers.default_bundle_dir
+    end
+
+    def app_config_path
+      if app_config = ENV["BUNDLE_APP_CONFIG"]
+        app_config_pathname = Pathname.new(app_config)
+
+        if app_config_pathname.absolute?
+          app_config_pathname
+        else
+        app_config_pathname.expand_path(root)
+        end
+      else
+        root.join(".bundle")
+      end
+    end
+
+    def settings
+      @settings ||= Settings.new(app_config_path)
+    rescue GemfileNotFound
+      @settings = Settings.new
+    end
+
+    def feature_flag
+      @feature_flag ||= FeatureFlag.new(Bundler.settings[:simulate_version] || VERSION)
+    end
+
+    # Opal: RbConfig is not defined in this runtime, and RUBY_VERSION is what
+    # the running interpreter reports, so the scope uses it for the upstream
+    # RbConfig::CONFIG["ruby_version"] half.
+    def ruby_scope
+      "#{Bundler.rubygems.ruby_engine}/#{RUBY_VERSION}"
     end
 
     # Opal: bundle_path, specs_path, user_home, configure, ui and the reset
@@ -242,8 +271,6 @@ module Bundler
       FileUtils.remove_entry_secure(path) if path && File.exist?(path)
     end
 
-    # Opal: upstream asks settings for the cache directory name; settings
-    # arrives with M8.2, and until then this answers its default.
     def locked_gems
       @locked_gems ||=
         if defined?(@definition) && @definition
@@ -256,7 +283,7 @@ module Bundler
 
     def app_cache(custom_path = nil)
       path = custom_path || root
-      Pathname.new(path).join("vendor", "cache")
+      Pathname.new(path).join(Bundler.settings.app_cache_path)
     end
 
     def eval_yaml_gemspec(path, contents)

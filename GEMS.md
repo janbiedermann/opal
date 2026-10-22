@@ -35,7 +35,8 @@ lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
 it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL,
-definition and resolver slices, the `bundle` command and settings next.
+definition, resolver and settings slices, the `bundle` command and installer
+next.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -1299,7 +1300,7 @@ that needed it; `pwd`/`chdir` run without the ext_lock the extension builds
 need (the port builds none); `md5_available?` answers true outright (no
 openssl stdlib to probe, and the corelib's digest ships the MD5 that
 upstream's LoadError branch then answers with); the `local_platform` settings
-guard returns with M8.2; `constants.rb` lacks NULL; `String#<<` concatenates
+guard came back with the settings slice; `constants.rb` lacks NULL; `String#<<` concatenates
 (corelib has no mutable String append); and shared_helpers'
 subprocess-environment block (`set_env`, `set_path`, `set_rubyopt`, the
 bin/gemspec path finders) waits for M8.3's exec.
@@ -1335,8 +1336,7 @@ command; no slice claims it yet) and the plugin system is not ported, so
 `Plugin.from_lock`/`Plugin.source` raise PluginError, its fetch hooks do
 nothing, and `source_list_for` drops the plugin `when` arm; `Bundler.ui`
 answers upstream's Silent UI until the command layer brings the Shell (and
-with it the RGProxy into Gem's user interaction); `app_cache` answers the
-default `vendor/cache` because settings is M8.2; the lockfile parser's two
+with it the RGProxy into Gem's user interaction); the lockfile parser's two
 extended NAME_VERSION regexps keep their shape but write their literal
 spaces escaped (`\ `) instead of upstream's `#{space}` interpolation, which
 Opal's `$regexp` breaks under /x; the parser's `strip!`s answer stripped
@@ -1375,24 +1375,15 @@ the builder resolves `to_lock`'s `require_relative` at compile time), the
 set, and upstream's `reset_paths!`/`reset_settings_and_root!` (`reset!` only
 covers paths: plugins are not ported and undoing RubyGems' activations is
 M8.3's job). `worker.rb` lands as a sequential queue behind the same
-`enq`/`deq`/`stop` surface - Opal has no preemptive threads. The settings
-Definition consults during construction answer as documented deviations until
-`bundle config` arrives: `frozen_bundle?` answers false, `converge_locals`
-walks `{}`, and `lockfile_checksums` defaults off; call sites the resolve
-commands reach first - `setup_domain!`'s `set_command_option`,
-`requested_groups`, `locations("frozen")` - raise until `settings.rb` lands.
-Definition is tested by `spec/opal/gems/bundler_definition_spec.rb`
-(8 examples). The resolver glue is in too: `resolver.rb` and `resolver/*`
+`enq`/`deq`/`stop` surface - Opal has no preemptive threads. Definition is
+tested by `spec/opal/gems/bundler_definition_spec.rb` (8 examples). The resolver glue is in too: `resolver.rb` and `resolver/*`
 copy over nearly verbatim - upstream 4.1's Bundler already dropped its own
 PubGrub copy and delegates to RubyGems' through a `vendored_pub_grub.rb`
 that is byte-identical to the port's `rubygems/vendored_pub_grub`, so the
 `Gem::PubGrub` namespace the resolver code speaks is the one M3 vendored.
 The deviations are small: the `require` goes through that rubygems
 bootstrap; the resolution logger is the Silent UI until `UI::Shell` arrives
-with the command slices; `raise_not_found!`'s cache-message names the
-default `vendor/cache` in place of `settings.app_cache_path`;
-`should_add_extra_platforms?` answers the settings default for its
-`force_ruby_platform` guard; `Bundler.locked_gems` joined the root methods
+with the command slices; `Bundler.locked_gems` joined the root methods
 for the platform-mismatch hint; and the message chains concatenate.
 Resolution is tested end to end: `bundler_local.test.mjs` now solves a
 Gemfile (a normal gem, a gem pulling a second one through its dependency,
@@ -1400,17 +1391,39 @@ and a path gem) with PubGrub against the `exe/gem`-installed repository,
 writes the lockfile through `to_lock`, reads it back with no re-resolve
 needed, and checks the `GemNotFound` an unsatisfiable Gemfile answers;
 `spec/opal/gems/bundler_resolver_spec.rb` (6 examples) pins the
-Candidate/SpecGroup/Package/GemVersionPromoter primitives. What remains:
+Candidate/SpecGroup/Package/GemVersionPromoter primitives. The settings slice
+is in too: `settings.rb`, `settings/validator.rb`, `mirror.rb` and
+`feature_flag.rb`, and `cooldown_settings.rb` on the rubygems side. The root
+now carries `settings`, `feature_flag`, `ruby_scope` and `app_config_path`,
+and every call site that had been answering a documented settings default
+went back to the faithful call: `frozen_bundle?` and `local_platform` run the
+upstream bodies, Definition's `lockfile_checksums`/`local_overrides`/
+`force_ruby_platform` answers read the settings (a lock written without a
+predecessor can now carry a CHECKSUMS section - 4.1's
+`BUNDLE_LOCKFILE_CHECKSUMS` default is true), and the resolver's cache hint
+names `settings.app_cache_path`. Its deviations: the autoload lines became a
+`require_relative` of the validator plus a use-site `require_relative` of the
+mirror set (it pulls in stdlib socket), upstream's `vendored_uri` requires
+resolve to the ported `rubygems/uri`, and `credential_store_class` checks the
+constant instead of the un-vendored literal
+`require "rubygems/credential_store"` - the builder would resolve it at build
+time - answering the nil upstream's `rescue LoadError` returns; the store
+stays dormant until a `credential_store` setting arrives with its backend.
+corelib has no mutating `String#gsub!`/`upcase!`/`downcase!` (nor
+`Array#map!`), so the key rewrites in `key_for`, `all` and `load_config` are
+expression rewrites keeping upstream's ___-before-__ order; and `ruby_scope`
+takes its interpreter half from `RUBY_VERSION` (RbConfig is not defined).
+Tested by `spec/opal/gems/bundler_settings_spec.rb` (11 examples).
+What remains:
 
 * **M8.2 - install and command**: `installer.rb` delegating to
-  `Gem::Installer`, `settings.rb` (the remaining settings call sites:
-  `setup_domain!`, `requested_groups`, `frozen_bundle?` for real), the
-  `tasks/bundler{,.exe}.mjs` bundling with `lib/opal/exe/bundler.rb`, and
-  the `install`/`lock`/`list`/`check` commands over the fixture index.
+  `Gem::Installer`, the `UI::Shell`, the `tasks/bundler{,.exe}.mjs` bundling
+  with `lib/opal/exe/bundler.rb`, and the `install`/`lock`/`list`/`check`
+  commands over the fixture index.
 * **M8.3 - the runtime half**: `runtime.rb`/`setup.rb`, `exec`/`show`/
   `info`/`platform`, `update` (the resolver's install side finally earns
   its keep, which also retires `gem update`'s omission), `clean`,
-  `config`/settings.
+  the `config` command.
 * **M8.4 - remote breadth**: `source/rubygems.rb` over
   `Gem::CompactIndexClient` and the fetch worker, `inject`/`add`/`remove`,
   `source`/`binstubs`/`init`; only here does Bundler reach the network in

@@ -145,10 +145,7 @@ module Bundler
         @locked_sources = []
         @originally_locked_specs = @locked_specs
         @originally_locked_sources = @locked_sources
-        # Opal: Bundler.settings is not ported yet (it arrives with the
-        # `bundle` command slices); its default for lockfile_checksums is
-        # off, so that answer goes here until settings lands.
-        @locked_checksums = false
+        @locked_checksums = Bundler.settings[:lockfile_checksums]
       end
 
       @unlocking_ruby ||= if @ruby_version && locked_ruby_version_object
@@ -680,10 +677,7 @@ module Bundler
     end
 
     def should_add_extra_platforms?
-      # Opal: Bundler.settings is not ported yet (it lands with the `bundle`
-      # command slices); its force_ruby_platform default is off, and that
-      # answer goes into the guard until settings lands.
-      !lockfile_exists? && Bundler::MatchPlatform.generic_local_platform_is_ruby?
+      !lockfile_exists? && Bundler::MatchPlatform.generic_local_platform_is_ruby? && !Bundler.settings[:force_ruby_platform]
     end
 
     def lockfile_exists?
@@ -991,11 +985,7 @@ module Bundler
     def converge_locals
       locals = []
 
-      # Opal: Bundler.settings is not ported yet (it lands with the `bundle`
-      # command slices); its local_overrides answer is {} until then, so the
-      # loop body never runs and converge_locals answers false - what upstream
-      # does with an unconfigured `bundle config local.`.
-      {}.map do |k, v|
+      Bundler.settings.local_overrides.map do |k, v|
         spec   = @dependencies.find {|s| s.name == k }
         source = spec&.source
         if source&.respond_to?(:local_override!)

@@ -391,10 +391,7 @@ module Bundler
       matching_part = name
       requirement_label = SharedHelpers.pretty_dependency(package.dependency)
       cache_message = begin
-                          # Opal: Bundler.settings is unported (it lands with the
-                          # command slices); the default app_cache path Bundler.app_cache
-                          # already answers goes here instead of settings.app_cache_path.
-                          " or in gems cached in vendor/cache" if Bundler.app_cache.exist?
+                          " or in gems cached in #{Bundler.settings.app_cache_path}" if Bundler.app_cache.exist?
                         rescue GemfileNotFound
                           nil
                         end

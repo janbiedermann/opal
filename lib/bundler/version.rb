@@ -19,7 +19,6 @@ module Bundler
   end
 
   def self.simulated_version
-    # Opal: Bundler.settings lands with M8.2; nothing reaches this before.
     @simulated_version ||= Bundler.settings[:simulate_version]
   end
 end
