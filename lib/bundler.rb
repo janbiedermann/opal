@@ -46,6 +46,7 @@ require_relative "bundler/source_map"
 require_relative "bundler/lockfile_parser"
 require_relative "bundler/dsl"
 require_relative "bundler/definition"
+require_relative "bundler/resolver"
 require_relative "bundler/gem_version_promoter"
 require_relative "bundler/source/rubygems_aggregate"
 
@@ -243,6 +244,16 @@ module Bundler
 
     # Opal: upstream asks settings for the cache directory name; settings
     # arrives with M8.2, and until then this answers its default.
+    def locked_gems
+      @locked_gems ||=
+        if defined?(@definition) && @definition
+          definition.locked_gems
+        elsif Bundler.default_lockfile.file?
+          lock = Bundler.read_file(Bundler.default_lockfile)
+          LockfileParser.new(lock)
+        end
+    end
+
     def app_cache(custom_path = nil)
       path = custom_path || root
       Pathname.new(path).join("vendor", "cache")

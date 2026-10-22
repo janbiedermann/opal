@@ -34,8 +34,8 @@ Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
 lockfile and gemdeps machinery, and the `update` commands, out with the
 dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
-it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL and
-definition slices, the resolver glue and the `bundle` command next.
+it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL,
+definition and resolver slices, the `bundle` command and settings next.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -181,9 +181,10 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile and
-   Gemfile DSL/definition slices (M8.1a-M8.1c) are in. The resolver glue plus
-   the `bundle` command and `settings.rb` (M8.2) are next. `lock` and
+1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile,
+   Gemfile DSL, definition and resolver slices are in (M8.1a-M8.2-resolve).
+   The `bundle` command with `installer.rb` and `settings.rb`
+   (M8.2-install) are next. `lock` and
    the `update` commands - the lockfile and gemdeps machinery Bundler's own
    support stands on - are its scope now.
 2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
@@ -1381,14 +1382,31 @@ walks `{}`, and `lockfile_checksums` defaults off; call sites the resolve
 commands reach first - `setup_domain!`'s `set_command_option`,
 `requested_groups`, `locations("frozen")` - raise until `settings.rb` lands.
 Definition is tested by `spec/opal/gems/bundler_definition_spec.rb`
-(8 examples); its `resolve` still raises NameError for the unported
-`Bundler::Resolver`, which is the next slice. What remains:
+(8 examples). The resolver glue is in too: `resolver.rb` and `resolver/*`
+copy over nearly verbatim - upstream 4.1's Bundler already dropped its own
+PubGrub copy and delegates to RubyGems' through a `vendored_pub_grub.rb`
+that is byte-identical to the port's `rubygems/vendored_pub_grub`, so the
+`Gem::PubGrub` namespace the resolver code speaks is the one M3 vendored.
+The deviations are small: the `require` goes through that rubygems
+bootstrap; the resolution logger is the Silent UI until `UI::Shell` arrives
+with the command slices; `raise_not_found!`'s cache-message names the
+default `vendor/cache` in place of `settings.app_cache_path`;
+`should_add_extra_platforms?` answers the settings default for its
+`force_ruby_platform` guard; `Bundler.locked_gems` joined the root methods
+for the platform-mismatch hint; and the message chains concatenate.
+Resolution is tested end to end: `bundler_local.test.mjs` now solves a
+Gemfile (a normal gem, a gem pulling a second one through its dependency,
+and a path gem) with PubGrub against the `exe/gem`-installed repository,
+writes the lockfile through `to_lock`, reads it back with no re-resolve
+needed, and checks the `GemNotFound` an unsatisfiable Gemfile answers;
+`spec/opal/gems/bundler_resolver_spec.rb` (6 examples) pins the
+Candidate/SpecGroup/Package/GemVersionPromoter primitives. What remains:
 
-* **M8.2 - resolve and install**: `resolver/*` glue over the ported PubGrub
-  (upstream's vendored copy goes, the way M3 took `Gem::PubGrub`),
-  `installer.rb` delegating to `Gem::Installer`,
-  the `tasks/bundler{,.exe}.mjs` bundling with `lib/opal/exe/bundler.rb`,
-  and the `install`/`lock`/`list`/`check` commands over the fixture index.
+* **M8.2 - install and command**: `installer.rb` delegating to
+  `Gem::Installer`, `settings.rb` (the remaining settings call sites:
+  `setup_domain!`, `requested_groups`, `frozen_bundle?` for real), the
+  `tasks/bundler{,.exe}.mjs` bundling with `lib/opal/exe/bundler.rb`, and
+  the `install`/`lock`/`list`/`check` commands over the fixture index.
 * **M8.3 - the runtime half**: `runtime.rb`/`setup.rb`, `exec`/`show`/
   `info`/`platform`, `update` (the resolver's install side finally earns
   its keep, which also retires `gem update`'s omission), `clean`,

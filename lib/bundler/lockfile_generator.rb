@@ -33,10 +33,10 @@ module Bundler
 
     def add_sources
       definition.sources.lock_sources.each_with_index do |source, idx|
-        out += "\n" unless idx.zero?
+        @out += "\n" unless idx.zero?
 
         # Add the source header
-        out += source.to_lock
+        @out += source.to_lock
 
         # Find all specs for this source
         specs = definition.resolve.select {|s| source.can_lock?(s) }
@@ -50,7 +50,7 @@ module Bundler
       # are ordered consistently
       specs.sort_by(&:full_name).each do |spec|
         next if spec.name == "bundler"
-        out += spec.to_lock
+        @out += spec.to_lock
       end
     end
 
@@ -59,12 +59,12 @@ module Bundler
     end
 
     def add_dependencies
-      out += "\nDEPENDENCIES\n"
+      @out += "\nDEPENDENCIES\n"
 
       handled = []
       definition.dependencies.sort_by(&:to_s).each do |dep|
         next if handled.include?(dep.name)
-        out += dep.to_lock + "\n"
+        @out += dep.to_lock + "\n"
         handled << dep.name
       end
     end
@@ -109,18 +109,18 @@ module Bundler
     end
 
     def add_section(name, value)
-      out += "\n#{name}\n"
+      @out += "\n#{name}\n"
       case value
       when Array
         value.map(&:to_s).sort.each do |val|
-          out += "  #{val}\n"
+          @out += "  #{val}\n"
         end
       when Hash
         value.to_a.sort_by {|k, _| k.to_s }.each do |key, val|
-          out += "  #{key}: #{val}\n"
+          @out += "  #{key}: #{val}\n"
         end
       when String
-        out += "  #{value}\n"
+        @out += "  #{value}\n"
       else
         raise ArgumentError, "#{value.inspect} can't be serialized in a lockfile"
       end

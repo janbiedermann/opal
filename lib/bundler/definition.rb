@@ -680,7 +680,10 @@ module Bundler
     end
 
     def should_add_extra_platforms?
-      !lockfile_exists? && Bundler::MatchPlatform.generic_local_platform_is_ruby? && !Bundler.settings[:force_ruby_platform]
+      # Opal: Bundler.settings is not ported yet (it lands with the `bundle`
+      # command slices); its force_ruby_platform default is off, and that
+      # answer goes into the guard until settings lands.
+      !lockfile_exists? && Bundler::MatchPlatform.generic_local_platform_is_ruby?
     end
 
     def lockfile_exists?

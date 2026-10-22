@@ -1,11 +1,9 @@
-// Bundler's local half over the port's own repository (M8.1b): an exe/opal
-// run requires "bundler", parses a fixture Gemfile.lock, and resolves it
-// against the gems `exe gem` installed in the temporary repository, plus a
-// path source whose .gemspec it evaluates. The run stays hermetic: a private
-// HOME, GEM_HOME and GEM_SPEC_CACHE, and GEM_SOURCES empty.
-//
-// Full resolution (Bundler::Resolver) arrives with M8.2; this test stops at
-// the source indexes and the SourceMap wiring.
+// Bundler's local half over the port's own repository (M8.1b, M8.2): an
+// exe/opal run requires "bundler", parses a fixture Gemfile.lock, and resolves
+// it against the gems `exe gem` installed in the temporary repository, plus a
+// path source whose .gemspec it evaluates - and now a full PubGrub resolution
+// of the Gemfile through Bundler::Definition. The run stays hermetic: a
+// private HOME, GEM_HOME and GEM_SPEC_CACHE, and GEM_SOURCES empty.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
@@ -134,6 +132,40 @@ end
 puts JSON.generate(out)
 `;
 
+// A full resolution through Bundler::Definition: PubGrub solves the Gemfile
+// against the installed repository and the path gem, to_lock writes the
+// result, a Definition built from that lock needs no re-resolve, and an
+// unsatisfiable Gemfile reports the GemNotFound Bundler would.
+const RESOLVE_PROBE = String.raw`require "json"
+require "bundler"
+
+out = {}
+Bundler.reset_settings_and_root!
+
+defn = Bundler::Definition.build("Gemfile", "Gemfile.lock", true)
+res = defn.resolve
+out["resolved"] = res.map {|s| [s.name, s.version.to_s] }.sort
+
+lock = defn.to_lock
+File.write("probe.lock", lock)
+parsed = Bundler::LockfileParser.new(lock)
+out["lock_specs"] = parsed.specs.map(&:full_name).sort
+out["lock_sections"] = lock.scan(/^(GEM|PATH|PLATFORMS|DEPENDENCIES|BUNDLED WITH)$/).flatten
+defn2 = Bundler::Definition.build("Gemfile", "probe.lock", nil)
+out["resolve_needed2"] = !!defn2.resolve_needed?
+out["resolved2"] = defn2.resolve.map {|s| [s.name, s.version.to_s] }.sort
+
+bad = Bundler::Definition.build("Gemfile.bad", "probe.lock", true)
+begin
+  bad.resolve
+  out["bad"] = "resolved?!"
+rescue Bundler::BundlerError => e
+  out["bad"] = [e.class.name, e.message.include?("Could not find gem 'hello (~> 2.0)'")]
+end
+
+puts JSON.generate(out)
+`;
+
 describe("Bundler over a local repository", () => {
   let app;
 
@@ -148,7 +180,8 @@ describe("Bundler over a local repository", () => {
     app = join(DIR, "app");
     mkdirSync(app, { recursive: true });
     mkdirSync(join(DIR, "home"), { recursive: true });
-    writeFileSync(join(app, "Gemfile"), "source 'https://rubygems.org'\n\ngem 'hello', '~> 1.0'\ngem 'world'\n");
+    writeFileSync(join(app, "Gemfile"), "source 'https://rubygems.org'\n\ngem 'hello', '~> 1.0'\ngem 'world'\ngem 'pathgem', path: 'pathgem'\n");
+    writeFileSync(join(app, "Gemfile.bad"), "source 'https://rubygems.org'\n\ngem 'hello', '~> 2.0'\ngem 'pathgem', path: 'pathgem'\n");
     writeFileSync(join(app, "Gemfile.lock"), LOCK);
     // The path gem next to the application, with a dependency of its own.
     const pathgem = gemTree("pathgem", "0.1", [["hello", ">= 1.0"]]);
@@ -159,6 +192,7 @@ describe("Bundler over a local repository", () => {
       writeFileSync(join(app, "pathgem", f), readFileSync(join(pathgem, f)));
     }
     writeFileSync(join(DIR, "bundler_probe.rb"), PROBE);
+    writeFileSync(join(DIR, "bundler_resolve_probe.rb"), RESOLVE_PROBE);
   });
 
   after(() => rmSync(DIR, { recursive: true, force: true }));
@@ -193,5 +227,20 @@ describe("Bundler over a local repository", () => {
 
     assert.deepEqual(answer.path_lock, ["Bundler::Source::Path", "PATH\n  remote: pathgem\n  specs:\n"]);
     assert.equal(answer.git_error, true, "the git source answers GitError");
+  });
+
+  test("PubGrub resolves the Gemfile against the repository, and the lock reads back", () => {
+    const r = run(OPAL, app, {}, [join(DIR, "bundler_resolve_probe.rb")]);
+    assert.equal(r.status, 0, r.err);
+    const answer = JSON.parse(r.out.split("\n").filter((line) => line.startsWith("{")).pop());
+
+    assert.deepEqual(answer.resolved, [["hello", "1.0.0"], ["pathgem", "0.1"], ["world", "0.5"]]);
+    assert.deepEqual(answer.lock_specs, ["hello-1.0.0", "pathgem-0.1", "world-0.5"]);
+    assert.deepEqual(answer.lock_sections, ["PATH", "GEM", "PLATFORMS", "DEPENDENCIES", "BUNDLED WITH"]);
+    // the written lock satisfies the Gemfile: reading it back needs no resolve
+    assert.equal(answer.resolve_needed2, false);
+    assert.deepEqual(answer.resolved2, answer.resolved);
+    // hello (~> 2.0) is not in the repository, and the solver reports it
+    assert.deepEqual(answer.bad, ["Bundler::GemNotFound", true]);
   });
 });
