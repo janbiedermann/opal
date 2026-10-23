@@ -26,6 +26,8 @@
     "build-gem-exe": "node tasks/gem_exe.mjs",
     "build-bundler": "node tasks/bundler.mjs",
     "build-bundler-exe": "node tasks/bundler_exe.mjs",
+    "build-lsp": "node tasks/lsp.mjs",
+    "build-lsp-exe": "node tasks/lsp_exe.mjs",
     "parser:assemble": "node tasks/parser/assemble.mjs"
   },
   "dependencies": {

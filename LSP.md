@@ -417,7 +417,8 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
 
 ## 9. Phases (each independently shippable)
 
-- **P0 — skeleton.** Precondition A (§0, one version source) lands as its
+- **P0 — skeleton. ✅ LANDED (2026-10-23).** Precondition A (§0, one version
+  source) landed as its
   own PR first. Then `exe/lsp.rb` + tasks + transport + lifecycle
   (`initialize`/`initialized`/`shutdown`/`exit`, `window/logMessage`) and the
   async-spawn test harness. Exit criteria: VS Code (or a JSON harness) can
