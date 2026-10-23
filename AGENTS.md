@@ -530,6 +530,28 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   read with `typeof usec === 'number'`: the C-style call
   `Time.utc(1,15,20,1,1,2000,:ignored,:ignored,:ignored,:ignored)` puts junk
   there, and `Number(:ignored)` turns the whole Date into NaN.
+- A compact-index fixture's *versions* line is `name v1,v2 <md5-of-info-file>`
+  - one checksum per gem name covering the whole info file. The source's
+  listing walks the versions line, not the info lines: a versions line naming
+  only `0.1.0` hides the second version of a two-version info file, which is
+  what makes `gem update` answer "Nothing to update" against a fixture meant
+  to have one.
+- A compiled bundle carries no file tree next to its code, so
+  `lib/bundler/templates/{Executable,Executable.standalone,Gemfile}` cannot be
+  read at run time: they are embedded as strings (installer.rb, cli/init.rb).
+  This stdlib's ERB carries only `ERB::Util.h`, no `#result`, so the binstub
+  generator fills the `<%= %>` holes with gsub - non-greedy `/<%= .*? %>/`,
+  the greedy one swallows both holes on the `load Gem.bin_path(...)` line.
+  The generated shebang reads `opal` because stdlib/rbconfig names the
+  interpreter that; run a binstub through `exe/ruby`, not straight.
+- `lib/bundler/fetcher.rb` reads `Bundler.settings` at require time, so files
+  loaded while the root is still being defined (`source/rubygems.rb`) must not
+  require it - `require_relative "fetcher"` belongs at first use instead
+  (the autoload shape upstream leans on).
+- The bundler CLI scanner registers command-table switches before the global
+  ones and keeps the first (`switches[s] ||= name`): Thor's precedence of
+  method_options over class_options, without which the global `-r` (retry)
+  hijacks `add -r` (require).
 - A gem can fail for a reason outside the port: Opal compiles some Ruby regexp
   literals (`'\)'` escapes under the `/u` flag, as in addressable) into a JS
   expression JavaScript rejects, so `require 'addressable/uri'` dies in the

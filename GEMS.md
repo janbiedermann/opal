@@ -839,7 +839,7 @@ later, see M2.)
 `matches_name?` is not missing: RubyGems 4.1 has no such method, the work is
 done by `contains_requirable_file?` and `find_inactive_by_path`.
 
-### M4 — installed-gem store, activation and `require` (~900 lines) — **done**, bar `exe/gem install`
+### M4 — installed-gem store, activation and `require` (~900 lines) — **done**
 
 `Gem::Source`, `SourceList`, `Source::Installed`, `Source::Local`,
 `Source::SpecificFile`, `Gem::Specification` scanning, `Gem::Installer`
