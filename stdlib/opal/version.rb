@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 module Opal
-  # WHEN RELEASING:
-  # Remember to update RUBY_ENGINE_VERSION in opal/corelib/constants.rb and
-  # VERSION in lib/opal/compiler/version.mjs too!
-  VERSION = '3.1.0dev'
+  # The single source of the version is opal/corelib/version.mjs, which
+  # RUBY_ENGINE_VERSION answers.
+  VERSION = ::RUBY_ENGINE_VERSION
 
   # Only major and minor parts of version
   VERSION_MAJOR_MINOR = VERSION.split('.').first(2).join('.').freeze

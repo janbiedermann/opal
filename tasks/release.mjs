@@ -5,8 +5,9 @@
 //     Updates CHANGELOG.md from the published GitHub releases; UNRELEASED.md
 //     becomes the entry of VERSION (or "Unreleased").
 //   node tasks/release.mjs prepare VERSION
-//     Sets the version in stdlib/opal/version.rb, lib/opal/compiler/version.mjs
-//     and opal/corelib/constants.rb, updates the changelog (unless it's a
+//     Sets the version in opal/corelib/version.mjs (the single source: the
+//     corelib's RUBY_ENGINE_VERSION, Opal::VERSION and the compiler all
+//     answer it), updates the changelog (unless it's a
 //     prerelease), resets UNRELEASED.md and commits.
 //   node tasks/release.mjs upload TAG
 //     Uploads build/{opal,opal-parser}{.js,.min.js,.min.js.gz} (from
@@ -91,10 +92,10 @@ function replaceIn(path, fn) {
 async function prepare(version) {
   if (!version) throw new Error("please provide a version, e.g.: node tasks/release.mjs prepare 1.2.3");
   version = version.replace(/^v/, "");
-  const current = /VERSION = '([^']+)'/.exec(readFileSync(join(ROOT, "stdlib/opal/version.rb"), "utf8"))[1];
-  replaceIn("stdlib/opal/version.rb", (s) => s.replace(current, version));
-  replaceIn("lib/opal/compiler/version.mjs", (s) => s.replace(current, version));
-  replaceIn("opal/corelib/constants.rb", (s) => s.replace(current, version).replace(/(RUBY_RELEASE_DATE *= *')\d{4}-\d{2}-\d{2}(')/, `$1${today()}$2`));
+  const current = /OPAL_VERSION = "([^"]+)"/.exec(readFileSync(join(ROOT, "opal/corelib/version.mjs"), "utf8"))[1];
+  replaceIn("opal/corelib/version.mjs", (s) => s.replace(current, version));
+  // the date constant still lives in the corelib
+  replaceIn("opal/corelib/constants.rb", (s) => s.replace(/(RUBY_RELEASE_DATE *= *')\d{4}-\d{2}-\d{2}(')/, `$1${today()}$2`));
 
   // like Gem::Version#prerelease?: a letter in the version
   if (/[a-zA-Z]/.test(version)) {
@@ -107,7 +108,7 @@ async function prepare(version) {
 
   console.log("== committing");
   const git = (...args) => execFileSync("git", args, { cwd: ROOT, stdio: "inherit" });
-  git("add", "UNRELEASED.md", "CHANGELOG.md", "opal/corelib/constants.rb", "stdlib/opal/version.rb", "lib/opal/compiler/version.mjs");
+  git("add", "UNRELEASED.md", "CHANGELOG.md", "opal/corelib/version.mjs", "opal/corelib/constants.rb");
   git("commit", "-m", `Release v${version}`);
   git("--no-pager", "show");
 }
