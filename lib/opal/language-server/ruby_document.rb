@@ -23,6 +23,24 @@ module Opal
       def diagnostics
         parse!.diagnostics
       end
+
+      # The innermost node containing an LSP {line, character} position (and
+      # the chain of nodes containing it, innermost first): the shape
+      # ruby-lsp's locate_node answers, used by selectionRange and by the
+      # on-type-formatting `end` auto-indent.
+      def locate_node(line, character)
+        result = parse!
+        offset = result.offset_for(line, character)
+        containing = []
+        stack = [result.ast]
+        while (node = stack.pop)
+          next unless node.location_start <= offset && offset <= node.location_end
+          containing << node
+          stack.concat(node.child_nodes)
+        end
+        containing.sort_by! { |node| node.location_end - node.location_start }
+        { node: containing.first, ancestors: containing }
+      end
     end
   end
 end

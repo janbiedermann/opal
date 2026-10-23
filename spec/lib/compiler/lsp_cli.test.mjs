@@ -110,6 +110,10 @@ describe("the opal-language-server command", () => {
     assert.equal(answer.result.capabilities.positionEncoding, "utf-16");
     assert.equal(answer.result.capabilities.textDocumentSync.openClose, true);
     assert.equal(answer.result.capabilities.textDocumentSync.change, 2); // Incremental
+    // P2 features are advertised
+    assert.equal(answer.result.capabilities.documentSymbolProvider, true);
+    assert.equal(answer.result.capabilities.foldingRangeProvider, true);
+    assert.equal(answer.result.capabilities.selectionRangeProvider, true);
     client.send({ jsonrpc: "2.0", method: "initialized" });
     client.send({ jsonrpc: "2.0", method: "exit" });
     assert.equal(await client.exitCode(), 1); // exit without shutdown: status 1 per spec
@@ -230,6 +234,88 @@ describe("the opal-language-server command", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // ---- P2: AST features ----
+
+  const TREE_SRC = [
+    "# header one",
+    "# header two",
+    'require "json"',
+    'require "set"',
+    "",
+    "CONST = 42",
+    "class Foo < Bar",
+    "  def baz(x)",
+    "    x",
+    "  end",
+    "end",
+    "",
+  ].join("\n");
+
+  async function openTree(client) {
+    await openDoc(client, "file:///tree.rb", TREE_SRC);
+  }
+
+  function request(client, id, method, params) {
+    client.send({ jsonrpc: "2.0", id, method, params });
+    return client.next();
+  }
+
+  test("documentSymbol nests the declarations under their class", async () => {
+    const client = await handshake();
+    await openTree(client);
+    const answer = await request(client, 20, "textDocument/documentSymbol", { textDocument: { uri: "file:///tree.rb" } });
+
+    const names = answer.result.map((s) => [s.name, s.kind]);
+    assert.deepEqual(names, [["CONST", 14], ["Foo", 5]]); // Constant, Class
+
+    const foo = answer.result.find((s) => s.name === "Foo");
+    // the class body's def nests under the class, its range is the whole
+    // class node while the selection range is just the name
+    assert.deepEqual(foo.range.start, { line: 6, character: 0 });
+    assert.deepEqual(foo.selectionRange.start, { line: 6, character: 6 });
+    assert.deepEqual(foo.children.map((s) => [s.name, s.kind]), [["baz", 6]]); // Method
+    const baz = foo.children[0];
+    assert.deepEqual(baz.selectionRange.start, { line: 7, character: 6 }); // "def baz"
+    assert.equal(baz.range.end.line, 9); // the def's `end`
+
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("foldingRange folds comments, imports and the keyword blocks", async () => {
+    const client = await handshake();
+    await openTree(client);
+    const answer = await request(client, 21, "textDocument/foldingRange", { textDocument: { uri: "file:///tree.rb" } });
+    assert.deepEqual(answer.result, [
+      { startLine: 0, endLine: 1, kind: "comment" }, // the two adjacent # lines
+      { startLine: 2, endLine: 3, kind: "imports" }, // the require run
+      { startLine: 6, endLine: 10, kind: "region" }, // class ... end
+      { startLine: 7, endLine: 9, kind: "region" }, // def ... end
+    ]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("selectionRange answers the enclosing chain from the cursor out", async () => {
+    const client = await handshake();
+    await openTree(client);
+    // cursor on the `x` body reference, line 8 "    x"
+    const answer = await request(client, 22, "textDocument/selectionRange", {
+      textDocument: { uri: "file:///tree.rb" },
+      positions: [{ line: 8, character: 4 }],
+    });
+
+    const chain = [];
+    for (let range = answer.result[0]; range; range = range.parent) {
+      chain.push([range.range.start.line, range.range.start.character, range.range.end.line, range.range.end.character]);
+    }
+    // innermost: the x reference itself... then the def body, the def, the class
+    assert.deepEqual(chain[0], [8, 4, 8, 5]); // x
+    const [defLine] = chain[chain.length - 2]; // class node
+    assert.deepEqual(chain[chain.length - 1], [2, 0, 10, 3]); // top statements (== program, deduped)
+    assert.ok(chain.some(([, , line]) => line === 9)); // the def's end line appears on the way out
+    assert.ok(defLine === 6);
+    client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
   after(() => {

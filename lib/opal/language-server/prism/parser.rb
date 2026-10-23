@@ -1,5 +1,6 @@
 # backtick_javascript: true
 require 'opal/parser/index.mjs'
+require 'opal/language-server/prism/node'
 
 module Opal
   module LanguageServer
@@ -38,6 +39,27 @@ module Opal
         `#{@envelope}.errors.length > 0`
       end
 
+      # The parse tree root as a Node.
+      def ast
+        Node.new(`#{@envelope}.ast`, self)
+      end
+
+      # The envelope's comments: {type: "inline"|"embdoc", start:, end:} -
+      # raw UTF-16 offsets, not location objects (they are not AST nodes).
+      def comments
+        cs = `#{@envelope}.comments`
+        count = `cs.length`
+        list = []
+        count.times do |i|
+          list << {
+            "type"  => `#{cs}[#{i}].type`,
+            "start" => `#{cs}[#{i}].start`,
+            "end"   => `#{cs}[#{i}].end`,
+          }
+        end
+        list
+      end
+
       # The parse gate as LSP Diagnostics: errors as severity 1, parser
       # warnings as severity 2, carrying the Prism diagnostic id as `code`.
       # Returned as plain Ruby Hashes so they survive JSON generation
@@ -64,6 +86,34 @@ module Opal
           end
         end
         [lo, offset - line_start(lo)]
+      end
+
+      # The inverse: an LSP {line, character} to a UTF-16 offset, clamped to
+      # the line end and the source (the same defense Document#push_edits
+      # uses against a client racing its own edits).
+      def offset_for(line, character)
+        return source_length if line >= @line_count
+        off = line_start(line) + character
+        line_end = (line + 1 < @line_count ? line_start(line + 1) : source_length + 1) - 1
+        off = line_end if off > line_end
+        off > source_length ? source_length : off
+      end
+
+      def source_length
+        `String(#{@source}).length`
+      end
+
+      # An LSP Range for a Prism loc POJO ({start:, end:} UTF-16 offsets,
+      # the optional *_loc fields), or nil when the loc is absent.
+      def range_for_loc(loc)
+        # a POJO has no #nil? - the null test has to happen in JS
+        return nil if `loc == null`
+        s, sc = position_at(`loc.start`)
+        e, ec = position_at(`loc.end`)
+        {
+          "start" => { "line" => s, "character" => sc },
+          "end"   => { "line" => e, "character" => ec },
+        }
       end
 
       private

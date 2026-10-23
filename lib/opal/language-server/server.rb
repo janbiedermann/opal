@@ -5,6 +5,9 @@ require 'opal/language-server/transport'
 require 'opal/language-server/protocol'
 require 'opal/language-server/store'
 require 'opal/language-server/ruby_document'
+require 'opal/language-server/features/document_symbol'
+require 'opal/language-server/features/folding_ranges'
+require 'opal/language-server/features/selection_ranges'
 
 module Opal
   module LanguageServer
@@ -51,6 +54,12 @@ module Opal
           # The parse gate already ran on the last edit (P5 moves the
           # compile gate here); nothing to do.
           nil
+        when 'textDocument/documentSymbol'
+          with_document(id, params) { |document| DocumentSymbolFeature.perform(document) }
+        when 'textDocument/foldingRange'
+          with_document(id, params) { |d| FoldingRangesFeature.perform(d) }
+        when 'textDocument/selectionRange'
+          with_document(id, params) { |d| SelectionRangesFeature.perform(d, params["positions"] || []) }
         when 'shutdown'
           @shutdown = true
           @transport.write(Result.new(id, nil))
@@ -87,11 +96,11 @@ module Opal
       def run_initialize(_id, params)
         @client_capabilities = params ? (params["capabilities"] || {}) : {}
 
-        # P1 capabilities: incremental sync plus push diagnostics (the 3.17
-        # shape). Pull diagnostics (3.18 textDocument/diagnostic) join in
-        # P6, negotiated against general.positionEncodings — only utf-16 is
-        # offered: JS strings are UTF-16 and the parser reports UTF-16
-        # offsets (lib/opal/parser/index.mjs).
+        # P2 capabilities: incremental sync, push diagnostics (the 3.17
+        # shape), and the AST features. Pull diagnostics
+        # (3.18 textDocument/diagnostic) join in P6, negotiated against
+        # general.positionEncodings — only utf-16 is offered: JS strings are
+        # UTF-16 and the parser reports UTF-16 offsets (lib/opal/parser/index.mjs).
         capabilities = {
           "positionEncoding" => "utf-16",
           "textDocumentSync" => {
@@ -99,6 +108,9 @@ module Opal
             "change"    => 2, # TextDocumentSyncKind.Incremental
             "save"      => { "includeText" => false },
           },
+          "documentSymbolProvider" => true,
+          "foldingRangeProvider"   => true,
+          "selectionRangeProvider" => true,
         }
         @transport.write(Result.new(_id,
                                     "capabilities" => capabilities,
@@ -109,6 +121,13 @@ module Opal
       end
 
       # ---- document synchronization (P1) ----
+
+      # Answer with the feature's result for the request's document; nil
+      # when the document is not open (the client raced a didClose).
+      def with_document(id, params)
+        document = @store[params.dig("textDocument", "uri")]
+        @transport.write(Result.new(id, document && yield(document)))
+      end
 
       def open_document(params)
         text_document = params["textDocument"]
