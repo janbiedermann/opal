@@ -318,6 +318,138 @@ describe("the opal-language-server command", () => {
     client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
+  // ---- P2: the editor-coloring and typing features ----
+
+  function decodeTokens(data) {
+    const tokens = [];
+    let line = 0;
+    let character = 0;
+    for (let i = 0; i < data.length; i += 5) {
+      line += data[i];
+      character = data[i] === 0 ? character + data[i + 1] : data[i + 1];
+      tokens.push({ line, character, length: data[i + 2], type: data[i + 3], modifiers: data[i + 4] });
+    }
+    return tokens;
+  }
+
+  test("documentHighlight lights an ivar's read and write with the right kinds", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///hl.rb", "def run\n  @count = 1\n  puts @count\nend\n");
+    // cursor inside @count on the read line (its `o`)
+    const answer = await request(client, 23, "textDocument/documentHighlight", {
+      textDocument: { uri: "file:///hl.rb" },
+      position: { line: 2, character: 9 },
+    });
+
+    const listed = answer.result.map((h) => [
+      h.range.start.line, h.range.start.character, h.range.end.character, h.kind,
+    ]);
+    // source order: the write (kind 3) then the read (kind 2)
+    assert.deepEqual(listed, [[1, 2, 8, 3], [2, 7, 13, 2]]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("semanticTokens/full delta-encodes the class, def and calls", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///st.rb", "class Foo\n  def bar\n    baz\n  end\nend\n");
+    const answer = await request(client, 24, "textDocument/semanticTokens/full", { textDocument: { uri: "file:///st.rb" } });
+
+    const tokens = decodeTokens(answer.result.data);
+    // legend indexes: namespace 0, class 1, method 2, function 3,
+    // parameter 4, property 5, variable 6; modifier declaration = 1
+    assert.deepEqual(
+      tokens.filter((t) => t.type === 1 || (t.type === 2 && t.modifiers === 1)),
+      [
+        { line: 0, character: 6, length: 3, type: 1, modifiers: 0 }, // Foo (class)
+        { line: 1, character: 6, length: 3, type: 2, modifiers: 1 }, // bar (def, declaration)
+      ],
+    );
+    // bare call `baz` is a function token on line 2
+    assert.ok(tokens.some((t) => t.line === 2 && t.type === 3 && t.character === 4 && t.length === 3));
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("initialize advertises the semantic tokens legend", async () => {
+    const client = startServer();
+    client.send(INITIALIZE);
+    const answer = await client.next();
+    assert.deepEqual(answer.result.capabilities.semanticTokensProvider.legend.tokenTypes, [
+      "namespace", "class", "method", "function", "parameter", "property", "variable",
+    ]);
+    assert.equal(answer.result.capabilities.semanticTokensProvider.full, true);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("inlayHint annotates a bare rescue and the hash shorthand", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///ih.rb", "begin\n  risky\nrescue\n  safe\nend\n\nname = 1\nputs({name: })\n");
+    const answer = await request(client, 25, "textDocument/inlayHint", {
+      textDocument: { uri: "file:///ih.rb" },
+      range: { start: { line: 0, character: 0 }, end: { line: 7, character: 0 } },
+    });
+
+    const hints = answer.result.map((h) => [h.label, h.position.line, h.position.character]);
+    assert.deepEqual(hints, [
+      ["#rescued_value", 2, 6], // right after the bare `rescue`
+      ["name", 7, 11], // echoing the omitted value of `{name: }`
+    ]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("onTypeFormatting completes `end` after an unfinished def on newline", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///ot.rb", "class Foo\n  def bar\n");
+    const answer = await request(client, 26, "textDocument/onTypeFormatting", {
+      textDocument: { uri: "file:///ot.rb" },
+      position: { line: 2, character: 0 },
+      ch: "\n",
+    });
+
+    assert.equal(answer.result.length, 1);
+    assert.equal(answer.result[0].newText, "\n  end");
+    assert.deepEqual(answer.result[0].range.start, { line: 2, character: 0 });
+    assert.deepEqual(answer.result[0].range.end, { line: 2, character: 0 });
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("onTypeFormatting continues a comment on newline and indents after typed end", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///ot2.rb", "# hello\n");
+    const comment = await request(client, 27, "textDocument/onTypeFormatting", {
+      textDocument: { uri: "file:///ot2.rb" },
+      position: { line: 1, character: 0 },
+      ch: "\n",
+    });
+    assert.deepEqual(comment.result.map((e) => e.newText), ["# "]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  // ---- P2: the Opal-specific custom requests ----
+
+  test("opalLsp/showSyntaxTree answers the Prism AST as JSON", async () => {
+    const client = await handshake();
+    await openTree(client);
+    const answer = await request(client, 28, "opalLsp/showSyntaxTree", { textDocument: { uri: "file:///tree.rb" } });
+
+    const ast = JSON.parse(answer.result.ast);
+    assert.equal(ast.type, "ProgramNode");
+    const classNames = ast.statements.body.filter((n) => n.type === "ClassNode").map((n) => n.name);
+    assert.deepEqual(classNames, ["Foo"]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("opalLsp/compileToJs compiles, and answers the compiler error on bad source", async () => {
+    const client = await handshake();
+    await openTree(client);
+    const ok = await request(client, 29, "opalLsp/compileToJs", { textDocument: { uri: "file:///tree.rb" } });
+    assert.match(ok.result.code, /Foo/); // the compiled JS carries the class
+
+    await openDoc(client, "file:///bad.rb", "def foo(\n");
+    const bad = await request(client, 30, "opalLsp/compileToJs", { textDocument: { uri: "file:///bad.rb" } });
+    assert.match(bad.result.error.message, /expected a `\)`/);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
   after(() => {
     // Every test closes its own server through "exit"; this catches any
     // child left alive by a failed assertion so the suite can't hang.

@@ -106,8 +106,8 @@ module Opal
       # An LSP Range for a Prism loc POJO ({start:, end:} UTF-16 offsets,
       # the optional *_loc fields), or nil when the loc is absent.
       def range_for_loc(loc)
-        # a POJO has no #nil? - the null test has to happen in JS
-        return nil if `loc == null`
+        # raw()/POJO boundary: absent is Opal nil (not JS null) - test it in JS
+        return nil if `loc === nil || loc == null`
         s, sc = position_at(`loc.start`)
         e, ec = position_at(`loc.end`)
         {

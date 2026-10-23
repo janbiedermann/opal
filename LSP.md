@@ -430,9 +430,18 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   surrogate-pair edit spec passes. (Prism's parse *warnings* also surface —
   severity 2 — which made "fixed file answers zero diagnostics" fixtures
   need warning-free code.)
-- **P2 — AST features.** documentSymbol, foldingRange, selectionRange,
-  documentHighlight, semanticTokens, inlayHint, onTypeFormatting,
-  `opalLsp/showSyntaxTree`, `opalLsp/compileToJs`. No indexer yet.
+- **P2 — AST features. ✅ LANDED (2026-10-23).** documentSymbol, foldingRange,
+  selectionRange, documentHighlight, semanticTokens, inlayHint,
+  onTypeFormatting, `opalLsp/showSyntaxTree`, `opalLsp/compileToJs`. The
+  POJO wrapper (`prism/node.rb`) + Prism-naming dispatcher
+  (`prism/dispatcher.rb`, with a generic `on_node_enter` for whole-tree
+  scans) carry the features; opal-parser joined the bundle at boot for
+  `compileToJs` (exe/lsp: 1.46MB minified). Boundary rules learned the hard
+  way, now pinned by tests: the envelope POJOs carry no Opal methods (never
+  send `#nil?`/`#==` to them - test in JS), `Node#raw` normalizes absent
+  fields to **Opal nil** (so `x == null` never matches - use `x === nil`),
+  and any file whose backticks *compile* needs `# backtick_javascript:
+  true` or they compile to shell calls. No indexer yet.
 - **P3 — index.** the generator (`indexer/driver.rb` +
   `tasks/language-server/update_baked_index.mjs`) producing
   `baked_index.mjs`/`corelib_sources.mjs`; the record-based Index

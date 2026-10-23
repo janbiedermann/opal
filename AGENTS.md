@@ -76,7 +76,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   answers `JSON.parse` as plain Hashes with String keys. Tests are the async
   stdio harness in `spec/lib/compiler/lsp_cli.test.mjs` (spawnSync would
   block the loop piping the frames); `--check DIR` runs the parse gate
-  headless.
+  headless. The parse-tree POJOs (`parseWithMetadata`) carry no Opal
+  methods: never send them Ruby messages, test them in JS; `Node#raw`
+  turns missing fields into Opal `nil`, and `Opal.nil == null` is false,
+  so guard with `=== nil` (an `== null` guard silently never fires there).
 - `tmp/` is gitignored scratch space. Some of it is created by the tasks:
   `tmp/performance` (tasks/performance.mjs clones the Asciidoctor checkouts
   and writes asciidoctor_test.rb and asciidoctor_test.js there),

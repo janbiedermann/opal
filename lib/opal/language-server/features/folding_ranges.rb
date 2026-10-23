@@ -38,12 +38,12 @@ module Opal
         private
 
         # The *_loc fields are loc POJOs ({start:, end:}) or null when the
-        # keyword has no keyword form (modifier if/unless/while). A POJO has
-        # no #nil? - the null test goes through JS.
+        # keyword has no keyword form (modifier if/unless/while). Node#raw
+        # answers Opal nil for those - test for nil in JS, not Ruby.
         def fold(node, open_field, close_field)
           open_loc = node.raw(open_field)
           close_loc = node.raw(close_field)
-          return if `#{open_loc} == null || #{close_loc} == null`
+          return if `#{open_loc} === nil || #{close_loc} === nil`
           @folds << [`open_loc.start`, `close_loc.start`]
         end
       end

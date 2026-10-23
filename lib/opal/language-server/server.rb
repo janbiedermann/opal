@@ -8,6 +8,12 @@ require 'opal/language-server/ruby_document'
 require 'opal/language-server/features/document_symbol'
 require 'opal/language-server/features/folding_ranges'
 require 'opal/language-server/features/selection_ranges'
+require 'opal/language-server/features/document_highlight'
+require 'opal/language-server/features/semantic_highlighting'
+require 'opal/language-server/features/inlay_hints'
+require 'opal/language-server/features/on_type_formatting'
+require 'opal/language-server/features/syntax_tree'
+require 'opal/language-server/features/compile_to_js'
 
 module Opal
   module LanguageServer
@@ -20,6 +26,7 @@ module Opal
         @stopped = false
         @shutdown = false
         @client_capabilities = {}
+        @client_name = ""
       end
 
       # Read messages until the client closes stdin or asks to exit.
@@ -60,6 +67,18 @@ module Opal
           with_document(id, params) { |d| FoldingRangesFeature.perform(d) }
         when 'textDocument/selectionRange'
           with_document(id, params) { |d| SelectionRangesFeature.perform(d, params["positions"] || []) }
+        when 'textDocument/documentHighlight'
+          with_document(id, params) { |d| DocumentHighlightFeature.perform(d, params["position"]) }
+        when 'textDocument/semanticTokens/full'
+          with_document(id, params) { |d| SemanticHighlightingFeature.perform(d) }
+        when 'textDocument/inlayHint'
+          with_document(id, params) { |d| InlayHintsFeature.perform(d, params["range"]) }
+        when 'textDocument/onTypeFormatting'
+          with_document(id, params) { |d| OnTypeFormattingFeature.perform(d, params, @client_name) }
+        when 'opalLsp/showSyntaxTree'
+          with_document(id, params) { |d| SyntaxTreeFeature.perform(d) }
+        when 'opalLsp/compileToJs'
+          with_document(id, params) { |d| CompileToJsFeature.perform(d) }
         when 'shutdown'
           @shutdown = true
           @transport.write(Result.new(id, nil))
@@ -95,6 +114,7 @@ module Opal
 
       def run_initialize(_id, params)
         @client_capabilities = params ? (params["capabilities"] || {}) : {}
+        @client_name = params ? ((params["clientInfo"] || {})["name"] || "") : ""
 
         # P2 capabilities: incremental sync, push diagnostics (the 3.17
         # shape), and the AST features. Pull diagnostics
@@ -111,6 +131,22 @@ module Opal
           "documentSymbolProvider" => true,
           "foldingRangeProvider"   => true,
           "selectionRangeProvider" => true,
+          "documentHighlightProvider" => true,
+          "semanticTokensProvider" => {
+            "legend" => SemanticHighlightingFeature.legend,
+            "full"   => true,
+            "range"  => false,
+          },
+          "inlayHintProvider" => true,
+          "documentOnTypeFormattingProvider" => {
+            "firstTriggerCharacter" => "{",
+            "moreTriggerCharacter" => ["\n", "|", "d"],
+          },
+          # Custom requests (opalLsp/showSyntaxTree, opalLsp/compileToJs)
+          # are advertised under flat extension keys, as LSP's capability
+          # section allows.
+          "opalLspShowSyntaxTreeProvider" => true,
+          "opalLspCompileToJsProvider" => true,
         }
         @transport.write(Result.new(_id,
                                     "capabilities" => capabilities,

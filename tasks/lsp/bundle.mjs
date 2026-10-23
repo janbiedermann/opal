@@ -29,6 +29,10 @@ export async function buildLspBundle() {
   builder.build("thread", { requirable: true, load: true });
   // The protocol's JSON-RPC codec.
   builder.build("json", { requirable: true, load: true });
+  // opal-parser at boot: the compile gate, opalLsp/compileToJs and P5's
+  // save-time diagnostics all ask the real compiler (LSP.md §5 note on why
+  // it is always in the bundle, not lazy).
+  builder.build("opal-parser", { requirable: true, load: true });
   // The umbrella requires the whole server; the sweep carries every file
   // of the tree as a requirable module too, so later phases can require
   // the parts the umbrella does not yet load.
