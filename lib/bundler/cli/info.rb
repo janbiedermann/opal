@@ -36,9 +36,10 @@ module Bundler
     def print_gem_path(spec)
       name = spec.name
       if name == "bundler"
-        # Opal: show's bundler path, the checkout the sources came from
-        # rather than __dir__ of a compiled bundle (see cli/show.rb).
-        path = defined?(OPAL_HOME) ? OPAL_HOME : File.expand_path("../../..", __dir__)
+        # Opal: show's bundler path, the executable that answers (bundler is
+        # compiled into it) rather than __dir__ of a compiled bundle (see
+        # cli/show.rb).
+        path = Bundler::SharedHelpers.program_path || File.expand_path("../../..", __dir__)
       else
         path = spec.full_gem_path
         if spec.installation_missing?

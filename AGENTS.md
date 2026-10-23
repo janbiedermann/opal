@@ -152,12 +152,13 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `node tasks/release.mjs` (changelog, release preparation).
 - `node tasks/ruby.mjs` (`npm run build-ruby`) builds the `ruby` command
   (lib/opal/exe/ruby.rb) into exe/ruby (terser-minified, reproducible): a
-  standalone Node program bundling opal,
-  opal-parser and an OPAL_HOME constant, which loads, compiles and runs the
+  standalone Node program bundling opal, opal-parser and the whole stdlib
+  and lib/ as requirable modules, which loads, compiles and runs the
   given script in its own runtime. It supports -e -c -I -r -w -W -v -d -n -p
-  -0 -E - `--` -h --version; scripts' runtime requires are resolved through
-  `Opal.platform.load_file` against $LOAD_PATH, the stdlib directory and the
-  cwd. It caches compiled JS at runtime (like the builder's FileCache, but
+  -0 -E - `--` -h --version; a script's runtime requires answer from the
+  bundle's module table first, and `Opal.platform.load_file` runs only on
+  a miss - it resolves installed gems and -I paths against $LOAD_PATH and
+  the cwd. It caches compiled JS at runtime (like the builder's FileCache, but
   keyed by source+options and OPAL_COMPILER_KEY, a digest of the compiler
   sources baked into the bundle by tasks/ruby/bundle.mjs; dir
   ~/.cache/opal-ruby or OPAL_CACHE_DIR/opal-ruby, OPAL_CACHE_DISABLE turns
@@ -314,11 +315,14 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   inside PubGrub's failure reporting.
 - `exe/ruby` builds `opal/full` and `stdlib/thread.rb` into its bundle, so
   `FileTest`, `Marshal`, `pack`/`unpack`, `ObjectSpace`, `Set` and
-  `caller_locations` work with no `-I` and no require; `$LOAD_PATH` also gets
-  `$OPAL_HOME`, `$OPAL_HOME/opal`, `$OPAL_HOME/stdlib` and `$OPAL_HOME/lib`
-  (the last joins so `require 'bundler'`/`'bundler/setup'` resolve, bundler
-  answering as the default gem it is in CRuby; stdlib goes first so it wins
-  any shared name); and `find_feature` finds a `<path>.js` as it stands. Its `caller_locations` frames are
+  `caller_locations` work with no `-I` and no require; the whole stdlib and
+  the port's lib/ join as requirable modules (tasks/ruby/bundle.mjs's
+  sweep), so a script's `require 'optparse'` or `require 'bundler/setup'`
+  answers from inside the program - OPAL_HOME, the baked checkout path
+  that used to join $LOAD_PATH, is gone and the exe is relocatable (the
+  sweep skips opal-builder: it links builder.mjs, whose erb worker loads
+  from a file beside the checkout, and its import.meta.url bakes as the
+  build machine's URL); and `find_feature` finds a `<path>.js` as it stands. Its `caller_locations` frames are
   JavaScript ones: the script runs through `eval`, so a script frame names the
   bundle, not the `.rb` file.
 - `--compile-to-exe node` runs `node --build-sea=config.json` on Node.js 26 or
@@ -333,7 +337,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   relocatable anyway. The pattern for JS the bundle needs: keep the module
   CommonJS with built-in requires only, embed its source as a Ruby constant
   (builder.buildStr input is COMPILED AS RUBY - `Opal.x = ...` becomes a
-  Ruby setter call and dies; use `NAME = "<json>"` like OPAL_HOME) and run it
+  Ruby setter call and dies; use `NAME = "<json>"` like OPAL_HTTP_TRANSPORT) and run it
   through `new Function("require", "module", "exports", src)` - the scope's
   require still answers built-ins inside. That is how the HTTP transport
   (lib/opal/gems/http.cjs, OPAL_HTTP_TRANSPORT) loads; `new Function` and
@@ -351,9 +355,15 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   requirable, and the `OPAL_HTTP_TRANSPORT` constant - the CommonJS source of
   `lib/opal/gems/http.cjs`, which `Gem::HTTPTransport` runs through
   `new Function` - so the exe fetches with no tree beside it and bakes no
-  checkout path: `exe/gem` is relocatable (pinned by a bundle-shape case in
-  `cli.test.mjs`). `exe/ruby`/`exe/bundler` still bake `OPAL_HOME` for their
-  stdlib `$LOAD_PATH` and binstub paths. Plus `OPAL_COMPILER_KEY` (below, for
+  checkout path: every exe is relocatable (pinned by bundle-shape cases
+  in `cli.test.mjs`, `ruby_exe.test.mjs` and `bundler_cli.test.mjs`). No
+  bundle bakes a path now: `tasks/{ruby,bundler}/bundle.mjs` stamp
+  `OPAL_COMPILED_BUNDLE`/`OPAL_PROGRAM` (name-only constants lib/bundler
+  answers paths with: `SharedHelpers#program_path` is `process.execPath`
+  in a single-file executable and node's argv[1] in a node bundle; a
+  hosting program names its sibling `bundler` in the same directory),
+  and the stdlib sweep means no loader ever needs a tree. Plus
+  `OPAL_COMPILER_KEY` (below, for
   compiled trees). The command classes are required eagerly by
   `lib/rubygems.rb`, which is also why `Gem::CommandManager` no longer requires
   a command by name: a require path with an interpolation in it still reads as

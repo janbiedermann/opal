@@ -318,11 +318,21 @@ describe("bundle command over a local repository", () => {
     assert.equal(ruby.out.trim(), "No ruby version specified");
   });
 
-  test("show bundler names the checkout the executable came from", () => {
+  test("show bundler names the executable that answers", () => {
+    // A compiled bundle carries bundler inside it and names no checkout:
+    // the program is the answer (SharedHelpers#program_path).
     const dir = app();
     const r = bundle(dir, "show", "bundler");
     assert.equal(r.status, 0, r.err);
-    assert.equal(r.out.trim(), OPAL_ROOT);
+    assert.equal(r.out.trim(), BUNDLE);
+  });
+
+  test("the bundle carries bundler and the stdlib, not a path to the checkout", () => {
+    // The exe must run with nothing beside it: every require a loaded
+    // binstub asks answers from inside, and nothing names the build tree.
+    const bundleJs = readFileSync(BUNDLE, "utf8");
+    assert.match(bundleJs, /OPAL_COMPILED_BUNDLE/);
+    assert.ok(!bundleJs.includes(OPAL_ROOT), "the bundle must not name the checkout it was built in");
   });
 
   test("clean --dry-run has nothing to remove after a fresh install", () => {
@@ -335,10 +345,11 @@ describe("bundle command over a local repository", () => {
   });
 
   test("bundler/setup activates the bundle for exe/ruby", () => {
-    // the exit test of the M8.3a setup half: exe/ruby finds
-    // -r bundler/setup through the OPAL_HOME/lib it puts on $LOAD_PATH,
-    // Bundler.setup resolves the lockfile and puts the bundle's load paths
-    // on $LOAD_PATH, and the script's requires answer from the gems.
+    // the exit test of the M8.3a setup half: exe/ruby finds -r
+    // bundler/setup inside its own bundle (the lib/ sweep compiled it in,
+    // OPAL_HOME is gone), Bundler.setup resolves the lockfile and puts the
+    // bundle's load paths on $LOAD_PATH, and the script's requires answer
+    // from the gems.
     const dir = app();
     const install = bundle(dir, "install", "--local");
     assert.equal(install.status, 0, install.err);

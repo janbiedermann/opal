@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# backtick_javascript: true
 
 require_relative "version"
 require_relative "current_ruby"
@@ -292,22 +293,28 @@ module Bundler
     end
 
     # Opal: upstream spells the setup file `File.expand_path("setup", __dir__)`;
-    # a compiled bundle's __dir__ names no file on disk, so the port takes it
-    # from OPAL_HOME - the checkout its loader resolves "bundler/setup"
-    # against - whenever the bundle carries that constant.
+    # a compiled bundle has no setup.rb beside it - "bundler/setup" is
+    # compiled into the program - so the bundle names the feature instead of
+    # a path, and the children that inherit the answer resolve it from their
+    # module table (which carries it since OPAL_HOME left). A source-tree
+    # run answers as upstream does.
     def setup_path
-      if defined?(OPAL_HOME)
-        File.join(OPAL_HOME, "lib", "bundler", "setup.rb")
-      else
-        File.expand_path("setup", __dir__)
-      end
+      return "bundler/setup" if defined?(OPAL_COMPILED_BUNDLE)
+      File.expand_path("setup", __dir__)
     end
 
     def bundle_bin_path
       # Opal: the port's executable is exe/bundler (tasks/bundler.mjs), not
-      # exe/bundle, and bundler is no default gem to fall back on; under
-      # OPAL_HOME the file is really there, and the binstub templates that
-      # read this only carry the path.
+      # exe/bundle, and bundler is no default gem to fall back on; a compiled
+      # bundler IS that executable, so it answers its own path. A sibling
+      # program hosting bundler (exe/ruby with -r bundler/setup) names the
+      # bundler that sits beside it in exe/. The binstub templates that read
+      # this only carry the path.
+      if defined?(OPAL_COMPILED_BUNDLE)
+        return program_path if OPAL_PROGRAM == "bundler"
+        sibling = File.join(File.dirname(program_path), "bundler")
+        return File.exist?(sibling) ? sibling : program_path
+      end
       File.join(source_root, "exe", "bundler")
     end
 
@@ -320,17 +327,30 @@ module Bundler
       gemspec_file
     end
 
-    # Opal: __dir__ of a compiled bundle names no directory on disk; OPAL_HOME
-    # is the checkout the bundle's sources came from and holds exe/ and lib/.
+    # Opal: only a source-tree run has a checkout to name; __dir__ of a
+    # compiled bundle names no directory on disk and no tree sits beside the
+    # program, so it answers nil and the consumers below answer for
+    # themselves.
     def source_root
-      return OPAL_HOME if defined?(OPAL_HOME)
+      return nil if defined?(OPAL_COMPILED_BUNDLE)
       File.expand_path("../..", __dir__)
     end
 
+    # Opal: the running program answers for itself: a single-file
+    # executable is its own path, and a bundle run through node is node's
+    # argv[1], absolute as node resolved it. node:sea is a built-in module,
+    # which even an executable's embedded require answers.
+    def program_path
+      return nil unless defined?(OPAL_COMPILED_BUNDLE)
+      `(() => { let sea = false; try { sea = require("node:sea").isSea() } catch (e) {} const p = sea ? process.execPath : process.argv[1]; return p == null ? nil : String(p) })()`
+    end
+
     def bundler_ruby_lib
-      # Opal: the port's Bundler lib directory sits at <source_root>/lib -
-      # where $LOAD_PATH already finds it (exe/ruby adds it at boot).
-      File.join(source_root, "lib")
+      # Opal: the port's Bundler lib directory sits at <source_root>/lib,
+      # the child process's RUBYLIB. A compiled bundle carries bundler
+      # inside the program, so it names nothing to add.
+      lib = source_root
+      lib && File.join(lib, "lib")
     end
 
     def set_path
@@ -356,8 +376,11 @@ module Bundler
     def set_rubylib
       rubylib = (ENV["RUBYLIB"] || "").split(File::PATH_SEPARATOR)
       # Opal: the guard against duplicating RbConfig's rubylibdir goes - the
-      # port runs no RbConfig, and bundler_ruby_lib names the checkout's lib.
-      rubylib.unshift bundler_ruby_lib
+      # port runs no RbConfig. bundler_ruby_lib names the checkout's lib for
+      # a source-tree run; a compiled bundle carries bundler inside the
+      # program and adds nothing.
+      lib = bundler_ruby_lib
+      rubylib.unshift lib if lib
       Bundler::SharedHelpers.set_env "RUBYLIB", rubylib.uniq.join(File::PATH_SEPARATOR)
     end
 

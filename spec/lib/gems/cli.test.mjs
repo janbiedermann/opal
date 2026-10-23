@@ -389,8 +389,8 @@ describe("the gem command", () => {
   test("installs from a compact index over HTTP", async () => {
     // M5's exit test at the command line: a source of the port's own, in the
     // compact index shape the M5 specs answer with, serving the fixture gem.
-    // It also checks that a bundle reaches the transport, which it finds
-    // through the OPAL_HOME the bundle carries.
+    // It also checks that a bundle reaches the transport, which it carries
+    // as embedded source (OPAL_HOME and its lookup are gone).
     const gemBytes = readFileSync(FIXTURE_GEM);
     const info = "0.1.0 \n";
     const routes = new Map([

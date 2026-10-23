@@ -90,7 +90,7 @@ through the library alone:
   `gem uninstall -x -I`, and `gem install tiny --clear-sources --source
   http://127.0.0.1:PORT/ci/` against a compact index the test serves, which is
   also the case that shows a bundle reaches the transport through its
-  `OPAL_HOME` (`spec/lib/gems/cli.test.mjs`, M4's and M5's exit tests). The
+  embedded source (`spec/lib/gems/cli.test.mjs`, M4's and M5's exit tests). The
   same test reads that repository back with `gem list` (`-i`, `--details`),
   `gem info`, `gem which`, `gem contents`, `gem spec` and `gem search`, and
   `gem build` and `gem unpack` take a gem apart and put it back together; the
@@ -1460,8 +1460,10 @@ lock reads back with no re-resolve.
 The `bundle` command is in too: `exe/bundler`, built by `tasks/bundler.mjs`
 from `tasks/bundler/bundle.mjs` (the `gem` bundle's shape: opal/full, the
 thread shim, rubygems, then `lib/bundler.rb`, with opal-parser requirable
-because a Gemfile and a .gemspec are Ruby source, and the OPAL_HOME and
-`compilerKey()` constants shared with the other bundles), running
+because a Gemfile and a .gemspec are Ruby source, the whole stdlib as
+requirable modules (so a binstub loaded by `bundle exec` finds what it
+requires inside the program), and the OPAL_COMPILED_BUNDLE/OPAL_PROGRAM
+and `compilerKey()` constants shared with the other bundles), running
 `lib/opal/exe/bundler.rb` inside `Bundler.with_friendly_errors` and
 dispatching through `cli.rb` and `cli/{common,install,lock,list,check,
 clean}.rb`; `tasks/bundler_exe.mjs` makes the single-file executable the
@@ -1501,9 +1503,10 @@ out in `rubygems_integration.rb`): upstream rewrites Kernel#gem/#require
 to police the bundle, while Opal's require is the runtime's own and
 Gem::Specification carries no activation state - isolation comes from the
 load path that `clean_load_path` trims and `Gem.add_to_load_path`
-prepends. That loop closes end to end, because exe/ruby adds
-`$OPAL_HOME/lib` to its boot `$LOAD_PATH` (bundler answers there the way
-it answers as a default gem in CRuby): `node exe/ruby -r bundler/setup
+prepends. That loop closes end to end, because exe/ruby compiles
+lib/bundler into its bundle as requirable modules (bundler answers from
+inside the program the way it answers as a default gem in CRuby — the
+OPAL_HOME load-path entry is gone): `node exe/ruby -r bundler/setup
 script.rb` resolves the lockfile and the script requires the gems the
 Gemfile names. `show`, `info`, `platform` and `clean` joined the command
 tables with the positional argument show/info take as Thor arguments;

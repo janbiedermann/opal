@@ -2,7 +2,7 @@
 // bundle once, then run scripts through it the way CRuby's ruby would.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -132,9 +132,24 @@ describe("the ruby command", () => {
       assert.equal(r.out, "[Thread::Backtrace::Location, String, true, true]\n", r.err);
     });
 
-    test("corelib files resolve through OPAL_HOME at runtime", () => {
+    test("corelib files resolve inside the bundle at runtime", () => {
       const r = ruby("-e", "require 'corelib/file_test'; require 'opal/full'; puts ObjectSpace.is_a?(Module), Set[1, 2].size");
       assert.equal(r.out, "true\n2\n", r.err);
+    });
+
+    test("the stdlib and the port's lib answer from the bundle", () => {
+      // OPAL_HOME left: the bundle carries the whole stdlib and lib/ as
+      // requirable modules, so none of this needs a checkout or a $LOAD_PATH.
+      const r = ruby("-e", "require 'uri'; require 'json'; require 'optparse'; require 'pathname'; require 'digest'; require 'digest/md5'; require 'singleton'; require 'forwardable'; require 'bundler'; puts [URI('http://example.com/y').host, JSON.generate([1, 2]), Pathname('a/b.txt').basename.to_s, Digest::MD5.hexdigest('x').length, OptionParser.new {}.class, Bundler::VERSION.class].join(' ')");
+      assert.equal(r.out, "example.com [1,2] b.txt 32 OptionParser String\n", r.err);
+    });
+
+    test("the bundle carries its tree, not a path to the checkout", () => {
+      // The exe must run with nothing beside it: it embeds the sources and
+      // names no build checkout (tasks/ruby/bundle.mjs).
+      const bundle = readFileSync(RUBY, "utf8");
+      assert.match(bundle, /OPAL_COMPILED_BUNDLE/);
+      assert.ok(!bundle.includes(OPAL_ROOT), "the bundle must not name the checkout it was built in");
     });
   });
 

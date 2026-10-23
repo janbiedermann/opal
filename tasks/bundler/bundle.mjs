@@ -2,7 +2,9 @@
 // (exe/bundler) and tasks/bundler_exe.mjs (exe/bundler.exe): the full
 // corelib (opal and opal/full), the single-thread shim, RubyGems
 // (lib/rubygems.rb), Bundler (lib/bundler.rb, which requires its layer
-// eagerly) and lib/opal/exe/bundler.rb, minified with terser.
+// eagerly), the whole stdlib as requirable modules (so a binstub loaded
+// by bundle exec finds what it requires inside the program) and
+// lib/opal/exe/bundler.rb, minified with terser.
 //
 // It carries opal-parser as a requirable module like the `gem` bundle does:
 // a Gemfile and a .gemspec are Ruby source, so Bundler compiles when it
@@ -14,7 +16,7 @@ import { join } from "node:path";
 import { Builder } from "../../lib/opal/compiler/builder/builder.mjs";
 import { minifyJs } from "../../lib/opal/compiler/cli/minify.mjs";
 import { ROOT } from "../testing/common.mjs";
-import { compilerKey } from "../ruby/bundle.mjs";
+import { compilerKey, treeRequireNames } from "../ruby/bundle.mjs";
 
 export async function buildBundlerBundle() {
   // dynamic_require_severity: Runtime#require requires each Gemfile
@@ -41,7 +43,23 @@ export async function buildBundlerBundle() {
   builder.build("bundler", { requirable: true, load: true });
   // opal-parser, requirable but not loaded at boot (see the header).
   builder.build("opal-parser", { requirable: true });
-  builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
+  // The whole stdlib, compiled and requirable: bundle exec loads a gem's
+  // binstub in this process, and that script's requires - 'optparse',
+  // 'yaml', whatever the gem reaches for - must answer from the module
+  // table, since no checkout sits beside the program (OPAL_HOME is gone).
+  // #processRequire dedups on the raw require name, but the explicit
+  // build above registered its own expanded, so the sweep skips them -
+  // as it skips opal-builder, the runtime builder wrapper whose erb worker
+  // would load from a file beside the checkout (see tasks/ruby/bundle.mjs).
+  const bootNames = new Set(["thread", "opal-parser", "opal-builder"]);
+  for (const name of treeRequireNames("stdlib")) {
+    if (!bootNames.has(name)) builder.buildRequire(name);
+  }
+  // What the program is, with no path in it: lib/bundler branches on this
+  // instead of OPAL_HOME, the build checkout's path that used to be baked
+  // in and made the executables need that tree to work.
+  builder.buildStr("OPAL_COMPILED_BUNDLE = true\n", "(opal-compiled-bundle)", { no_export: true });
+  builder.buildStr("OPAL_PROGRAM = \"bundler\"\n", "(opal-program)", { no_export: true });
   // The HTTP transport (Gem::HTTPTransport): embedded as source text, because
   // a single-file executable's require() answers only built-in modules and no
   // tree sits beside the program to read it from anyway.

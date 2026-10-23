@@ -3,11 +3,12 @@
 #
 # tasks/ruby.mjs builds it into exe/ruby: a standalone Node.js program
 # bundling the full corelib (opal), the parser and the compiler
-# (opal-parser), and this script. It parses the common CRuby options, then
+# (opal-parser), the whole stdlib and the port's lib/ as requirable
+# modules, and this script. It parses the common CRuby options, then
 # loads, compiles and runs the given script in its own process, so the
-# script shares this runtime: its requires are resolved at runtime against
-# $LOAD_PATH (which -I extends and the stdlib directory joins), the stdlib
-# directory and the current directory.
+# script shares this runtime: its requires answer from the bundle, and
+# only files outside it - installed gems, -I paths, the current
+# directory - are resolved against $LOAD_PATH at runtime.
 #
 # Unlike CRuby it can't support every option or platform feature: there are
 # no threads or fibers, no native extensions, one string encoding, and only
@@ -26,20 +27,13 @@ module RubyCommand
       @syntax_check = false
       @loop_mode = nil
 
-      # The stdlib sources and the Opal entry points join the load path so
-      # that scripts can require them at runtime; OPAL_HOME is set by
-      # tasks/ruby.mjs at build time. <home>/opal holds opal/full.rb and the
-      # corelib files the autoloads registered by the bundle point at, and
-      # <home> itself is what makes `require 'opal/full'` resolve. <home>/lib
-      # joins last (stdlib winning any shared name): it is what makes
-      # `require 'bundler'` and `require 'bundler/setup'` resolve, the way
-      # bundler answers as a default gem in CRuby.
-      home = defined?(OPAL_HOME) ? OPAL_HOME : nil
-      if home
-        [File.join(home, 'stdlib'), File.join(home, 'opal'), home, File.join(home, 'lib')].each do |dir|
-          $LOAD_PATH << dir if File.directory?(dir)
-        end
-      end
+      # The stdlib and the port's lib/ are compiled into the bundle as
+      # requirable modules, so a script's require of them answers from the
+      # module table before the loader below ever touches $LOAD_PATH; the
+      # path list is only what -I extends plus the gems an activation puts
+      # on it. (This replaced OPAL_HOME, the baked checkout path the
+      # loader used to search for the stdlib sources - it made the
+      # executables need the tree that built them.)
 
       install_loader
 

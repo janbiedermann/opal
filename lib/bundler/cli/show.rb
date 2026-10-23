@@ -19,9 +19,10 @@ module Bundler
       if gem_name
         if gem_name == "bundler"
           # Opal: upstream expands __dir__ inside the installed bundler gem;
-          # a compiled bundle's __dir__ names no directory, so the port
-          # names the checkout bundler's sources came from.
-          path = defined?(OPAL_HOME) ? OPAL_HOME : File.expand_path("../../..", __dir__)
+          # a compiled bundle names no directory and carries no checkout, so
+          # the port names the executable that answers - bundler is compiled
+          # into it.
+          path = Bundler::SharedHelpers.program_path || File.expand_path("../../..", __dir__)
         else
           spec = spec_for_gem(gem_name)
           return unless spec
