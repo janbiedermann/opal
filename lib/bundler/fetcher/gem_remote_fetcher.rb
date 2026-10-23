@@ -7,7 +7,7 @@ module Bundler
     class GemRemoteFetcher < Gem::RemoteFetcher
       # Opal: upstream's initialize then sets @pool_size (the Gem::Request
       # pool width) and appends ssl_ca_cert to @cert_files; the port's
-      # RemoteFetcher has neither - the transport (http.mjs) keeps its
+      # RemoteFetcher has neither - the transport (http.cjs) keeps its
       # connections on the Worker and Node verifies TLS against its own
       # trust store - so those two lines drop and the call stays.
       def initialize(*)

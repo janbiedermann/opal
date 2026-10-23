@@ -1,4 +1,4 @@
-// The HTTP transport the gem port fetches through (lib/opal/gems/http.mjs).
+// The HTTP transport the gem port fetches through (lib/opal/gems/http.cjs).
 //
 // The fixture server runs on a Worker of its own: the transport parks the main
 // thread in Atomics.wait while it waits for an answer, so a server in the main
@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import net from "node:net";
 import test from "node:test";
 import { Worker } from "node:worker_threads";
-import { close, fetch, fetchAll } from "../../../lib/opal/gems/http.mjs";
+import { close, fetch, fetchAll } from "../../../lib/opal/gems/http.cjs";
 
 const SERVER_SOURCE = `
 const { parentPort } = require("node:worker_threads");

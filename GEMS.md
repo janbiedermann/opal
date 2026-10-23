@@ -1034,9 +1034,12 @@ compact-index update asks of it. `Gem::Net::HTTP` is a stand-in that keeps
 upstream's names — the status classes where `Net::HTTP` puts them, the
 per-class `body_permitted?`, the nil body a 304 answers so that
 `cache_update_path` keeps its cached copy — over `Gem::HTTPTransport`, the seam
-every remote read goes through, and a program that cannot reach
-`lib/opal/gems/http.mjs` says so at the first fetch rather than failing inside
-a require. `Gem::RemoteFetcher` is the ported file: pooling, certificate files,
+every remote read goes through. Compiled bundles embed the transport's source -
+since the relocation fix CommonJS, as `http.cjs` - as an `OPAL_HTTP_TRANSPORT`
+constant, and the seam runs it through `new Function`: a single-file
+executable's `require()` answers only Node's built-ins, and a relocatable exe
+has no source tree to read from. A program with neither the embed nor the file
+beside it says so at the first fetch rather than failing inside a require. `Gem::RemoteFetcher` is the ported file: pooling, certificate files,
 proxy arguments, the global gem cache and the redirect limits. `Gem::URI` is the
 stdlib library under the name the vendored copy gives — the constant and the
 `Gem::URI(uri)` constructor the client and the API set call point at
@@ -1139,7 +1142,8 @@ exit tests that were waiting on a command: build → `exe/gem install
 ./hello-1.0.0.gem` → `exe/ruby -e "require 'hello'"` → uninstall, and
 `exe/gem install tiny --clear-sources --source http://127.0.0.1:PORT/ci/`
 against a compact index the test itself serves — the last case also being the
-one that shows a bundle reaches the transport through its baked `OPAL_HOME`.
+one that shows a bundle reaches the transport through its embedded source.
+(`exe/gem` now bakes no path into the bundle at all: it is relocatable.)
 `spec/lib/gems/cli.test.mjs` covers it (15 cases, no network).
 
 Two read-only batches have gone in since: `Gem::QueryUtils` with `list`,
@@ -1560,7 +1564,7 @@ rides the port's own transport, the one every remote gem read has used
 since M5: the response shim `rubygems/vendored_net_http.rb` supplies the
 `Gem::Net::HTTP*` classes Downloader's response state machine branches
 on, and `ConnectionPools` shrinks to the request `Gem::RemoteFetcher`
-builds, because the connection itself lives on the http.mjs Worker. The
+builds, because the connection itself lives on the http.cjs Worker. The
 substitution moves the deviations: the downloader's error lists drop the
 Socket/Errno/net-http names that have no class here (a never-completed
 fetch always answers a `FetchError`, whose message carries the cause's

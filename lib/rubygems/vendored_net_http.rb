@@ -6,7 +6,7 @@
 #
 # Opal: this is where upstream loads the net-http it vendors. The port runs no
 # Net::HTTP at all: #request in remote_fetcher.rb hands the request to
-# http.mjs (see the last bullet below), which runs it on a Node Worker and
+# http.cjs (see the last bullet below), which runs it on a Node Worker and
 # parks this thread with Atomics.wait until it answers - Opal's Ruby side is
 # synchronous and Node's fetch is not - and wraps the answer in the response
 # classes here, which carry the shape remote_fetcher.rb and
@@ -294,8 +294,8 @@ module Gem
   end
 
   ##
-  # The seam every remote read goes through: http.mjs, loaded once, and the
-  # response wrapped as a Gem::Net::HTTPResponse.
+  # The seam every remote read goes through: the embedded http.cjs, run once,
+  # and the response wrapped as a Gem::Net::HTTPResponse.
 
   module HTTPTransport
     DEFAULT_TIMEOUT = 30_000 # ms, what a fetch may take before it is aborted
@@ -341,10 +341,11 @@ module Gem
         @transport = nil
       end
 
-      # A platform without the module beside it (a browser runner) cannot fetch
-      # at all; the specs use this to say so rather than fail.
+      # A platform with neither the embedded transport nor the file beside it
+      # (a browser runner) cannot fetch at all; the specs use this to say so
+      # rather than fail.
       def available?
-        !transport_path.nil?
+        !transport_source.nil?
       end
 
       private
@@ -364,15 +365,19 @@ module Gem
       def transport
         @transport ||= begin
           enable_env_proxy
-          path = transport_path
-          unless path
+          src = transport_source
+          unless src
             raise TransportMissing,
-              "no HTTP transport: http.mjs under lib/opal/gems is not reachable from here"
+              "no HTTP transport: lib/opal/gems/http.cjs is neither embedded in this program nor readable from here"
           end
-          # Opal: `require` is in the scope compiled code runs in, and Node 22.12
-          # and newer can require() an ES module, so the transport is loaded
-          # here rather than installed by the runner.
-          `require(#{path})`
+          # Opal: the transport arrives as source text - embedded by the bundle
+          # tasks, or read off the file in a source-tree run - and runs through
+          # `new Function`, because a `require` of it would work in neither
+          # place: a single-file executable's require() answers only built-in
+          # modules, and a compiled bundle has no directory to resolve a path
+          # against either. The module is CommonJS and its only require is
+          # node:worker_threads, which even the executable's require answers.
+          `((function (src) { var mod = { exports: {} }; new Function("require", "module", "exports", src)(require, mod, mod.exports); return mod.exports })(String(#{src})))`
         end
       end
 
@@ -386,20 +391,25 @@ module Gem
         ENV["NODE_USE_ENV_PROXY"] = "1"
       end
 
-      # The module lives in lib/opal/gems beside the tree this file belongs to,
-      # and a program that was compiled from source no longer knows where its
-      # libraries sat: `__dir__` inside a required file names the load path's
-      # entry ("rubygems"), not a directory. So the checkout comes from
-      # OPAL_HOME - the constant tasks/ruby/bundle.mjs bakes into exe/ruby, and
-      # the environment variable the node runner sets - and failing that, from
-      # the current directory, which is the repository in most development runs.
+      # The source arrives one of two ways: a compiled bundle embeds it as the
+      # OPAL_HTTP_TRANSPORT constant (tasks/{ruby,gem,bundler}/bundle.mjs bake
+      # it beside OPAL_COMPILER_KEY), and a source-tree run - exe/opal, the
+      # runners, MSpec - reads the file.
+      def transport_source
+        return OPAL_HTTP_TRANSPORT if defined?(OPAL_HTTP_TRANSPORT)
+        path = transport_path
+        path && File.read(path)
+      end
+
+      # Which file to read when nothing is embedded. A program compiled from
+      # source no longer knows where its libraries sat: `__dir__` inside a
+      # required file names the load path's entry ("rubygems"), not a
+      # directory. The node runner exports OPAL_HOME for this checkout, and the
+      # current directory is the repository in most development runs.
       def transport_path
-        home =
-          if defined?(OPAL_HOME) then OPAL_HOME
-          elsif ENV["OPAL_HOME"] then ENV["OPAL_HOME"]
-          end
-        paths = [File.join(".", "lib", "opal", "gems", "http.mjs")]
-        paths.unshift File.join(home, "lib", "opal", "gems", "http.mjs") if home
+        home = ENV["OPAL_HOME"]
+        paths = [File.join(".", "lib", "opal", "gems", "http.cjs")]
+        paths.unshift File.join(home, "lib", "opal", "gems", "http.cjs") if home
         paths.find {|path| File.exist?(path) }
       end
 

@@ -116,6 +116,15 @@ describe("the gem command", () => {
     assert.equal(r.status, 0);
   });
 
+  test("the bundle carries its transport, not a path to the checkout", () => {
+    // Gem::HTTPTransport runs the embedded source through new Function; the
+    // exe must fetch with no tree beside it, so nothing may bake the build
+    // checkout's path into the bundle.
+    const bundle = readFileSync(GEM, "utf8");
+    assert.match(bundle, /OPAL_HTTP_TRANSPORT/);
+    assert.ok(!bundle.includes(OPAL_ROOT), "the bundle must not name the checkout it was built in");
+  });
+
   test("with no arguments the usage is printed and the run fails", () => {
     const r = gem();
     assert.match(r.out, /gem \[global options\.\.\.\] command \[arguments\.\.\.\] \[options\.\.\.\]/);

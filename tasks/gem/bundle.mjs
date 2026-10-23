@@ -40,10 +40,12 @@ export async function buildGemBundle() {
   // carrying it: the boot cost is only paid by a command that loads a gemspec
   // (GEMS.md risk 5).
   builder.build("opal-parser", { requirable: true });
-  // OPAL_HOME, the same constant tasks/ruby/bundle.mjs bakes in: the transport
-  // (Gem::HTTPTransport.transport_path) finds lib/opal/gems/http.mjs through it,
-  // and a bundle has no source tree of its own to look in.
-  builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
+  // The HTTP transport, embedded as source text rather than as a path into
+  // the build checkout: the program has no tree beside it to read it from
+  // (Gem::HTTPTransport runs the source through new Function), the exe is
+  // relocatable, and a single-file executable's require() - which answers
+  // only built-in modules - is never asked for it.
+  builder.buildStr(`OPAL_HTTP_TRANSPORT = ${JSON.stringify(readFileSync(join(ROOT, "lib", "opal", "gems", "http.cjs"), "utf8"))}\n`, "(http-transport)", { no_export: true });
   // The compiled-tree digest of `gem compile` (Gem::CompiledTree) names its
   // output with this key, and the exe/ruby loader re-computes it to find the
   // tree back: both bundles carry the same compiler, so both stamp the same

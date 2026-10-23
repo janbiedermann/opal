@@ -58,6 +58,10 @@ export async function buildRubyBundle() {
   builder.build("rubygems", { requirable: true, load: true });
   builder.build("opal-parser", { requirable: true, load: true });
   builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
+  // The HTTP transport (Gem::HTTPTransport): embedded as source text, because
+  // a single-file executable's require() answers only built-in modules and no
+  // tree sits beside the program to read it from anyway.
+  builder.buildStr(`OPAL_HTTP_TRANSPORT = ${JSON.stringify(readFileSync(join(ROOT, "lib", "opal", "gems", "http.cjs"), "utf8"))}\n`, "(http-transport)", { no_export: true });
   builder.buildStr(`OPAL_COMPILER_KEY = ${JSON.stringify(compilerKey())}\n`, "(opal-compiler-key)", { no_export: true });
   builder.buildStr(readFileSync(join(ROOT, "lib", "opal", "exe", "ruby.rb"), "utf8"), "lib/opal/exe/ruby.rb");
   builder.buildStr("::Kernel.exit", "(exit)", { no_export: true });

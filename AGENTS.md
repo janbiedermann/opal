@@ -326,6 +326,18 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   the executable instead of a blob. Below 26 the old
   `--experimental-sea-config` + postject path runs, and it needs a build with
   the SEA fuse, which the system `node-22` lacks.
+- Inside a single-file executable, every `require()` compiled into the bundle
+  is Node's embedder require, which answers only built-in modules
+  ("No such built-in module: <path>") - a userland path on disk is not
+  loadable, and baking a checkout path into the exe would make it non-
+  relocatable anyway. The pattern for JS the bundle needs: keep the module
+  CommonJS with built-in requires only, embed its source as a Ruby constant
+  (builder.buildStr input is COMPILED AS RUBY - `Opal.x = ...` becomes a
+  Ruby setter call and dies; use `NAME = "<json>"` like OPAL_HOME) and run it
+  through `new Function("require", "module", "exports", src)` - the scope's
+  require still answers built-ins inside. That is how the HTTP transport
+  (lib/opal/gems/http.cjs, OPAL_HTTP_TRANSPORT) loads; `new Function` and
+  eval'd Workers are unrestricted in a SEA.
 - The gem port (GEMS.md, `lib/rubygems/`) requires its files eagerly - no
   `autoload` - so a compiled bundle can carry them; `tasks/ruby/bundle.mjs`
   bundles `lib/rubygems.rb` into `exe/ruby` (1.4MB -> 2.06MB as the port grew) and
@@ -336,9 +348,13 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 - `exe/gem` is `tasks/gem.mjs` (bundle in `tasks/gem/bundle.mjs`, single-file
   executable in `tasks/gem_exe.mjs` and `tasks/sea_exe.mjs`, which both `*_exe`
   tasks share): opal, opal/full, thread and rubygems at boot, opal-parser
-  requirable, and the `OPAL_HOME` constant `Gem::HTTPTransport` needs to find
-  `lib/opal/gems/http.mjs` - without it a bundle's first fetch raises
-  `TransportMissing` - plus `OPAL_COMPILER_KEY` (below, for compiled trees). The command classes are required eagerly by
+  requirable, and the `OPAL_HTTP_TRANSPORT` constant - the CommonJS source of
+  `lib/opal/gems/http.cjs`, which `Gem::HTTPTransport` runs through
+  `new Function` - so the exe fetches with no tree beside it and bakes no
+  checkout path: `exe/gem` is relocatable (pinned by a bundle-shape case in
+  `cli.test.mjs`). `exe/ruby`/`exe/bundler` still bake `OPAL_HOME` for their
+  stdlib `$LOAD_PATH` and binstub paths. Plus `OPAL_COMPILER_KEY` (below, for
+  compiled trees). The command classes are required eagerly by
   `lib/rubygems.rb`, which is also why `Gem::CommandManager` no longer requires
   a command by name: a require path with an interpolation in it still reads as
   static to the builder, which then asks for `rubygems/commands/_command`.

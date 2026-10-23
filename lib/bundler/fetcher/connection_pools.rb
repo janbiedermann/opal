@@ -4,7 +4,7 @@ require "rubygems/remote_fetcher"
 
 # Opal: upstream's ConnectionPools keeps a pool of Gem::Net::HTTP connections
 # per host, configures TLS and finds the environment's proxy. The port's
-# transport (lib/opal/gems/http.mjs) owns connection reuse (one pool for the
+# transport (lib/opal/gems/http.cjs) owns connection reuse (one pool for the
 # process, on the Worker), TLS (Node's trust store) and proxies
 # (NODE_USE_ENV_PROXY, see Gem::HTTPTransport.enable_env_proxy), and every
 # request of this stack goes through Gem::RemoteFetcher#request anyway - so

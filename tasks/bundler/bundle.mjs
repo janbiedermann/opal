@@ -41,11 +41,11 @@ export async function buildBundlerBundle() {
   builder.build("bundler", { requirable: true, load: true });
   // opal-parser, requirable but not loaded at boot (see the header).
   builder.build("opal-parser", { requirable: true });
-  // OPAL_HOME, the same constant tasks/ruby/bundle.mjs bakes in: the
-  // transport (Gem::HTTPTransport.transport_path) finds
-  // lib/opal/gems/http.mjs through it, and a bundle has no source tree of
-  // its own to look in.
   builder.buildStr(`OPAL_HOME = ${JSON.stringify(ROOT)}\n`, "(opal-home)", { no_export: true });
+  // The HTTP transport (Gem::HTTPTransport): embedded as source text, because
+  // a single-file executable's require() answers only built-in modules and no
+  // tree sits beside the program to read it from anyway.
+  builder.buildStr(`OPAL_HTTP_TRANSPORT = ${JSON.stringify(readFileSync(join(ROOT, "lib", "opal", "gems", "http.cjs"), "utf8"))}\n`, "(http-transport)", { no_export: true });
   // The compiled-tree digest of `gem compile` (Gem::CompiledTree) names
   // its output with this key, and a bundle finding a gem's compiled tree
   // re-computes it to find the tree back; every bundle stamps the same
