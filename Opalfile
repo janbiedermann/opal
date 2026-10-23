@@ -1,3 +1,0 @@
-add_load_path "opal"
-add_load_path "stdlib"
-add_load_path "lib"

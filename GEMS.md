@@ -32,9 +32,10 @@ manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
 `unpack`, `env`, `sources`, `outdated`, `dependency`, `cleanup`, `update` and
 the Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with
 the lockfile and gemdeps machinery. M7 is in - the builder's `--gem`, the
-Opalfile directive, the compiled trees and `gem install --compile` came with
-it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL,
-definition, resolver, settings, installer and `bundle` command slices -
+compiled trees and `gem install --compile` came with it (the `Opalfile`
+directive it also shipped has since been removed); M8 is in with its
+foundation, matching, source/lockfile, Gemfile DSL, definition, resolver,
+settings, installer and `bundle` command slices -
 `exe/bundler` installs, locks, lists and checks a Gemfile - and its runtime
 setup half (M8.3a): `bundler/setup` and `Bundler.setup` activate a bundle
 for `exe/ruby`, and `show`, `info`, `platform` and `clean` answer. The

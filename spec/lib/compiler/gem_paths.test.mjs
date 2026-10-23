@@ -9,7 +9,6 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compareGemVersions, defaultGemDir, gemLoadPaths, gemRepositories } from "../../../lib/opal/compiler/builder/gem_paths.mjs";
-import { evaluateOpalfile } from "../../../lib/opal/compiler/builder/project.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
 const DIR = mkdtempSync(join(tmpdir(), "opal-gem-paths-"));
@@ -125,29 +124,6 @@ describe("version order of installed gems", () => {
     assert.equal(compareGemVersions("2.0", "2.0.0"), 0);
     assert.ok(compareGemVersions("1.0.0.rc1", "1.0.0.beta") > 0);
     assert.ok(compareGemVersions("1.0", "1.0.1") < 0);
-  });
-});
-
-describe("add_gem_dependency in an Opalfile", () => {
-  test("adds the installed gem's paths, and warns when a name is absent", () => {
-    const repo = join(DIR, "opalfile-repo");
-    install(repo, "dep", "0.2.0");
-
-    const collected = [];
-    const warnings = [];
-    const collection = { appendPaths: (...paths) => collected.push(...paths) };
-    const previous = process.env.GEM_HOME;
-    process.env.GEM_HOME = repo;
-    try {
-      evaluateOpalfile('add_gem_dependency "dep"\nadd_gem_dependency "absent"\n', DIR, collection, (m) => warnings.push(m));
-    } finally {
-      if (previous === undefined) delete process.env.GEM_HOME;
-      else process.env.GEM_HOME = previous;
-    }
-
-    assert.deepEqual(collected, [join(repo, "gems", "dep-0.2.0", "lib")]);
-    assert.equal(warnings.length, 1, warnings.join("\n"));
-    assert.match(warnings[0], /gem absent is not installed in the gem repositories/);
   });
 });
 

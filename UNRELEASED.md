@@ -8,6 +8,12 @@
 ### Fixed
 -->
 
+### Removed
+
+- Remove `Opalfile` support: a project is marked by its `Gemfile` or
+  `*.gemspec`, load paths are given by `-I`/`Builder#appendPaths`, and gem
+  paths by `--gem` or gems installed from a `Gemfile`
+
 ### Performance
 
 - Optimize `Hash#rehash` for the common case, avoid calling `$slice` when no hash collision is present (#2571)

@@ -4,7 +4,7 @@
 // builder/post_processor/dce_spec.rb.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, statSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, statSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,7 +12,7 @@ import { Builder, MissingRequire } from "../../../lib/opal/compiler/builder/buil
 import { NullCache } from "../../../lib/opal/compiler/builder/cache.mjs";
 import { JsProcessor, RubyProcessor } from "../../../lib/opal/compiler/builder/processors.mjs";
 import { PathReader } from "../../../lib/opal/compiler/builder/path_reader.mjs";
-import { UnknownOpalfileDirective, evaluateOpalfile } from "../../../lib/opal/compiler/builder/project.mjs";
+import { locateRootDir } from "../../../lib/opal/compiler/builder/project.mjs";
 import { link, LinkError } from "../../../lib/opal/compiler/builder/esm_linker.mjs";
 import { Fragment, Directive } from "../../../lib/opal/compiler/fragment.mjs";
 import { defaultPaths, OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
@@ -355,53 +355,55 @@ describe("source encodings", () => {
 });
 
 describe("projects", () => {
-  const projectBuilder = () => {
-    const builder = newBuilder({ warn: () => {} });
-    builder.appendPaths(join(FIXTURES, "project"));
-    return builder;
-  };
-
-  test("adds a load path from an Opalfile when a file of the project is built", () => {
-    const b = projectBuilder();
-    b.build("p1/test");
-    b.build("require_from_p3");
-    assert.ok(b.toString().includes("require_from_p3_working"));
+  test("locateRootDir finds the Gemfile or gemspec directory above a file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-projects-"));
+    try {
+      mkdirSync(join(dir, "lib", "nested"), { recursive: true });
+      const file = join(dir, "lib", "nested", "file.rb");
+      writeFileSync(file, "");
+      assert.equal(locateRootDir(file), null);
+      writeFileSync(join(dir, "Gemfile"), "source \"https://rubygems.org\"\n");
+      assert.equal(locateRootDir(file), realpathSync(dir));
+      rmSync(join(dir, "Gemfile"));
+      writeFileSync(join(dir, "lib", "own.gemspec"), "");
+      assert.equal(locateRootDir(file), realpathSync(join(dir, "lib")));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
-  test("adds a load path from an Opalfile when a path is appended", () => {
-    const b = projectBuilder();
-    b.appendPaths(join(FIXTURES, "project", "p1"));
-    b.build("require_from_p3");
-    assert.ok(b.toString().includes("require_from_p3_working"));
+  test("locateRootDir stops at a vendor directory and an Opalfile marks nothing", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-projects-"));
+    try {
+      writeFileSync(join(dir, "Gemfile"), "");
+      writeFileSync(join(dir, "Opalfile"), "add_load_path 'x'\n");
+      mkdirSync(join(dir, "vendor", "pkg"), { recursive: true });
+      const file = join(dir, "vendor", "pkg", "file.rb");
+      writeFileSync(file, "");
+      // the Gemfile above is out of reach, and the Opalfile marks no root
+      assert.equal(locateRootDir(file), null);
+      rmSync(join(dir, "Gemfile"));
+      assert.equal(locateRootDir(join(dir, "Opalfile")), null);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
-  test("adds an absolute load path (__dir__ + ...) from an Opalfile", () => {
-    const b = projectBuilder();
-    b.appendPaths(join(FIXTURES, "project", "p5"));
-    b.build("require_from_p3");
-    assert.ok(b.toString().includes("require_from_p3_working"));
-  });
-
-  test("warns about gem dependencies (no gems in Node.js)", () => {
-    const warnings = [];
-    const b = newBuilder({ warn: (m) => warnings.push(m) });
-    b.appendPaths(join(FIXTURES, "project", "p2"));
-    assert.ok(warnings.some((w) => w.includes("add_gem_dependency rake")));
-  });
-
-  test("raises when an Opalfile contains an unknown directive", () => {
-    assert.throws(() => projectBuilder().appendPaths(join(FIXTURES, "project", "p4")), UnknownOpalfileDirective);
+  test("the loaded projects are listed when a require is missing", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-projects-"));
+    try {
+      writeFileSync(join(dir, "Gemfile"), "");
+      writeFileSync(join(dir, "main.rb"), "require \"absent_lib\"\n");
+      const b = newBuilder();
+      b.appendPaths(dir);
+      assert.throws(() => b.build("main"), (err) => err instanceof MissingRequire && String(err.message).includes(realpathSync(dir)));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("doesn't break when adding a non-existent load path", () => {
-    projectBuilder().appendPaths(join(FIXTURES, "project", "non_existent"));
-  });
-
-  test("evaluates RUBY_ENGINE conditions as Opal", () => {
-    const paths = [];
-    evaluateOpalfile("if RUBY_ENGINE == 'opal'\n  add_load_path 'a'\nelse\n  add_load_path 'b'\nend\nunless RUBY_ENGINE == 'opal'\n  add_gem_dependency 'x'\nend\n",
-      "/root", { appendPaths: (...p) => paths.push(...p) }, () => assert.fail("no warning expected"));
-    assert.deepEqual(paths, ["/root/a"]);
+    newBuilder().appendPaths(join(FIXTURES, "project", "non_existent"));
   });
 });
 

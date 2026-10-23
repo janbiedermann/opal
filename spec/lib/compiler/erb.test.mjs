@@ -62,7 +62,7 @@ describe("renderErb (in a worker thread)", () => {
   });
 
   test("has the nodejs stdlib (File, ENV, __dir__)", () => {
-    assert.equal(render("<%= __dir__ %> <%= File.exist?(__FILE__) %> <%= ENV.key?('PATH') %>", join(OPAL_ROOT, "Opalfile")), `${OPAL_ROOT} true true`);
+    assert.equal(render("<%= __dir__ %> <%= File.exist?(__FILE__) %> <%= ENV.key?('PATH') %>", join(OPAL_ROOT, "package.json")), `${OPAL_ROOT} true true`);
   });
 
   test("reports errors of the template", () => {
