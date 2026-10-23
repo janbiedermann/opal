@@ -5,8 +5,6 @@
 > runs on Node.js and isn't a Ruby gem anymore, so the guide applies to
 > Opal 1.x until these integrations move to the Node.js toolchain.
 
-**Note: While everything described in this document works, it is recommended to use Opalfile for that purpose. See: [Adjusting Load Paths with Opalfile](opalfile.html)**
-
 To configure a gem to run in Opal the gem will need a couple of things:
 
 1. The opal gem running on a server (so the ruby code can get compiled to JavaScript).

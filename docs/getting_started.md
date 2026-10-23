@@ -56,7 +56,7 @@ const builder = new Builder();
 builder.appendPaths("../my_lib");
 ```
 
-or list it in an [Opalfile](opalfile.md). Now, any Ruby files in this directory can be discovered.
+Now, any Ruby files in this directory can be discovered.
 
 ### Standalone Executables
 
