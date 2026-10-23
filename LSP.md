@@ -423,10 +423,13 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   (`initialize`/`initialized`/`shutdown`/`exit`, `window/logMessage`) and the
   async-spawn test harness. Exit criteria: VS Code (or a JSON harness) can
   start/stop the server; `--version` works and answers the §0 version.
-- **P1 — documents + parse diagnostics + `--check`.** Document store,
+- **P1 — documents + parse diagnostics + `--check`. ✅ LANDED (2026-10-23).**
+  Document store,
   incremental sync, parse-gate diagnostics (push). Exit criteria: opening a
   file with a syntax error lights the exact range in VS Code; the
-  surrogate-pair edit spec passes.
+  surrogate-pair edit spec passes. (Prism's parse *warnings* also surface —
+  severity 2 — which made "fixed file answers zero diagnostics" fixtures
+  need warning-free code.)
 - **P2 — AST features.** documentSymbol, foldingRange, selectionRange,
   documentHighlight, semanticTokens, inlayHint, onTypeFormatting,
   `opalLsp/showSyntaxTree`, `opalLsp/compileToJs`. No indexer yet.

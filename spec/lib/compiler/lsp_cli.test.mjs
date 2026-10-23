@@ -5,7 +5,8 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
@@ -22,8 +23,10 @@ function frame(object) {
 
 // Spawns exe/lsp and parses its framed stdout into messages; next()
 // answers the next message in order.
+const servers = [];
 function startServer() {
   const child = spawn(process.execPath, [LSP], { stdio: ["pipe", "pipe", "pipe"] });
+  servers.push(child);
   const queue = [];
   const waiters = [];
   let buffer = Buffer.alloc(0);
@@ -135,8 +138,103 @@ describe("the opal-language-server command", () => {
     assert.equal(await client.exitCode(), 0); // Opal exits 0 when the process ends normally
   });
 
+  // ---- P1: document sync + the parse gate ----
+
+  function openDoc(client, uri, text, languageId = "ruby") {
+    client.send({ jsonrpc: "2.0", method: "textDocument/didOpen",
+      params: { textDocument: { uri, languageId, version: 1, text } } });
+    return client.next();
+  }
+
+  function changeDoc(client, uri, version, changes) {
+    client.send({ jsonrpc: "2.0", method: "textDocument/didChange",
+      params: { textDocument: { uri, version }, contentChanges: changes } });
+    return client.next();
+  }
+
+  test("didOpen publishes the parse gate with exact positions", async () => {
+    const client = await handshake();
+    const published = await openDoc(client, "file:///t_open.rb", "def foo(\nputs 1\n");
+    assert.equal(published.method, "textDocument/publishDiagnostics");
+    assert.equal(published.params.uri, "file:///t_open.rb");
+    const error = published.params.diagnostics.find((d) => d.severity === 1);
+    assert.ok(error, "an error-severity diagnostic");
+    assert.equal(error.source, "opal");
+    assert.equal(error.code, "def_params_term_paren");
+    // the missing ')' is reported at the newline after it (0-based)
+    assert.deepEqual([error.range.start.line, error.range.start.character], [1, 5]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("an incremental edit that closes the paren clears the diagnostics", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///t_fix.rb", "puts (1");
+    const published = await changeDoc(client, "file:///t_fix.rb", 2, [
+      { range: { start: { line: 0, character: 7 }, end: { line: 0, character: 7 } }, text: ")" },
+    ]);
+    assert.deepEqual(published.params.diagnostics, []);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("edits and positions count UTF-16 units around a surrogate pair", async () => {
+    const client = await handshake();
+    // line 0 is 'print "𠀀"': the U+20000 pair occupies UTF-16 units 7..8
+    // and the line is 10 units long (counting code points would say 9) -
+    // the AGENTS.md lesson that character offsets answer in characters and
+    // lie past a surrogate pair, pinned on the document splice.
+    await openDoc(client, "file:///t_utf16.rb", 'print "𠀀"');
+    // insert '(' at the end of line 0: character 10, one unit past the pair
+    let published = await changeDoc(client, "file:///t_utf16.rb", 2, [
+      { range: { start: { line: 0, character: 10 }, end: { line: 0, character: 10 } }, text: "(" },
+    ]);
+    assert.ok(published.params.diagnostics.length > 0, "the inserted '(' opens an unterminated expression");
+    const unterminated = published.params.diagnostics.find((d) => d.range.start.line === 0);
+    assert.ok(unterminated, "the error lands on line 0, after the astral character");
+    // replace the pair itself (units 7..9) with an X, then drop the '(':
+    // after the pair collapses to one unit the '(' sits at 9, not 10
+    published = await changeDoc(client, "file:///t_utf16.rb", 3, [
+      { range: { start: { line: 0, character: 7 }, end: { line: 0, character: 9 } }, text: "X" },
+    ]);
+    assert.ok(published.params.diagnostics.length > 0, "still only the '(' dangling");
+    published = await changeDoc(client, "file:///t_utf16.rb", 4, [
+      { range: { start: { line: 0, character: 9 }, end: { line: 0, character: 10 } }, text: "" },
+    ]);
+    // 'print "X"' parses clean with no warnings: any off-by-two UTF-16 math
+    // in the splices above would have left broken syntax here.
+    assert.deepEqual(published.params.diagnostics, []);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("a non-ruby document answers no diagnostics", async () => {
+    const client = await handshake();
+    client.send({ jsonrpc: "2.0", method: "textDocument/didOpen",
+      params: { textDocument: { uri: "file:///t.txt", languageId: "plaintext", version: 1, text: "def foo(" } } });
+    client.send({ jsonrpc: "2.0", id: 9, method: "shutdown" });
+    const answer = await client.next();
+    assert.equal(answer.id, 9); // shutdown is the next thing answered: no publish came
+    client.send({ jsonrpc: "2.0", method: "exit" });
+    assert.equal(await client.exitCode(), 0);
+  });
+
+  test("--check parse-gates a tree and exits 1 listing the errors", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-lsp-check-"));
+    try {
+      writeFileSync(join(dir, "bad.rb"), "def foo(\nputs 1\n");
+      writeFileSync(join(dir, "good.rb"), "puts 1\n");
+      const run = spawnSync(process.execPath, [LSP, "--check", dir], { encoding: "utf8" });
+      assert.equal(run.status, 1);
+      assert.match(run.stdout, /bad\.rb:2:6: error: .*def_params_term_paren/);
+      assert.match(run.stdout, /bad\.rb:1:1: error: .*def_term/);
+      assert.doesNotMatch(run.stdout, /good\.rb/);
+      assert.match(run.stdout, /2 files, 3 errors/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   after(() => {
-    // Each test closes its own server through "exit" or stdin; nothing
-    // else to clean up — exe/lsp is rebuilt by the compiler suite too.
+    // Every test closes its own server through "exit"; this catches any
+    // child left alive by a failed assertion so the suite can't hang.
+    for (const child of servers) if (child.exitCode === null) child.kill();
   });
 });

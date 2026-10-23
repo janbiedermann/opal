@@ -17,6 +17,10 @@ module LanguageServerCommand
         # stdio is the only transport: VS Code spawns the server and pipes
         # it. --stdio names it explicitly, as other language servers do.
         Opal::LanguageServer::Server.new.run
+      when '--check'
+        # Parse gate over a tree, no protocol (LSP.md §6): exit 1 when any
+        # file fails to parse under Opal's parser.
+        exit Opal::LanguageServer::Check.run(ARGV[1] || Dir.pwd)
       when '--version', '-v'
         puts "opal-language-server #{Opal::LanguageServer::VERSION} (Opal #{Opal::VERSION})"
       when '--help', '-h'
@@ -29,9 +33,11 @@ module LanguageServerCommand
 
     def usage
       <<~TEXT
-        Usage: opal-lsp [--stdio] [--version] [--help]
+        Usage: opal-lsp [--stdio] [--check DIR] [--version] [--help]
 
             --stdio                      Speak LSP over stdin/stdout (default)
+            --check DIR                  Parse-gate every .rb under DIR,
+                                         print them, exit 1 on any error
             --version, -v                Print the version
             --help, -h                   Print this help
 

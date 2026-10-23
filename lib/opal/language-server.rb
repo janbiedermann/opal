@@ -6,8 +6,13 @@
 # into exe/lsp (tasks/lsp.mjs) and exe/lsp.exe (tasks/lsp_exe.mjs).
 require 'opal/version'
 require 'opal/language-server/protocol'
+require 'opal/language-server/prism/parser'
+require 'opal/language-server/document'
+require 'opal/language-server/ruby_document'
+require 'opal/language-server/store'
 require 'opal/language-server/transport'
 require 'opal/language-server/server'
+require 'opal/language-server/check'
 
 module Opal
   module LanguageServer

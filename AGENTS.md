@@ -65,6 +65,18 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   with `rubocop` and `rubocop-performance` (optional).
 
 ## Notes
+- The language server (`exe/lsp`, built by `tasks/lsp.mjs`/`tasks/lsp_exe.mjs`
+  from `lib/opal/language-server.rb` + `lib/opal/exe/lsp.rb`; plan in
+  `LSP.md`): its stdio transport frames are byte-exact JS (`fs.readSync` into
+  raw bytes, `TextDecoder('utf-8')` per body, `Buffer.byteLength` on write —
+  LSP counts UTF-8 bytes while Opal strings are UTF-16). LSP positions and
+  `parseWithMetadata`'s envelope offsets are both UTF-16 code-unit indices
+  (the envelope's `offsets` line table turns one into line/character), so the
+  utf-16 positionEncoding is arithmetic, no conversion; `stdlib/json.rb`
+  answers `JSON.parse` as plain Hashes with String keys. Tests are the async
+  stdio harness in `spec/lib/compiler/lsp_cli.test.mjs` (spawnSync would
+  block the loop piping the frames); `--check DIR` runs the parse gate
+  headless.
 - `tmp/` is gitignored scratch space. Some of it is created by the tasks:
   `tmp/performance` (tasks/performance.mjs clones the Asciidoctor checkouts
   and writes asciidoctor_test.rb and asciidoctor_test.js there),

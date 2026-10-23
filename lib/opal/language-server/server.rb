@@ -3,16 +3,20 @@
 # loop (ruby-lsp's reader/worker/dispatcher threads collapse into it).
 require 'opal/language-server/transport'
 require 'opal/language-server/protocol'
+require 'opal/language-server/store'
+require 'opal/language-server/ruby_document'
 
 module Opal
   module LanguageServer
     class Server
-      attr_reader :transport
+      attr_reader :transport, :store
 
       def initialize(transport = Transport.new)
         @transport = transport
+        @store = Store.new
         @stopped = false
         @shutdown = false
+        @client_capabilities = {}
       end
 
       # Read messages until the client closes stdin or asks to exit.
@@ -35,7 +39,17 @@ module Opal
         when 'initialize'
           run_initialize(id, params)
         when 'initialized'
-          # P0: nothing to warm up yet (indexing arrives with P3).
+          # P1: nothing to warm up yet (indexing arrives with P3).
+          nil
+        when 'textDocument/didOpen'
+          open_document(params)
+        when 'textDocument/didChange'
+          change_document(params)
+        when 'textDocument/didClose'
+          @store.delete(params.dig("textDocument", "uri"))
+        when 'textDocument/didSave'
+          # The parse gate already ran on the last edit (P5 moves the
+          # compile gate here); nothing to do.
           nil
         when 'shutdown'
           @shutdown = true
@@ -70,10 +84,14 @@ module Opal
         end
       end
 
-      def run_initialize(_id, _params)
-        # P0 answers minimal static capabilities; positionEncoding is the
-        # LSP 3.18 negotiation and utf-16 is the only one offered — JS
-        # strings are UTF-16, and the parser reports UTF-16 offsets.
+      def run_initialize(_id, params)
+        @client_capabilities = params ? (params["capabilities"] || {}) : {}
+
+        # P1 capabilities: incremental sync plus push diagnostics (the 3.17
+        # shape). Pull diagnostics (3.18 textDocument/diagnostic) join in
+        # P6, negotiated against general.positionEncodings — only utf-16 is
+        # offered: JS strings are UTF-16 and the parser reports UTF-16
+        # offsets (lib/opal/parser/index.mjs).
         capabilities = {
           "positionEncoding" => "utf-16",
           "textDocumentSync" => {
@@ -88,6 +106,42 @@ module Opal
                                       "name"    => "opal-language-server",
                                       "version" => ::Opal::VERSION,
                                     }))
+      end
+
+      # ---- document synchronization (P1) ----
+
+      def open_document(params)
+        text_document = params["textDocument"]
+        return unless ruby_language?(text_document["languageId"])
+        document = RubyDocument.new(
+          uri: text_document["uri"],
+          source: text_document["text"] || "",
+          version: text_document["version"] || 0,
+          language_id: text_document["languageId"],
+        )
+        @store.set(document)
+        publish_parse_gate(document)
+      end
+
+      def change_document(params)
+        document = @store[params.dig("textDocument", "uri")]
+        return if document.nil?
+        document.version = params["textDocument"]["version"] if params.dig("textDocument", "version")
+        document.push_edits(params["contentChanges"] || [])
+        publish_parse_gate(document)
+      end
+
+      # The parse gate on every edit (LSP.md §9 P1: the compile gate waits
+      # for save, P5). Publishing an empty array clears the squiggles.
+      def publish_parse_gate(document)
+        @transport.write(Notification.new(
+          "textDocument/publishDiagnostics",
+          { "uri" => document.uri, "diagnostics" => document.diagnostics },
+        ))
+      end
+
+      def ruby_language?(language_id)
+        language_id.nil? || language_id == "ruby"
       end
     end
   end
