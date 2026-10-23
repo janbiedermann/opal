@@ -353,6 +353,10 @@ module Bundler
       user_bundle_path("cache")
     end
 
+    def preferred_gemfile_name
+      Bundler.settings[:init_gems_rb] ? "gems.rb" : "Gemfile"
+    end
+
     def configure_gem_home_and_path(path = bundle_path)
       configure_gem_path
       configure_gem_home(path)

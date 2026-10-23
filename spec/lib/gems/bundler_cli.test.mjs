@@ -536,4 +536,123 @@ describe("bundle command over a local repository", () => {
       await new Promise((resolve) => server.close(resolve));
     }
   });
+
+  test("add resolves remotely and injects, and remove takes it back out", async () => {
+    // the Injector half of M8.4b: `bundle add` evaluates the current Gemfile,
+    // resolves the new dependency through the fetcher, appends the gem line
+    // with its conservative requirement and writes the lockfile; `bundle
+    // remove` then edits the Gemfile back and reinstalls. The -r spelling
+    // doubles as the pin that a command option wins the switch clash with
+    // the global retry, and renders as require: false in the Gemfile.
+    const gemBytes = readFileSync(builtGem("tiny", "0.1.0"));
+    const info = "0.1.0 \n";
+    const routes = new Map([
+      ["/ci/names", [Buffer.from("tiny\n"), "text/plain"]],
+      ["/ci/versions", [Buffer.from(`tiny 0.1.0 ${createHash("md5").update(info).digest("hex")}\n`), "text/plain"]],
+      ["/ci/info/tiny", [Buffer.from(info), "text/plain"]],
+      ["/ci/gems/tiny-0.1.0.gem", [gemBytes, "application/octet-stream"]],
+    ]);
+    const server = createServer((req, res) => {
+      const route = routes.get(req.url);
+      if (!route) {
+        res.writeHead(404, { "content-type": "text/plain" });
+        res.end("no such route");
+        return;
+      }
+      const [body, contentType] = route;
+      res.writeHead(200, { "content-type": contentType });
+      res.end(body);
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address();
+    const dir = join(DIR, `inject${appCount++}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "Gemfile"), `source 'http://127.0.0.1:${port}/ci/'\n`);
+    const remoteEnv = { no_proxy: "127.0.0.1,localhost" };
+
+    try {
+      const add = await runAsync(BUNDLE, dir, remoteEnv, ["add", "tiny", "-r", "false"]);
+      assert.equal(add.status, 0, `${add.out}${add.err}`);
+      const gemfile = readFileSync(join(dir, "Gemfile"), "utf8");
+      assert.match(gemfile, /gem "tiny", ">= 0\.1\.0", require: false/);
+      assert.match(readFileSync(join(dir, "Gemfile.lock"), "utf8"), /tiny \(0\.1\.0\)/);
+      assert.ok(existsSync(join(DIR, "repo", "gems", "tiny-0.1.0", "lib", "tiny.rb")));
+
+      const remove = await runAsync(BUNDLE, dir, remoteEnv, ["remove", "tiny"]);
+      assert.equal(remove.status, 0, `${remove.out}${remove.err}`);
+      assert.match(remove.out, /was removed/);
+      assert.ok(!/gem "tiny"/.test(readFileSync(join(dir, "Gemfile"), "utf8")));
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  test("add's option validation answers before the Gemfile is read", () => {
+    const dir = app();
+    const none = bundle(dir, "add");
+    assert.equal(none.status, 15);
+    assert.match(none.err, /Please specify gems to add/);
+
+    const pattern = bundle(dir, "add", "tiny", "--version", "bad pattern");
+    assert.equal(pattern.status, 15);
+    assert.match(pattern.err, /Invalid gem requirement pattern/);
+
+    const branch = bundle(dir, "add", "tiny", "--branch", "x");
+    assert.equal(branch.status, 15);
+    assert.match(branch.err, /cannot specify/);
+  });
+
+  test("remove rejects its remembered --install flag and unknown gems", () => {
+    const dir = app();
+    const flag = bundle(dir, "remove", "--install", "pathgem");
+    assert.equal(flag.status, 15);
+    assert.match(flag.err, /`--install` flag has been removed/);
+
+    const missing = bundle(dir, "remove", "nosuchgem");
+    assert.equal(missing.status, 4);
+    assert.match(missing.err, /not specified in/);
+    assert.match(missing.err, /could not be removed/);
+  });
+
+  test("binstubs writes the wrapper, runs it, and needs a gem", () => {
+    const dir = app();
+    const none = bundle(dir, "binstubs");
+    assert.equal(none.status, 1);
+    assert.match(none.err, /needs at least one gem to run/);
+
+    const remembered = bundle(dir, "binstubs", "--path", "foo", "pathgem");
+    assert.equal(remembered.status, 15);
+    assert.match(remembered.err, /`--path` flag has been removed/);
+
+    const install = bundle(dir, "install", "--local");
+    assert.equal(install.status, 0, install.err);
+    const made = bundle(dir, "binstubs", "pathgem");
+    assert.equal(made.status, 0, made.err);
+    const stub = readFileSync(join(dir, "bin", "pathgem-bin"), "utf8");
+    assert.match(stub, /ENV\["BUNDLE_GEMFILE"\] \|\|= File\.expand_path\("\.\.\/Gemfile", __dir__\)/);
+    assert.match(stub, /load Gem\.bin_path\("pathgem", "pathgem-bin"\)/);
+
+    // the ported rbconfig names this interpreter, so the stub's `#!/usr/bin/env
+    // opal` line matches the template while running it straight would need an
+    // `opal` on PATH; exe/ruby runs the file under the bundle's own setup.
+    const ran = run(RUBY, dir, {}, ["bin/pathgem-bin"]);
+    assert.equal(ran.status, 0, ran.err);
+    assert.match(ran.out, /pathgem/);
+  });
+
+  test("init writes the template once and says so", () => {
+    const dir = join(DIR, `init${appCount++}`);
+    mkdirSync(dir, { recursive: true });
+    const made = bundle(dir, "init");
+    assert.equal(made.status, 0, made.err);
+    assert.match(made.out, /Writing new Gemfile/);
+    const gemfile = readFileSync(join(dir, "Gemfile"), "utf8");
+    assert.match(gemfile, /^# frozen_string_literal: true$/m);
+    assert.match(gemfile, /^source "https:\/\/rubygems\.org"$/m);
+    assert.match(gemfile, /# gem "rails"/);
+
+    const again = bundle(dir, "init");
+    assert.equal(again.status, 1);
+    assert.match(again.err, /Gemfile already exists/);
+  });
 });

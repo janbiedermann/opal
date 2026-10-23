@@ -149,15 +149,48 @@ module Bundler
         "keep-file-descriptors" => {type: :boolean, default: true, desc: "Passes all file descriptors to the new processes. Default is true, and setting it to false is not permitted (removed)."},
         "gemfile" => {type: :string, desc: "Use the specified gemfile instead of Gemfile"},
       },
+      "init" => {
+        "gemspec" => {type: :string, desc: "Use the specified .gemspec to create the Gemfile"},
+        "gemfile" => {type: :string, desc: "Use the specified name for the gemfile instead of 'Gemfile'"},
+      },
+      "remove" => {
+        "install" => {type: :boolean, desc: "Runs 'bundle install' after removing the gems from the Gemfile (removed)"},
+      },
+      "binstubs" => {
+        "force" => {type: :boolean, default: false, desc: "Overwrite existing binstubs if they exist"},
+        "path" => {type: :string, lazy_default: "bin", desc: "Binstub destination directory, `bin` by default (removed)"},
+        "shebang" => {type: :string, desc: "Specify a different shebang executable name than the default (usually 'ruby')"},
+        "standalone" => {type: :boolean, desc: "Make binstubs that can work without the Bundler runtime"},
+        "all" => {type: :boolean, desc: "Install binstubs for all gems"},
+        "all-platforms" => {type: :boolean, default: false, desc: "Install binstubs for all platforms"},
+      },
+      "add" => {
+        "version" => {type: :string, switches: ["-v"], desc: "Version of the gem to add"},
+        "group" => {type: :string, switches: ["-g"], desc: "Add to group(s); can be used multiple times and supports comma separated groups"},
+        "source" => {type: :string, switches: ["-s"], desc: "The source address where the gem will be sourced from"},
+        "require" => {type: :string, switches: ["-r"], desc: "Adds require path to gem. Provide false, or a path as a string."},
+        "path" => {type: :string, desc: "The location to use if the gem should come from a folder"},
+        "git" => {type: :string, desc: "The git repository URI to use as the source for the gem"},
+        "github" => {type: :string, desc: "The GitHub repository to use as the source for the gem"},
+        "branch" => {type: :string, desc: "The git branch, if source is git"},
+        "ref" => {type: :string, desc: "The git reference, if source is git"},
+        "glob" => {type: :string, desc: "The location of a dependency's .gemspec, expanded within Ruby (single quotes recommended)"},
+        "quiet" => {type: :boolean, desc: "Only output warnings and errors."},
+        "skip-install" => {type: :boolean, desc: "Adds gem to the Gemfile but does not install it"},
+        "optimistic" => {type: :boolean, desc: "Ignored (now default behavior)"},
+        "pessimistic" => {type: :boolean, desc: "Adds pessimistic declaration of version to gem"},
+        "strict" => {type: :boolean, desc: "Adds strict declaration of version to gem"},
+        "cooldown" => {type: :numeric, desc: "Only consider gem versions published at least N days ago. Use 0 to disable."},
+      },
       "version" => {},
       "cli_help" => {},
       "help" => {},
     }.freeze
 
     # Commands whose Thor method takes positional arguments (show/info get
-    # a gem name, update/exec a list, and config its subcommand line;
-    # binstubs/add and the rest join it when those commands do).
-    POSITIONAL_COMMANDS = %w[show info update config exec].freeze
+    # a gem name, update/exec a list, config its subcommand line, and
+    # add/remove/binstubs their gem names).
+    POSITIONAL_COMMANDS = %w[show info update config exec add remove binstubs].freeze
 
     def self.start(argv = ARGV, _options = {})
       new(argv).run
@@ -375,6 +408,33 @@ module Bundler
       Exec.new(options, @positional).run
     end
 
+    def init
+      require_relative "cli/init"
+      Init.new(options.dup).run
+    end
+
+    def remove
+      if ARGV.include?("--install")
+        removed_message = "The `--install` flag has been removed. `bundle install` is triggered by default."
+        raise InvalidOption, removed_message
+      end
+
+      require_relative "cli/remove"
+      Remove.new(@positional, options).run
+    end
+
+    def binstubs
+      remembered_flag_deprecation("path", option_name: "bin")
+
+      require_relative "cli/binstubs"
+      Binstubs.new(options, @positional).run
+    end
+
+    def add
+      require_relative "cli/add"
+      Add.new(options.dup, @positional).run
+    end
+
     def version
       # Opal: upstream stamps "(timestamp commit sha)" through the bundler
       # gem's BuildMetadata, stamped at gem-build time; this port runs no
@@ -451,7 +511,10 @@ module Bundler
       end
       CLI::GLOBAL_OPTIONS.each do |name, spec|
         options[name] = spec[:default] if spec.key?(:default)
-        (Array(spec[:switches]) + ["--#{name}"]).each {|s| switches[s] = name }
+        # A command's own option wins a switch clash (Thor merges
+        # method_options over class_options): `add -r` is require, not the
+        # global retry.
+        (Array(spec[:switches]) + ["--#{name}"]).each {|s| switches[s] ||= name }
       end
 
       i = 0

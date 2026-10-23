@@ -42,9 +42,9 @@ for `exe/ruby`, and `show`, `info`, `platform` and `clean` answer. The
 `config`, `update` and `exec` commands (M8.3b-c) complete the command
 set; the remote sources landed with M8.4a - a bare (non-local) `bundle
 lock`/`install` resolves and downloads through `Bundler::Fetcher` over the
-port's own transport, and mirror settings reroute a source. The command
-breadth around them (`add`/`inject`/`remove`, `binstubs`, `init`, the
-rest of M8.4) is what is left.
+port's own transport, and mirror settings reroute a source; the command
+breadth around them (M8.4b) - `add`/`remove` editing the Gemfile through
+the Injector, `binstubs`, `init` - finished the M8 plan.
 
 What runs now, with no `-I` and no network beyond a fixture server on
 `127.0.0.1` — and every path below except the last works with no `gem` command,
@@ -190,19 +190,16 @@ every one reached through a failing gem path — are listed with their commits i
 
 What is still open, in the order that unblocks the rest:
 
-1. **M8 - Bundler is in** (§8): the foundation, matching, source/lockfile,
-   Gemfile DSL, definition, resolver, settings, install-layer, command,
-   runtime-setup, config/update and exec slices are in (M8.1a-M8.3c), and
-   so are the remote sources (M8.4a). What is left is the command breadth
-   around them: `add`/`inject`/`remove`, `binstubs`, `init`.
-2. **Nothing in the suite reads the real index.** `exe/gem install rake` works
+1. **Nothing in the suite reads the real index.** `exe/gem install rake` works
    against rubygems.org when run by hand, and the suite keeps to the fixture
    server so it stays offline and deterministic; what no test covers is the
    live server's own behaviour — a `SolveFailure` message read back from it, a
    real ETag negotiation, a 304.
-3. **M7**: the builder consulting the gem directories (`--gem`, `Opalfile`'s
-   `add_gem_dependency`) and the precompiled `compiled/` tree.
-4. **M8, Bundler.**
+2. **`gem update`** - rubygems' own update command, the one M6 omission left
+   open; it rides the already-ported `Gem::DependencyResolver`.
+3. **Bundler beyond the §8 plan** - the plugin and self-manager scaffolding
+   stays empty, and the commands §8 never listed (`outdated`, `cache`,
+   `viz`, `console`) were not ported.
 
 ---
 
@@ -1259,7 +1256,7 @@ came with it: `--[no-]compile` on install compiles each spec the run
 installed, reporting - rather than failing - a file the compiler cannot read,
 whose `.rb` then answers as it did before.
 
-### M8 — Bundler (~3500 lines) — **in**
+### M8 — Bundler (~3500 lines) — **done**
 
 `lib/opal/exe/bundler.rb`, `lib/bundler/`: `bundler.rb` (root, `root`,
 `bundle_path`, `load`, `setup`, `require`, `ui`), `dsl.rb` (Gemfile: `source`,
@@ -1292,7 +1289,7 @@ to drop, the second already works.
 `exe/bundler install`, `exe/bundler exec ruby -e "require '…'"`,
 `exe/bundler update --conservative`, `exe/bundler list`, lockfile round-trip.
 
-**Status: in**. M8.1a is in - the leaf files of `lib/bundler`: `lib/bundler.rb`
+**Status: done**. M8.1a is in - the leaf files of `lib/bundler`: `lib/bundler.rb`
 (eager requires, no autoloads, the bundle rule), `version.rb`, `errors.rb`,
 `current_ruby.rb`, `match_platform.rb`, `constants.rb`, `deprecate.rb`,
 `force_platform.rb`, `shared_helpers.rb`, `dependency.rb` and the Dependency
@@ -1583,12 +1580,31 @@ had not needed until now. Tested by `spec/opal/gems/bundler_remote_spec.rb`
 bare `lock` + `install` + setup-activation over the fixture compact
 index, the mirror reroute answering only when it sees the origin's
 `X-Gemfile-Source`, and a source that refuses connection leaving the
-HTTPError status 17. What remains:
-
-* **M8.4b - the command breadth around the remote sources**:
-  `inject`/`add`/`remove`, `source`/`binstubs`/init; only here does
-  Bundler reach the network in tests, and only against the fixture
-  server.
+HTTPError status 17. The commands around them landed last (M8.4b).
+`Injector` is upstream verbatim - resolve the edited Gemfile before
+touching it, append with the conservative requirement, and the remove
+path's line-regex with nested-block cleanup and the cross-check revert -
+and `CLI::Add`/`CLI::Remove` are, and `binstubs`/`init` join as upstream
+files with local adaptations. The scanner gains a rule: a command option
+wins the clash with a global one over a switch, Thor's precedence of
+method_options over class_options, so `add -r` means require, not retry.
+The slice's traps all sit in files nothing had run: binstub generation
+reads `lib/bundler/templates/Executable`(+`.standalone`) off disk, which
+a compiled bundle has no file tree to carry - they are embedded as
+constants - and this stdlib's ERB holds `ERB::Util.h` only, no `#result`,
+so the generator fills the `<%= %>` holes with a non-greedy regex (the
+greedy one swallows both holes on the `Gem.bin_path` line); `init` inlines
+its template for the same reason, and its `--gemspec` arm keeps upstream's
+call of `to_gemfile` - a method neither this bundler nor this rubygems
+defines, so it dies `NoMethodError` there too. The generated shebang reads
+`opal` (the ported rbconfig's name for this interpreter), so the suite
+runs a binstub through exe/ruby rather than straight. Tested by five more
+`bundler_cli.test.mjs` runs: the add->remove round trip over the fixture
+compact index (the `-r false` spelling pinning both the switch precedence
+and the injected line), `add`'s validation answers, `remove`'s flag and
+unknown-gem rejections, the binstub's content and its run, and `init`'s
+template. M8 is done; the M8 plan's command list is complete except the
+never-listed `outdated`/`cache`/`viz` and the empty plugin hooks.
 
 ### Suggested ordering rationale
 
