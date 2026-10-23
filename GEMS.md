@@ -26,13 +26,12 @@ core files the work has changed so far.
 *and* through the command line — `exe/gem install ./hello-1.0.0.gem` then
 `exe/ruby -e "require 'hello'"`, and `exe/gem install tiny --source <fixture
 server>` over the compact index (`spec/lib/gems/cli.test.mjs`).
-M6 is in with its plumbing and eighteen commands — the runner, the command
+M6 is in with its plumbing and nineteen commands — the runner, the command
 manager, `Gem::Command` and its option mixins, and `install`, `uninstall`,
 `help`, `list`, `search`, `info`, `contents`, `which`, `spec`, `build`, `fetch`,
-`unpack`, `env`, `sources`, `outdated`, `dependency`, `cleanup` and the
-Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with the
-lockfile and gemdeps machinery, and the `update` commands, out with the
-dependency resolver's install side (M8). M7 is in - the builder's `--gem`, the
+`unpack`, `env`, `sources`, `outdated`, `dependency`, `cleanup`, `update` and
+the Opal-only `compile` (D7). What is left of §8's M6 list is `lock`, out with
+the lockfile and gemdeps machinery. M7 is in - the builder's `--gem`, the
 Opalfile directive, the compiled trees and `gem install --compile` came with
 it; M8 is in with its foundation, matching, source/lockfile, Gemfile DSL,
 definition, resolver, settings, installer and `bundle` command slices -
@@ -195,9 +194,7 @@ What is still open, in the order that unblocks the rest:
    server so it stays offline and deterministic; what no test covers is the
    live server's own behaviour — a `SolveFailure` message read back from it, a
    real ETag negotiation, a 304.
-2. **`gem update`** - rubygems' own update command, the one M6 omission left
-   open; it rides the already-ported `Gem::DependencyResolver`.
-3. **Bundler beyond the §8 plan** - the plugin and self-manager scaffolding
+2. **Bundler beyond the §8 plan** - the plugin and self-manager scaffolding
    stays empty, and the commands §8 never listed (`outdated`, `cache`,
    `viz`, `console`) were not ported.
 
@@ -1112,7 +1109,7 @@ compact index the test itself serves and installing the package it downloads,
 in `spec/lib/gems/cli.test.mjs`. Running the same path against rubygems.org is
 now a run rather than a missing feature; the suite keeps to the fixture.
 
-### M6 — the `gem` CLI (~1500 lines) — **in progress**
+### M6 — the `gem` CLI (~1500 lines) — **done**
 
 `lib/opal/exe/gem.rb`, `Gem::GemRunner`, `Gem::CommandManager`,
 `Gem::Command`, `user_interaction.rb` (trimmed), `version_option.rb`,
@@ -1131,7 +1128,7 @@ Build tasks: `tasks/gem.mjs`, `tasks/gem/bundle.mjs`, `tasks/gem_exe.mjs`
 Tests: `spec/lib/gems/cli.test.mjs` — spawn `exe/gem` against a local
 `Source::Local` fixture directory (no network) plus one network-marked test.
 
-**Status: in progress.** The runner is in — `lib/opal/exe/gem.rb` (the script
+**Status: done.** The runner is in — `lib/opal/exe/gem.rb` (the script
 `tasks/gem.mjs` bundles into `exe/gem`, with `tasks/gem_exe.mjs` for the
 single-file executable), `Gem::GemRunner`, `Gem::CommandManager` with its
 abbreviated-command lookup and `-h`/`-v`/`-C` handling, `Gem::Command` with its
@@ -1150,9 +1147,13 @@ Two read-only batches have gone in since: `Gem::QueryUtils` with `list`,
 an installed repository answers: `list -i`, `--details`, `contents -l`,
 `spec FIELD`), and the packaging trio `build`, `fetch` and `unpack` with
 `Gem::GemspecHelpers`. Since then `environment`, `sources`, `outdated`,
-`dependency`, `cleanup` and the Opal-only `compile` came in, which is every
-command §8 lists except `lock` (out with the lockfile and gemdeps machinery)
-and the `update` commands (out with the resolver's install side, M8).
+`dependency`, `cleanup`, `update` and the Opal-only `compile` came in, which is
+every command §8 lists except `lock` (out with the lockfile and gemdeps
+machinery). `gem update` came with the resolver's install side: its cooldown
+filters stay inert like the installer's (`Gem::Cooldown` is not ported), and
+its `--system` self-update arm is upstream's own code - it lands on upstream's
+"Latest version already installed. Done." because this port is itself the
+RubyGems installation and no rubygems-update is ever in reach.
 `gem compile NAME` (D7) writes the gem's requirable files as JavaScript under
 `<gem_dir>/compiled/<full_name>/<digest>/` (`Gem::CompiledTree`,
 `Gem::Commands::CompileCommand`), and `BasicSpecification#full_require_paths`

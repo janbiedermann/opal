@@ -113,6 +113,7 @@ require_relative "rubygems/commands/search_command"
 require_relative "rubygems/commands/sources_command"
 require_relative "rubygems/commands/specification_command"
 require_relative "rubygems/commands/uninstall_command"
+require_relative "rubygems/commands/update_command"
 require_relative "rubygems/commands/unpack_command"
 require_relative "rubygems/commands/which_command"
 
@@ -443,6 +444,22 @@ module Gem
   def self.source_date_epoch
     require "time"
     Time.at(source_date_epoch_string.to_i)
+  end
+
+  ##
+  # RubyGems distributors (like operating system package managers) can
+  # disable RubyGems update by setting this to error message printed to
+  # end-users on gem update --system instead of actual update.
+  #
+  # Opal: upstream declares this attr_accessor inside a `class << self`
+  # block; the port spells it in the def self. style the file uses.
+
+  def self.disable_system_update_message # :nodoc:
+    @disable_system_update_message
+  end
+
+  def self.disable_system_update_message=(message) # :nodoc:
+    @disable_system_update_message = message
   end
 
   ##

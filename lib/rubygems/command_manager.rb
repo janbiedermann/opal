@@ -36,7 +36,7 @@ require_relative "text"
 #
 # * BUILTIN_COMMANDS lists the commands this port carries, not upstream's
 #   thirty-odd: the certificate, push/pull/signin/signout, yank, server, exec,
-#   open, rdoc, pristine, rebuild, update, generate_index and owner commands are
+#   open, rdoc, pristine, rebuild, generate_index and owner commands are
 #   out with signing, documentation, and the git/lock/vendor machinery, and a
 #   command that is not listed here is not loaded - it answers UnknownCommand.
 #   The list grows as the milestones port them. To it the port adds one name
@@ -68,6 +68,7 @@ class Gem::CommandManager
     :sources,
     :specification,
     :uninstall,
+    :update,
     :unpack,
     :which,
   ].freeze

@@ -443,6 +443,80 @@ describe("the gem command", () => {
     }
   });
 
+  test("update moves an installed gem to the newest version of the index", async () => {
+    // the update command's loop: fetch_remote_gems asks the source for every
+    // version above the highest installed one, --explain names what would
+    // move, and the update itself leaves the old version in place. The index
+    // serves two versions: the committed fixture as 0.1.0 and one built here
+    // as 0.2.0.
+    const newer = builtGem("tiny", "0.2.0");
+    const info = "0.1.0 \n0.2.0 \n";
+    const routes = new Map([
+      ["/ci/names", [Buffer.from("tiny\n"), "text/plain"]],
+      ["/ci/versions", [Buffer.from(`tiny 0.1.0,0.2.0 ${createHash("md5").update(info).digest("hex")}\n`), "text/plain"]],
+      ["/ci/info/tiny", [Buffer.from(info), "text/plain"]],
+      ["/ci/gems/tiny-0.1.0.gem", [readFileSync(FIXTURE_GEM), "application/octet-stream"]],
+      ["/ci/gems/tiny-0.2.0.gem", [readFileSync(newer.path), "application/octet-stream"]],
+    ]);
+
+    const server = createServer((req, res) => {
+      const route = routes.get(req.url);
+      if (!route) {
+        res.writeHead(404, { "content-type": "text/plain" });
+        res.end("no such route");
+        return;
+      }
+      const [body, type] = route;
+      res.writeHead(200, { "content-type": type });
+      res.end(body);
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address();
+
+    const repo = join(DIR, "update-repo");
+    const over = {
+      GEM_HOME: repo, GEM_PATH: repo, GEM_SPEC_CACHE: join(DIR, "update-specs"),
+      no_proxy: "127.0.0.1,localhost",
+    };
+    const source = ["--clear-sources", "--source", `http://127.0.0.1:${port}/ci/`];
+
+    try {
+      const inst = await runAsync(GEM, DIR, over, ["install", "tiny", "-v", "0.1.0", "--no-document", ...source]);
+      assert.equal(inst.status, 0, `${inst.out}${inst.err}`);
+
+      const explain = await runAsync(GEM, DIR, over, ["update", "--explain", ...source]);
+      assert.equal(explain.status, 0, `${explain.out}${explain.err}`);
+      assert.match(explain.out, /^ {2}tiny-0\.2\.0$/m, explain.out);
+
+      const upd = await runAsync(GEM, DIR, over, ["update", ...source]);
+      assert.equal(upd.status, 0, `${upd.out}${upd.err}`);
+      assert.match(upd.out, /Updating tiny/);
+      assert.match(upd.out, /Gems updated: tiny/);
+      assert.ok(existsSync(join(repo, "gems", "tiny-0.2.0", "lib", "tiny.rb")));
+      assert.ok(existsSync(join(repo, "gems", "tiny-0.1.0")), "the old version stays installed");
+
+      const again = await runAsync(GEM, DIR, over, ["update", "tiny", ...source]);
+      assert.equal(again.status, 0, `${again.out}${again.err}`);
+      assert.match(again.out, /Nothing to update/);
+      assert.match(again.out, /Gems already up-to-date: tiny/);
+
+      const missing = await runAsync(GEM, DIR, over, ["update", "nosuchgem-at-all", ...source]);
+      assert.equal(missing.status, 0, `${missing.out}${missing.err}`);
+      assert.match(missing.out, /Gems not currently installed: nosuchgem-at-all/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  test("update --system answers that this port is current", () => {
+    // the self-update arm with no rubygems-update in reach lands on
+    // upstream's own check_latest_rubygems answer: the port is the RubyGems
+    // installation, and it is already at its own version.
+    const r = gem("update", "--system");
+    assert.match(r.out, /Latest version already installed\. Done\./);
+    assert.equal(r.status, 0, `${r.out}${r.err}`);
+  });
+
   test("the opal command reads installed gems through --gem, compiled tree first", () => {
     const greet = builtGem("greet", "1.0.0");
     const installed = gemIn(greet.dir, {}, "install", "./greet-1.0.0.gem", "--no-document");
