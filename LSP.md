@@ -573,12 +573,14 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   a configured command. Not suite-tested (running VS Code headless is
   out of scope; `node --check` is the only gate here) - F5 is the smoke
   test documented in its README.
-  *Still deferred:* formatter delegation: the server spawns an external CRuby formatter
-  (`rubocop` with Layout cops only, or the `syntax_tree`/`st` CLI, or
-  `rubyfmt`) and advertises `documentFormattingProvider` only when one is
-  configured/found (`OPAL_LSP_FORMATTER`), degrading silently otherwise —
-  formatting is whitespace, not a language claim, so it does not bend the
-  "Opal's Ruby exactly" rule; then codeAction extract variable/method (pure
+  *Formatter delegation: ✅ LANDED (2026-10-24).* `features/formatting.rb`
+  runs the configured command (`initializationOptions.formatter`,
+  forwarded by the extension's `opal.languageServer.formatter` setting,
+  with `OPAL_LSP_FORMATTER` as the environment fallback) through
+  `spawnSync(shell: true)`: document source to stdin, formatted text from
+  stdout as one whole-document edit; anything failing answers null. The
+  `documentFormattingProvider` capability appears only when a formatter
+  is configured - no formatter, no claim. Still deferred:* codeAction extract variable/method (pure
   text, ports cleanly), code lens + test discovery for `test/nodejs`
   Minitest files (`bin/test <file>` commands), and ERB/`.opalerb`
   documents via `prepareErb`.

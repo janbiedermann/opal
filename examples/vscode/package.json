@@ -29,6 +29,11 @@
           "type": "string",
           "default": "",
           "description": "Optional Opal checkout path: navigation into corelib/stdlib then lands in the checkout instead of dumped copies of the baked sources."
+        },
+        "opal.languageServer.formatter": {
+          "type": "string",
+          "default": "",
+          "description": "Optional external formatter command (e.g. \"st --baseline\"); the server pipes the document to it and applies its stdout. Leave empty to advertise no formatter."
         }
       }
     }

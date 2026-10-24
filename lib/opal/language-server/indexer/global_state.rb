@@ -13,7 +13,7 @@ module Opal
     class GlobalState
       WORKSPACE_FILE_LIMIT = 300
 
-      attr_reader :index, :client_capabilities, :client_name, :opal_home
+      attr_reader :index, :client_capabilities, :client_name, :opal_home, :formatter
 
       def initialize
         @client_capabilities = {}
@@ -31,6 +31,10 @@ module Opal
         @client_name = (params["clientInfo"] || {})["name"] || ""
         init = params["initializationOptions"] || {}
         @opal_home = init["opalHome"]
+        # External formatter command (LSP.md §9 P7): none configured, none
+        # advertised. The environment is the fallback for clients that
+        # cannot send initializationOptions.
+        @formatter = init["formatter"] || ENV["OPAL_LSP_FORMATTER"]
 
         summary = []
         stale = @opal_home ? reindex_stale_corelib : 0

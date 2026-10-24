@@ -35,4 +35,7 @@ the produced VSIX.
   type; the deeper compile gate (`/o` regexp flags and friends) runs on
   save. Quickfixes are offered for the gated patterns (drop the bang,
   `msg << x` -> `msg += x`, drop `/o`, remove the unsupported require/call).
-- No formatter in v1: the server deliberately ships none (LSP.md §9 P7).
+- No built-in formatter: the server deliberately ships none (LSP.md §9
+  P7). Set `opal.languageServer.formatter` to an external command (e.g.
+  `st --baseline` or a `rubocop -a`-style runner): the document goes to
+  its stdin and its stdout replaces the buffer on Format Document.

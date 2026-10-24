@@ -25,6 +25,7 @@ require 'opal/language-server/features/type_hierarchy'
 require 'opal/language-server/features/completion'
 require 'opal/language-server/features/opal_gate'
 require 'opal/language-server/features/code_actions'
+require 'opal/language-server/features/formatting'
 require 'opal/language-server/indexer/global_state'
 
 module Opal
@@ -144,6 +145,10 @@ module Opal
           @transport.write(Result.new(id, CompletionFeature.resolve(@state, params)))
         when 'textDocument/codeAction'
           with_document(id, params) { |d| CodeActionsFeature.perform(d, params["context"]) }
+        when 'textDocument/formatting'
+          # Whitespace delegation only (LSP.md §9 P7): null when no
+          # formatter is configured, so the client keeps the buffer.
+          with_document(id, params) { |d| FormattingFeature.perform(d, @state.formatter) }
         when 'shutdown'
           @shutdown = true
           @transport.write(Result.new(id, nil))
@@ -232,6 +237,10 @@ module Opal
           "opalLspShowSyntaxTreeProvider" => true,
           "opalLspCompileToJsProvider" => true,
         }
+        # Formatting is delegation, so it is advertised only when a
+        # formatter command is configured (LSP.md §9 P7): no formatter,
+        # no claim, and clients keep their own or none.
+        capabilities["documentFormattingProvider"] = true unless @state.formatter.nil?
         @transport.write(Result.new(_id,
                                     "capabilities" => capabilities,
                                     "serverInfo"   => {

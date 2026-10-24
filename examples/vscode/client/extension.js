@@ -43,6 +43,10 @@ function activate(context) {
   if (opalHome) {
     initializationOptions.opalHome = opalHome;
   }
+  const formatter = config.get("formatter");
+  if (formatter) {
+    initializationOptions.formatter = formatter;
+  }
 
   const clientOptions = {
     documentSelector: [{ scheme: "file", language: "ruby" }],

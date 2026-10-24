@@ -145,6 +145,7 @@ describe("the opal-language-server command", () => {
     assert.deepEqual(answer.result.capabilities.textDocumentSync.save, { includeText: false });
     assert.deepEqual(answer.result.capabilities.codeActionProvider, { codeActionKinds: ["quickfix"] });
     assert.deepEqual(answer.result.capabilities.diagnosticProvider, { interFileDependencies: false, workspaceDiagnostics: false });
+    assert.equal(answer.result.capabilities.documentFormattingProvider, undefined); // none configured
     client.send({ jsonrpc: "2.0", method: "initialized" });
     client.send({ jsonrpc: "2.0", method: "exit" });
     assert.equal(await client.exitCode(), 1); // exit without shutdown: status 1 per spec
@@ -880,6 +881,41 @@ describe("the opal-language-server command", () => {
     const pull = await request(client, 87, "textDocument/diagnostic", { textDocument: { uri: "file:///p5c_accept.rb" } });
     assert.deepEqual(pull.result.items.map((d) => d.code).sort(), codes);
     client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  // ---- P7: formatter delegation ----
+
+  test("formatting delegates to a configured formatter and stays silent without one", async () => {
+    // unconfigured: the request answers null (the client keeps its buffer)
+    const plain = await handshake();
+    await openDoc(plain, "file:///p7_off.rb", "puts 1\n");
+    const off = await request(plain, 88, "textDocument/formatting", { textDocument: { uri: "file:///p7_off.rb" }, options: {} });
+    assert.equal(off.result, null);
+    plain.send({ jsonrpc: "2.0", method: "exit" });
+
+    // configured: advertised, and the command's stdout becomes a
+    // whole-document edit
+    const dir = mkdtempSync(join(tmpdir(), "opal-lsp-fmt-"));
+    try {
+      const fmt = join(dir, "fmt.mjs");
+      writeFileSync(fmt, 'let d="";process.stdin.on("data",(c)=>d+=c);process.stdin.on("end",()=>process.stdout.write(d.replace(/PLACEHOLDER/g,"puts 1")));');
+      const client = startServer();
+      client.send({ ...INITIALIZE,
+        params: { ...INITIALIZE.params, initializationOptions: { formatter: `${process.execPath} ${fmt}` } } });
+      const init = await client.next();
+      assert.equal(init.result.capabilities.documentFormattingProvider, true);
+      client.send({ jsonrpc: "2.0", method: "initialized" });
+      await openDoc(client, "file:///p7_fmt.rb", "PLACEHOLDER\n");
+      const answer = await request(client, 89, "textDocument/formatting", {
+        textDocument: { uri: "file:///p7_fmt.rb" },
+        options: { tabSize: 2, insertSpaces: true },
+      });
+      assert.deepEqual(answer.result,
+        [{ range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } }, newText: "puts 1\n" }]);
+      client.send({ jsonrpc: "2.0", method: "exit" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   after(() => {
