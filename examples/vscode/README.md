@@ -27,7 +27,11 @@ node tasks/lsp.mjs          # produces exe/lsp in this checkout
    `opal.languageServer.opalHome` to it so "go to definition" into
    corelib lands in `opal/corelib/*.rb` instead of dumped copies.
 5. To watch the server's traffic: View > Output > "Opal Language
-   Server".
+   Server". The server's stderr lands in that channel too — the
+   `DEP0169 url.parse()` warning an F5 session prints in the Debug
+   Console comes from VS Code's own extension host
+   (microsoft/vscode#328548), not from exe/lsp: the bundle contains
+   no `require("url")` at all.
 
 To install it for real instead of F5: `npx @vscode/vsce package`
 (adjust the `publisher` first, vsce rejects the placeholder) and install
