@@ -1,0 +1,39 @@
+{
+  "name": "opal-language-server-vscode",
+  "displayName": "Opal Language Server",
+  "description": "Launches the Opal Ruby language server (exe/lsp) for Ruby files.",
+  "version": "0.1.0",
+  "publisher": "opal",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:ruby"
+  ],
+  "main": "./client/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Opal Language Server",
+      "properties": {
+        "opal.languageServer.command": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the opal-language-server executable (exe/lsp, built by `node tasks/lsp.mjs`)."
+        },
+        "opal.languageServer.opalHome": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Opal checkout path: navigation into corelib/stdlib then lands in the checkout instead of dumped copies of the baked sources."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

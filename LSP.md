@@ -564,17 +564,24 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   bake (synchronous, already paid at module init) plus at most 300
   workspace files, measured fast enough that initialize returns inside
   the client's patience; revisit if the workspace cap ever grows.
-- **P7 — deferred until the server works end-to-end.**
-  formatter delegation: the server spawns an external CRuby formatter
+- **P7 — partially landed (2026-10-24).** *VS Code client extension:
+  ✅ shipped as an example* (`examples/vscode/`): `package.json` +
+  `client/extension.js` (~70 lines over `vscode-languageclient` 9, the
+  std-launch shape), settings `opal.languageServer.command` (the exe/lsp
+  path) and `opal.languageServer.opalHome`; forwards `.rb` watcher
+  events (feeding P6's didChangeWatchedFiles) and exits cleanly without
+  a configured command. Not suite-tested (running VS Code headless is
+  out of scope; `node --check` is the only gate here) - F5 is the smoke
+  test documented in its README.
+  *Still deferred:* formatter delegation: the server spawns an external CRuby formatter
   (`rubocop` with Layout cops only, or the `syntax_tree`/`st` CLI, or
   `rubyfmt`) and advertises `documentFormattingProvider` only when one is
   configured/found (`OPAL_LSP_FORMATTER`), degrading silently otherwise —
   formatting is whitespace, not a language claim, so it does not bend the
   "Opal's Ruby exactly" rule; then codeAction extract variable/method (pure
   text, ports cleanly), code lens + test discovery for `test/nodejs`
-  Minitest files (`bin/test <file>` commands), ERB/`.opalerb` documents via
-  `prepareErb`, and a minimal VS Code client extension (required to launch
-  this server in VS Code — no built-in hook exists; separate follow-up).
+  Minitest files (`bin/test <file>` commands), and ERB/`.opalerb`
+  documents via `prepareErb`.
 
 ## 10. Risks / spikes (first-week resolutions)
 
