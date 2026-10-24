@@ -616,6 +616,26 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   *Still deferred:* code lens + test discovery for `test/nodejs`
   Minitest files (`bin/test <file>` commands), and ERB/`.opalerb`
   documents via `prepareErb`.
+- **P7d — first live VS Code session. ✅ LANDED (2026-10-24).** The F5
+  smoke test paid for itself: (a) the extension had passed a mixed
+  serverOptions shape - `{run: <string>, debug: <string>, transport,
+  args}` - which `vscode-languageclient` rejects ("Unsupported server
+  configuration"); now one Executable `{command, transport}`, the client
+  appends `--stdio` itself. (b) The `DEP0169 url.parse` warning an F5
+  session prints is VS Code's own extension host (microsoft/vscode#328548)
+  - exe/lsp contains no `require("url")`. (c) A mid-typing buffer ending
+  in `def ` yields a recovered DefNode whose synthetic name loc sits past
+  the truncated location; documentSymbol now clamps every selectionRange
+  into its range (VS Code drops the whole response otherwise). (d) THE BIG
+  ONE, prefigured by §10.1: stdout writes do NOT land whole - a >64KB
+  response sat in libuv's async queue that the readSync loop never pumps,
+  so `documentSymbol`/semanticTokens on 600KB files hung until the next
+  client message ("stops working after a short time"); Transport#write
+  now fs.writeSyncs the whole frame. (e) New
+  `benchmark/parser/bench_lsp.mjs`: open/keystroke/documentSymbol
+  latencies per corpus file against warm parseWithMetadata - the gate +
+  live-index + framing overhead measures 9-17x over the parser alone
+  (~0.5s per keystroke at 640KB), the baseline for shrinking it.
 
 ## 10. Risks / spikes (first-week resolutions)
 

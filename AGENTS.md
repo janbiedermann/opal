@@ -95,6 +95,19 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   (`Record.ruby_range`) before answering. §10.6 settled the shape by
   benchmark (`tasks/language-server/bench_index.mjs`): POJO literals boot
   1.7-2.8x faster than either Map construction; keep it.
+- The stdio transport writes frames with `fs.writeSync`, not
+  `process.stdout.write` (transport.rb): the stdout pipe drains inline only
+  up to its ~64KB capacity, and `process.stdout.write` then queues the rest
+  as an async libuv write the synchronous readSync loop never pumps - a
+  >64KB response (documentSymbol on a 600KB file, semanticTokens on big
+  files) stayed unanswered until the client sent another message, each loop
+  turn pumping one more chunk: it looked like "the server freezes after a
+  while", but perform() had already finished (instrument with
+  `process.stderr.write` - terser strips `console.*` from the exe/lsp
+  bundle). benchmark/parser/bench_lsp.mjs compares exe/lsp's didOpen /
+  didChange (keystroke) / documentSymbol latencies against the same files'
+  warm parseWithMetadata times: the gates+index+publish add ~9-17x over
+  parse, ~0.5s per keystroke at 640KB.
 - More x-string traps, each costing a debugging cycle: a **multiline**
   backtick body splices as a *statement* (in a method tail or assignment
   the value is silently dropped — `digest` returned undefined this way);

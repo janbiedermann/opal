@@ -341,6 +341,23 @@ describe("the opal-language-server command", () => {
     client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
+  test("documentSymbol answers a response bigger than the stdout pipe buffer", { timeout: 30000 }, async () => {
+    // ~400KB of symbols, more than the 64KB the stdout pipe drains inline:
+    // with process.stdout.write the tail sat in libuv's async queue that
+    // the synchronous readSync loop never pumped, and the request hung
+    // until the client happened to send another message (deadlock fixed
+    // by fs.writeSync in Transport#write).
+    const big = "module BigFile\n" +
+      Array.from({ length: 2000 }, (_, i) => `  def m${i}; end`).join("\n") +
+      "\nend\n";
+    const client = await handshake();
+    await openDoc(client, "file:///big.rb", big);
+    const answer = await request(client, 40, "textDocument/documentSymbol", { textDocument: { uri: "file:///big.rb" } });
+    assert.equal(answer.result.length, 1);
+    assert.equal(answer.result[0].children.length, 2000);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
   test("foldingRange folds comments, imports and the keyword blocks", async () => {
     const client = await handshake();
     await openTree(client);

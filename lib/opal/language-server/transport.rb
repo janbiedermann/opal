@@ -76,12 +76,31 @@ module Opal
 
       # Serialize and write one message (a Hash or a protocol Message —
       # both answer to_h): the JSON body plus its UTF-8 byte count.
+      #
+      # The write goes through fs.writeSync, not process.stdout.write:
+      # the stdout pipe fd is nonblocking, so node queues any body past
+      # the ~64KB pipe capacity as an async libuv write - and this loop
+      # never returns to the event loop between a write and the next
+      # readSync(stdin). A >64KB response (documentSymbol on a 600KB file)
+      # then sits in the queue until the client happens to send another
+      # message: VS Code sees a request that never answers (and answers
+      # only after enough keystrokes pump the queue a chunk at a time).
+      # writeSync blocks in-kernel until the client's reads drain the
+      # pipe; EAGAIN (pipe momentarily full) just retries.
       def write(message)
         json = message.to_h.to_json
         %x{
-          var text = String(#{json});
-          process.stdout.write(
-            "Content-Length: " + Buffer.byteLength(text, "utf8") + "\r\n\r\n" + text);
+          var text = "Content-Length: " + Buffer.byteLength(String(#{json}), "utf8") + "\r\n\r\n" + #{json};
+          var buf = Buffer.from(text, "utf8");
+          var fd = process.stdout.fd;
+          var off = 0;
+          while (off < buf.length) {
+            try {
+              off += Opal.platform.modules.fs.writeSync(fd, buf, off, buf.length - off, null);
+            } catch (e) {
+              if (e.code !== 'EAGAIN') throw e;
+            }
+          }
         }
         nil
       end
