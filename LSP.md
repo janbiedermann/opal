@@ -580,8 +580,16 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   `spawnSync(shell: true)`: document source to stdin, formatted text from
   stdout as one whole-document edit; anything failing answers null. The
   `documentFormattingProvider` capability appears only when a formatter
-  is configured - no formatter, no claim. Still deferred:* codeAction extract variable/method (pure
-  text, ports cleanly), code lens + test discovery for `test/nodejs`
+  is configured - no formatter, no claim.
+  *Extract to local variable: ✅ LANDED (2026-10-24).* `refactor.extract`
+  joins the codeAction kinds: a single-line selection parses as exactly
+  one expression (checked with a `x = <sel>` ParseResult whose program
+  must be a single statement), then two edits splice `extracted = <sel>`
+  above the line (matching its indentation) and replace the selection
+  with `extracted`. Multi-line or half-parsed selections get nothing.
+  Requests honour `context`-less `only` filtering, so a quickfix-only
+  client never sees the refactor and vice versa.
+  *Still deferred:* codeAction extract method, code lens + test discovery for `test/nodejs`
   Minitest files (`bin/test <file>` commands), and ERB/`.opalerb`
   documents via `prepareErb`.
 

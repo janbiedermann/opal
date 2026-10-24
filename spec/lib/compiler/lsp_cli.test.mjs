@@ -143,7 +143,7 @@ describe("the opal-language-server command", () => {
     assert.ok(answer.result.capabilities.completionProvider.triggerCharacters.includes("."));
     // P5 gates: the compile gate needs save, the fixes advertise quickfixes
     assert.deepEqual(answer.result.capabilities.textDocumentSync.save, { includeText: false });
-    assert.deepEqual(answer.result.capabilities.codeActionProvider, { codeActionKinds: ["quickfix"] });
+    assert.deepEqual(answer.result.capabilities.codeActionProvider, { codeActionKinds: ["quickfix", "refactor.extract"] });
     assert.deepEqual(answer.result.capabilities.diagnosticProvider, { interFileDependencies: false, workspaceDiagnostics: false });
     assert.equal(answer.result.capabilities.documentFormattingProvider, undefined); // none configured
     client.send({ jsonrpc: "2.0", method: "initialized" });
@@ -755,6 +755,7 @@ describe("the opal-language-server command", () => {
       textDocument: { uri: "file:///p5b_fix.rb" },
       range: diags[0].range,
       context: { diagnostics: diags },
+      only: ["quickfix"],
     });
     const fixes = answer.result;
     assert.equal(fixes.length, 2);
@@ -916,6 +917,35 @@ describe("the opal-language-server command", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("extract to local variable refactors a single-line selection", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p7b_extract.rb", "x = 1 + 2\n");
+    const answer = await request(client, 90, "textDocument/codeAction", {
+      textDocument: { uri: "file:///p7b_extract.rb" },
+      range: { start: { line: 0, character: 4 }, end: { line: 0, character: 9 } },
+      context: { diagnostics: [] },
+    });
+    assert.equal(answer.result.length, 1);
+    const extract = answer.result[0];
+    assert.equal(extract.kind, "refactor.extract");
+    assert.equal(extract.title, "Extract to local variable");
+    const [insert, replace] = extract.edit.changes["file:///p7b_extract.rb"];
+    assert.deepEqual(insert,
+      { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: "extracted = 1 + 2\n" });
+    assert.deepEqual(replace,
+      { range: { start: { line: 0, character: 4 }, end: { line: 0, character: 9 } }, newText: "extracted" });
+
+    // multi-line selections and half-parsed ones get no action
+    await openDoc(client, "file:///p7b_multi.rb", "y = 1 +\n  2\n");
+    const multi = await request(client, 91, "textDocument/codeAction", {
+      textDocument: { uri: "file:///p7b_multi.rb" },
+      range: { start: { line: 0, character: 4 }, end: { line: 1, character: 5 } },
+      context: { diagnostics: [] },
+    });
+    assert.deepEqual(multi.result, []);
+    client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
   after(() => {

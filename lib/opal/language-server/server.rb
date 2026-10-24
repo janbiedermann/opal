@@ -144,7 +144,7 @@ module Opal
         when 'completionItem/resolve'
           @transport.write(Result.new(id, CompletionFeature.resolve(@state, params)))
         when 'textDocument/codeAction'
-          with_document(id, params) { |d| CodeActionsFeature.perform(d, params["context"]) }
+          with_document(id, params) { |d| CodeActionsFeature.perform(d, params["context"], params["range"], params["only"]) }
         when 'textDocument/formatting'
           # Whitespace delegation only (LSP.md §9 P7): null when no
           # formatter is configured, so the client keeps the buffer.
@@ -214,7 +214,7 @@ module Opal
             "resolveProvider" => true,
             "triggerCharacters" => [".", ":", "@", "\"", "'"],
           },
-          "codeActionProvider" => { "codeActionKinds" => ["quickfix"] },
+          "codeActionProvider" => { "codeActionKinds" => ["quickfix", "refactor.extract"] },
           # Pull diagnostics (3.17): per-document only - the three gates
           # are per-file, no cross-file claims (workspaceDiagnostics off).
           "diagnosticProvider" => {

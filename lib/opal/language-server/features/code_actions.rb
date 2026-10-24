@@ -10,45 +10,89 @@
 #  * unsupported.require        -> remove the require call.
 #  * compile-warning /o         -> delete the /o flag character (the flag
 #    array says "once", the source ends with the o after the closer).
+# Plus one refactor: a single-line selection extracts to a local named
+# `extracted` (refactor.extract, P7) - only when the selection itself
+# parses as exactly one expression.
 require 'opal/language-server/features/navigation_target'
 
 module Opal
   module LanguageServer
     module CodeActionsFeature
       class << self
-        def perform(document, context)
+        def perform(document, context, range, only = nil)
           diagnostics = (context || {})["diagnostics"] || []
-          return [] if diagnostics.empty?
           parse_result = document.parse!
           actions = []
-          diagnostics.each do |diagnostic|
-            case diagnostic["code"]
-            when "unsupported.string-mutation"
-              node = find_call_at(parse_result.ast, diagnostic["range"])
-              actions << drop_bang(document, parse_result, diagnostic, node) unless node.nil?
-            when "unsupported.string-append"
-              node = find_call_at(parse_result.ast, diagnostic["range"])
-              actions << append_to_plus(document, parse_result, diagnostic, node) unless node.nil?
-            when "unsupported.require"
-              node = find_call_at(parse_result.ast, diagnostic["range"])
-              actions << remove_call(document, diagnostic, node, "Remove this require - Opal does not provide it") unless node.nil?
-            when "unsupported.thread", "unsupported.fiber", "unsupported.data-define"
-              # The call itself is the unsupported API; removal is offered
-              # as a suggestion (the code cannot work as written anyway).
-              node = find_call_at(parse_result.ast, diagnostic["range"])
-              actions << remove_call(document, diagnostic, node, "Remove this call - Opal does not have it") unless node.nil?
-            when "compile-warning"
-              next unless diagnostic["message"].include?("Skipping the 'o' Regexp flag")
-              node = find_once_regexp_at(parse_result.ast, diagnostic["range"]["start"]["line"])
-              next if node.nil?
-              fix = drop_o_flag(document, parse_result, diagnostic, node)
-              actions << fix unless fix.nil?
+          allowed = only.nil? || only.empty? ? nil : only
+          if allowed.nil? || allowed.include?("quickfix")
+            diagnostics.each do |diagnostic|
+              case diagnostic["code"]
+              when "unsupported.string-mutation"
+                node = find_call_at(parse_result.ast, diagnostic["range"])
+                actions << drop_bang(document, parse_result, diagnostic, node) unless node.nil?
+              when "unsupported.string-append"
+                node = find_call_at(parse_result.ast, diagnostic["range"])
+                actions << append_to_plus(document, parse_result, diagnostic, node) unless node.nil?
+              when "unsupported.require"
+                node = find_call_at(parse_result.ast, diagnostic["range"])
+                actions << remove_call(document, diagnostic, node, "Remove this require - Opal does not provide it") unless node.nil?
+              when "unsupported.thread", "unsupported.fiber", "unsupported.data-define"
+                # The call itself is the unsupported API; removal is offered
+                # as a suggestion (the code cannot work as written anyway).
+                node = find_call_at(parse_result.ast, diagnostic["range"])
+                actions << remove_call(document, diagnostic, node, "Remove this call - Opal does not have it") unless node.nil?
+              when "compile-warning"
+                next unless diagnostic["message"].include?("Skipping the 'o' Regexp flag")
+                node = find_once_regexp_at(parse_result.ast, diagnostic["range"]["start"]["line"])
+                next if node.nil?
+                fix = drop_o_flag(document, parse_result, diagnostic, node)
+                actions << fix unless fix.nil?
+              end
             end
+          end
+          if allowed.nil? || allowed.include?("refactor.extract")
+            extract = extract_variable(document, parse_result, range)
+            actions << extract unless extract.nil?
           end
           actions
         end
 
         private
+
+        # refactor.extract (LSP.md §9 P7): pure-text, single-line only.
+        # The selection must parse as exactly one expression (the check
+        # assignment below has a single statement and no syntax error),
+        # or there is no action: extracting part of a multiline
+        # expression, or a statement list, would change the program.
+        def extract_variable(document, parse_result, range)
+          return nil if range.nil?
+          start_at = range["start"]
+          end_at = range["end"]
+          return nil if start_at["line"] != end_at["line"] || start_at == end_at
+          line = start_at["line"]
+          from = parse_result.offset_for(line, start_at["character"])
+          to = parse_result.offset_for(line, end_at["character"])
+          selection = document.source[from...to]
+          return nil if selection.nil? || selection.empty?
+          check = ParseResult.new("x = #{selection}")
+          return nil if check.syntax_error?
+          return nil if `check.envelope.ast.statements.body.length !== 1`
+          # Match the enclosing statement's indentation when the new line
+          # is spliced in above it.
+          indent = `(() => { var s = String(#{document.source}), i = #{parse_result.offset_for(line, 0)};
+            while (i < s.length && s[i] === " ") i++; return s.slice(#{parse_result.offset_for(line, 0)}, i); })()`
+          insert = {
+            "range" => { "start" => { "line" => line, "character" => 0 },
+                         "end" => { "line" => line, "character" => 0 } },
+            "newText" => "extracted = #{selection}\n#{indent}",
+          }
+          replace = { "range" => range, "newText" => "extracted" }
+          {
+            "title" => "Extract to local variable",
+            "kind" => "refactor.extract",
+            "edit" => { "changes" => { document.uri => [insert, replace] } },
+          }
+        end
 
         # The CallNode whose range starts exactly where the diagnostic says
         # it does - to_range built the diagnostic, so the match is exact.
