@@ -580,6 +580,80 @@ describe("the opal-language-server command", () => {
     }
   });
 
+  // ---- P4: hover, signature help, type hierarchy ----
+
+  const P4_SRC = "# A spinning widget.\nclass Widget\n  def self.spin(n = 1)\n    n\n  end\n\n  # Turns and spins.\n  def rotate(deg)\n    n = deg\n  end\nend\nWidget.new.rotate(2)\nputs String\nclass MyErr < StandardError\nend\n";
+
+  test("hover renders the declaration and the recorded doc comment", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p4_hover.rb", P4_SRC);
+
+    const klass = await request(client, 40, "textDocument/hover", {
+      textDocument: { uri: "file:///p4_hover.rb" },
+      position: { line: 1, character: 8 }, // Widget in `class Widget`
+    });
+    assert.match(klass.result.contents.value, /class Widget/);
+    assert.match(klass.result.contents.value, /# A spinning widget\./);
+
+    const meth = await request(client, 41, "textDocument/hover", {
+      textDocument: { uri: "file:///p4_hover.rb" },
+      position: { line: 7, character: 8 }, // rotate in `def rotate`
+    });
+    assert.match(meth.result.contents.value, /### Widget#rotate/);
+    assert.match(meth.result.contents.value, /def rotate\(deg\)/);
+    assert.match(meth.result.contents.value, /Turns and spins/);
+
+    // a call site types through the `Klass.new.m` heuristic
+    const call = await request(client, 42, "textDocument/hover", {
+      textDocument: { uri: "file:///p4_hover.rb" },
+      position: { line: 11, character: 13 }, // rotate in Widget.new.rotate(2)
+    });
+    assert.match(call.result.contents.value, /### Widget#rotate/);
+
+    // a baked corelib constant answers the declaration shape the index knows
+    const string = await request(client, 43, "textDocument/hover", {
+      textDocument: { uri: "file:///p4_hover.rb" },
+      position: { line: 12, character: 7 }, // String in `puts String`
+    });
+    assert.match(string.result.contents.value, /class String/);
+    assert.match(string.result.contents.value, /include Comparable/);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("signatureHelp answers the recorded parameters and the active one", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p4_sig.rb", '"a".gsub("b", "c")\n');
+    const answer = await request(client, 44, "textDocument/signatureHelp", {
+      textDocument: { uri: "file:///p4_sig.rb" },
+      position: { line: 0, character: 15 }, // inside the second argument
+    });
+    assert.equal(answer.result.signatures.length, 1);
+    assert.match(answer.result.signatures[0].label, /^gsub\(pattern, replacement/);
+    assert.equal(answer.result.activeParameter, 1); // one top-level comma typed
+    assert.ok(answer.result.signatures[0].parameters.length >= 2);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("type hierarchy walks supertypes and subtypes through the index", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p4_th.rb", P4_SRC);
+    const prepared = await request(client, 45, "textDocument/prepareTypeHierarchy", {
+      textDocument: { uri: "file:///p4_th.rb" },
+      position: { line: 13, character: 8 }, // MyErr in `class MyErr < StandardError`
+    });
+    assert.equal(prepared.result.length, 1);
+    assert.equal(prepared.result[0].name, "MyErr");
+    assert.equal(prepared.result[0].kind, 5); // class
+
+    const sups = await request(client, 46, "textDocument/typeHierarchy/supertypes", { item: prepared.result[0] });
+    assert.deepEqual(sups.result.map((i) => i.name), ["StandardError"]);
+
+    const item = { name: "Enumerable", kind: 2, data: "Enumerable" };
+    const subs = await request(client, 47, "textDocument/typeHierarchy/subtypes", { item });
+    assert.ok(subs.result.some((i) => i.name === "Array"), "Array includes Enumerable in corelib");
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
   after(() => {
     // Every test closes its own server through "exit"; this catches any
     // child left alive by a failed assertion so the suite can't hang.

@@ -99,7 +99,8 @@ without dynamic registration):
 | `diagnosticProvider` (pull, 3.18) + `publishDiagnostics` (push fallback) | P1 push / P6 pull |
 | `documentSymbolProvider`, `foldingRangeProvider`, `selectionRangeProvider`, `documentHighlightProvider`, `semanticTokensProvider` (full+range), `inlayHintProvider`, `onTypeFormattingProvider` | P2 |
 | `definitionProvider`, `referencesProvider`, `renameProvider` (+`prepareProvider`), `workspaceSymbolProvider` | P3 |
-| `hoverProvider`, `completionProvider` (resolve, triggers `. : @ $`), `signatureHelpProvider` (`(`, `[`), `typeHierarchyProvider` | P4 |
+| `hoverProvider` ✅, `signatureHelpProvider` (triggers `(`, `,`) ✅, `typeHierarchyProvider` ✅ | P4a |
+| `completionProvider` (resolve, triggers `. : @ $`) | P4b |
 | `codeActionProvider` (quickfix, refactor.extract), `executeCommandProvider` (`opalLsp/compileToJs`, `opalLsp/showSyntaxTree`) | P5/P7 |
 
 Out of scope for the protocol in v1: formatting/rangeFormatting (no
@@ -468,9 +469,19 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   suite fails. Exit criteria met: F12 on `"a".gsub` lands in
   `opal/corelib/string.rb:1663` (opalHome) or the dumped copy; rename
   crosses documents. lsp_cli suite: 26 cases.
-- **P4 — hover/completion/signature help/type hierarchy**, completion
-  resolve (docs from index entries), require-path completion against the
-  real stdlib set.
+- **P4a — hover, signatureHelp, typeHierarchy. ✅ LANDED (2026-10-24).**
+  Hover renders the record's declaration line (class/module + superclass +
+  recorded includes, `def name(params)` + `Owner#m` heading) with the baked
+  doc comment; signatureHelp finds the innermost call whose `opening_loc`/
+  `closing_loc` (the envelope's field names) span the cursor and reports
+  the recorded parameters + comma-counted activeParameter; the type
+  hierarchy walks recorded superclasses/includes out and scans includes/
+  superclasses back. Receiver typing moved into `NavigationTarget
+  .method_owner/receiver_class` — shared with definition (and P4b).
+  Envelope gotcha: CallNode locs are `opening_loc`/`closing_loc`, not
+  `open_loc`/`close_loc` as in Ruby Prism.
+- **P4b — completion** (items + resolve, require-path completion against
+  the real stdlib set).
 - **P5 — Opal gates.** compile-gate diagnostics on save; unsupported-API
   linter + quickfixes; missing-stdlib require diagnostics.
 - **P6 — 3.18 & robustness.** pull diagnostics (+push fallback),

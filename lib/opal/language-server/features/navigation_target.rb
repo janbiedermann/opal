@@ -8,6 +8,18 @@ module Opal
     module NavigationTarget
       CONSTANT_TYPES = ["ConstantReadNode", "ConstantPathNode"].freeze
 
+      # Prism literal node type -> the class its value instantiates (the
+      # LSP.md §2 receiver-typing heuristic, shared by definition, hover,
+      # signature help and completion).
+      LITERAL_CLASSES = {
+        "StringNode" => "String", "StringInterpolationNode" => "String",
+        "XStringNode" => "String", "StringHeredocNode" => "String",
+        "IntegerNode" => "Integer", "FloatNode" => "Float",
+        "ArrayNode" => "Array", "HashNode" => "Hash", "RangeNode" => "Range",
+        "RegularExpressionNode" => "Regexp", "TrueNode" => "TrueClass",
+        "FalseNode" => "FalseClass", "NilNode" => "NilClass",
+      }.freeze
+
       class << self
         def locate(document, position)
           parse_result = document.parse!
@@ -73,6 +85,54 @@ module Opal
           end
           parts.unshift(target.name) if target && target.type == "ConstantReadNode"
           parts.join("::")
+        end
+
+        # [fqcn, singleton-lookup?] for a method target's owner; [nil, ...]
+        # when unresolvable. Receiverless calls look in the enclosing module
+        # (instance side); explicit receivers type through receiver_class.
+        def method_owner(state, target)
+          receiver = target[:receiver]
+          nesting = target[:nesting] || []
+          if receiver.nil?
+            return [nil, false] if nesting.empty?
+            [nesting.last, false]
+          else
+            rc = receiver_class(state, receiver, nesting)
+            rc.nil? ? [nil, false] : rc
+          end
+        end
+
+        # [class name, singleton-lookup?], or nil when the receiver's type
+        # is unknown. Resolution of a constant receiver is nesting-aware.
+        def receiver_class(state, receiver, nesting)
+          case receiver.type
+          when "ConstantReadNode", "ConstantPathNode"
+            full = full_path_name(receiver)
+            last = receiver.name
+            candidates = []
+            nesting.reverse_each do |outer|
+              candidates << "#{outer}::#{full}"
+              candidates << "#{outer}::#{last}"
+            end
+            candidates << full << last
+            candidates.uniq.each do |cand|
+              return [cand, true] if state.index.module?(cand)
+            end
+            nil
+          when "CallNode"
+            # `Klass.new.m` - the instance methods of a known Klass.
+            if receiver.name == "new"
+              inner = receiver.child("receiver")
+              if inner && (inner.type == "ConstantReadNode" || inner.type == "ConstantPathNode")
+                full = full_path_name(inner)
+                return [full, false] if state.index.module?(full)
+              end
+            end
+            nil
+          else
+            literal = LITERAL_CLASSES[receiver.type]
+            literal.nil? ? nil : [literal, false]
+          end
         end
 
         def covers?(node, offset)

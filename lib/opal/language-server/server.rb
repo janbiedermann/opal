@@ -19,6 +19,9 @@ require 'opal/language-server/features/definition'
 require 'opal/language-server/features/references'
 require 'opal/language-server/features/rename'
 require 'opal/language-server/features/workspace_symbol'
+require 'opal/language-server/features/hover'
+require 'opal/language-server/features/signature_help'
+require 'opal/language-server/features/type_hierarchy'
 require 'opal/language-server/indexer/global_state'
 
 module Opal
@@ -97,6 +100,16 @@ module Opal
           with_document(id, params) { |d| RenameFeature.perform(@state, d, params["position"], params["newName"]) }
         when 'workspace/symbol'
           @transport.write(Result.new(id, WorkspaceSymbolFeature.perform(@state, params["query"] || "")))
+        when 'textDocument/hover'
+          with_document(id, params) { |d| HoverFeature.perform(@state, d, params["position"]) }
+        when 'textDocument/signatureHelp'
+          with_document(id, params) { |d| SignatureHelpFeature.perform(@state, d, params["position"]) }
+        when 'textDocument/prepareTypeHierarchy'
+          with_document(id, params) { |d| TypeHierarchyFeature.prepare(@state, d, params["position"]) }
+        when 'textDocument/typeHierarchy/supertypes'
+          @transport.write(Result.new(id, TypeHierarchyFeature.supertypes(@state, params["item"])))
+        when 'textDocument/typeHierarchy/subtypes'
+          @transport.write(Result.new(id, TypeHierarchyFeature.subtypes(@state, params["item"])))
         when 'shutdown'
           @shutdown = true
           @transport.write(Result.new(id, nil))
@@ -155,6 +168,9 @@ module Opal
           "referencesProvider" => true,
           "renameProvider" => { "prepareProvider" => true },
           "workspaceSymbolProvider" => true,
+          "hoverProvider" => true,
+          "signatureHelpProvider" => { "triggerCharacters" => ["(", ","] },
+          "typeHierarchyProvider" => true,
           "semanticTokensProvider" => {
             "legend" => SemanticHighlightingFeature.legend,
             "full"   => true,
