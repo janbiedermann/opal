@@ -1,5 +1,6 @@
-// The `opal-language-server` command (lib/opal/exe/lsp.rb, built by
-// tasks/lsp.mjs): drive exe/lsp over stdio the way an LSP client does.
+// The `opal-language-server` command (lib/opal/language-server/js/, built
+// into exe/lsp by tasks/lsp.mjs): drive it over stdio the way an LSP
+// client does.
 // The spawn stays asynchronous (AGENTS.md lesson): spawnSync would block
 // the event loop that pipes the frames to the server.
 import { test, describe, before, after } from "node:test";

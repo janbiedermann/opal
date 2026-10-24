@@ -3,37 +3,21 @@
 //   lib/opal/language-server/baked_index.mjs     - the corelib/stdlib record graph
 //   lib/opal/language-server/corelib_sources.mjs - path -> source
 //
-// Like tasks/compiler/update_fixtures.mjs: build, diff, commit. It compiles
-// a small driver bundle (opal/full + json + the language-server tree +
-// indexer/driver.rb), runs it on Node with OPAL_HOME pointing at this
-// checkout, and the driver writes the two modules. Run it after changing
-// corelib/stdlib sources or the indexer.
+// Like tasks/compiler/update_fixtures.mjs: bake, diff, commit. It runs the
+// JS bake driver (lib/opal/language-server/js/indexer/bake.mjs - the same
+// DeclarationListener the live server uses) over this checkout, and the
+// driver writes the two modules. Run it after changing corelib/stdlib
+// sources or the indexer.
 //
 // It also writes the three §10.6 benchmark variants (record representation:
 // POJO literals vs Map pair-arrays vs Map .set() chain) into tmp/lsp_bake
 // for bench_index.mjs - those are throwaway, not committed.
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
-import { Builder } from "../../lib/opal/compiler/builder/builder.mjs";
 import { ROOT } from "../testing/common.mjs";
-import { treeRequireNames } from "../ruby/bundle.mjs";
+import { runBake } from "../../lib/opal/language-server/js/indexer/bake.mjs";
 
 const BAKE_DIR = join(ROOT, "tmp", "lsp_bake");
-
-async function buildBakeBundle() {
-  const builder = new Builder({ compilerOptions: { dynamic_require_severity: "ignore" }, warn: (msg) => process.stderr.write(msg + "\n") });
-  builder.build("opal", { requirable: true, load: true });
-  builder.build("opal/full", { requirable: true, load: true });
-  builder.build("json", { requirable: true, load: true });
-  // The server tree only for prism/parser.rb + the indexer (ParseResult and
-  // DeclarationListener); not the transport/server.
-  for (const name of treeRequireNames("lib/opal/language-server", "opal/language-server/")) builder.buildRequire(name);
-  builder.build("opal/language-server/indexer/driver", { requirable: true, load: true });
-  builder.buildStr("::Opal::LanguageServer::Indexer::Driver.run", "(bake)");
-  builder.buildStr("::Kernel.exit", "(exit)", { no_export: true });
-  return `${builder}`;
-}
 
 // The three §10.6 variants of one payload, as loadable ESM modules.
 function emitVariants(payload) {
@@ -80,28 +64,29 @@ function emitVariants(payload) {
   writeFileSync(join(BAKE_DIR, "bench_chain.mjs"), `${parts.join("\n")}\nexport default ${root};\n`);
 }
 
-async function main() {
+function main() {
   mkdirSync(BAKE_DIR, { recursive: true });
 
-  const bake = join(BAKE_DIR, "bake.js");
-  writeFileSync(bake, await buildBakeBundle());
-
   const outDir = process.env.BAKED_OUT_DIR || join(ROOT, "lib", "opal", "language-server");
-  const run = spawnSync(process.execPath, [bake], {
-    stdio: "inherit",
-    env: { ...process.env, OPAL_HOME: ROOT, BAKED_OUT_DIR: outDir },
-  });
-  if (run.status !== 0) process.exit(run.status ?? 1);
+  const stats = runBake({ home: ROOT, outDir });
+  process.stdout.write(`baked ${stats.fileCount} files: ${stats.modules} modules, ${stats.constants} constants\n`);
 
   // The benchmark variants: reuse the freshly baked payload.
-  const payload = (await import(`file://${join(outDir, "baked_index.mjs")}`)).default;
+  const payload = JSON.parse(readPayload(outDir));
   emitVariants(payload);
 
   for (const file of ["baked_index.mjs", "corelib_sources.mjs"]) {
-    const size = (await import(`node:fs`)).statSync(join(outDir, file)).size;
-    console.log(`${file}: ${(size / 1024).toFixed(0)} KiB`);
+    const size = statSync(join(outDir, file)).size;
+    process.stdout.write(`${file}: ${(size / 1024).toFixed(0)} KiB\n`);
   }
-  console.log("bench variants in tmp/lsp_bake - run: node tasks/language-server/bench_index.mjs");
+  process.stdout.write("bench variants in tmp/lsp_bake - run: node tasks/language-server/bench_index.mjs\n");
+}
+
+function readPayload(outDir) {
+  // the baked module is one `export default {...};` literal - read it
+  // back without importing the fresh copy through the module cache
+  return readFileSync(join(outDir, "baked_index.mjs"), "utf8")
+    .replace(/^export default /, "").replace(/;\s*$/, "");
 }
 
 main();

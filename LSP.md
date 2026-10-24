@@ -1,7 +1,8 @@
 # Opal Language Server — Implementation Plan
 
-Goal: an LSP server for Ruby code developed **with and for Opal**, living in
-`lib/opal/language-server/`, entered by `lib/opal/exe/lsp.rb`, built into
+Goal (shipped: P0-P7 in Opal-Ruby, P8 re-implemented it in plain JS, §13):
+an LSP server for Ruby code developed **with and for Opal**, living in
+`lib/opal/language-server/js/`, entered by `js/main.mjs`, built into
 `exe/lsp` (Node program) and `exe/lsp.exe` (single-file executable) exactly like
 `exe/ruby` / `exe/gem` / `exe/bundler`. It speaks the Language Server Protocol
 as current VS Code speaks it, and its language model is **Opal's Ruby, not
@@ -154,106 +155,82 @@ never CRuby's docs or methods. `String#<<` is not offered; `Array#sum` is
 because `opal/corelib/enumerable.rb:1413` has it. Require-path completion
 offers only what Opal can load.
 
-## 3. Runtime constraints (the server is Ruby compiled by Opal)
+## 3. Runtime constraints (the server is plain JavaScript)
 
-The server itself is Ruby source in the bundle, so it inherits Opal's
-limitations and must be written inside them:
+Since P8 (§13) the server is plain ES modules under
+`lib/opal/language-server/js/`, bundled into one minified Node program.
+It embeds Opal's parser and Compiler as libraries, but the server's own
+code is not Ruby and inherits none of Opal's runtime quirks. The Ruby-era
+constraints that shaped the design survive as settled decisions:
 
-- **Single-threaded.** `Thread.new` raises (`stdlib/thread.rb` shim).
-  ruby-lsp's reader/worker/outgoing-dispatcher threads (`base_server.rb`)
-  collapse into one synchronous loop: `$stdin` → parse frame → dispatch →
-  `$stdout`. This is proven to work in a compiled bundle:
-  `stdlib/opal-replutils.rb:110-124` is exactly this stdin-loop shape. Long
-  work (workspace indexing, compile checks) is chunked with a
-  "budget of N files, then check for pending input" pattern; `$/cancelRequest`
-  sets a flag consulted between chunks.
-- **Byte-exact framing in JS.** LSP `Content-Length` counts UTF-8 bytes; Opal
-  strings are UTF-16. The transport is one small file
-  (`lib/opal/language-server/transport.rb`) doing the read/write through
-  backticks over `process.stdin`/`process.stdout` with `fs.readSync` +
-  `TextDecoder('utf-8')` (the AGENTS.md TextDecoder lesson) so framing never
-  loses bytes to the string layer. JSON through `stdlib/json.rb` (thin wrapper
-  over `JSON.parse`/`JSON.stringify`); message payloads are Hashes with String
-  keys — no `symbolize_names` needed if the dispatch reads string keys (ruby-lsp's
-  `symbolize_names` symbols are Strings here anyway, Opal `Symbol == String`).
-- **Immutable strings / no bang methods**: builders concatenate (`msg += ...`).
-- **No `Data`, no `Fiber`**; `Struct`, `Set`, pattern matching, endless methods,
-  `Hash#except`, `filter_map`, `sum` are all supported by corelib/Prism —
-  ruby-lsp's `lib/` uses none of the missing ones (checked: no `Data.define`,
-  no bare `it` outside one file), so most ported code compiles as-is.
-- `language_server-protocol` gem is **not needed**: ruby-lsp uses it only for
-  `Interface::*` structs and `Constant::*` enums; the port replaces them with
-  literal Hashes and integer constants in one file
-  (`lib/opal/language-server/protocol.rb`).
-- `DidYouMean::JaroWinkler` (used by `Index#fuzzy_search`) gets a small pure
-  Ruby implementation (~40 lines) in the indexer.
-- No Bundler/Gemfile/RuboCop integration: drop `setup_bundler.rb`,
-  `configuration.rb`, formatter support, add-on system. Document links to
-  rubygems.org (`package_url.rb`) dropped.
+- **Single-threaded by choice.** One synchronous loop (read frame →
+  dispatch → answer), no threads, no async work on the request path — the
+  reader/worker/dispatcher split ruby-lsp needs never arrived. Long work
+  (workspace indexing) stays bounded: 300 files at initialize, chunked
+  cancel checks reserved for later.
+- **Byte-exact framing.** LSP `Content-Length` counts UTF-8 bytes; JS
+  strings are UTF-16. `js/transport.mjs` accumulates raw bytes with
+  `fs.readSync`, decodes each body with `TextDecoder('utf-8')`, and writes
+  whole frames with `fs.writeSync` (a `process.stdout.write` over the ~64KB
+  pipe capacity queues an async write the synchronous loop never pumps —
+  §9 P7d).
+- **UTF-16 only.** `positionEncoding: "utf-16"` is the single offered
+  encoding: parser offsets and LSP characters are the same units, so
+  editing is plain `slice` arithmetic and no scanner variants exist.
+- **JSON is JSON.** Messages are plain objects; `JSON.parse`/`JSON.stringify`
+  directly — the old `stdlib/json.rb` wrapper and `protocol.rb` Hash
+  wrappers collapsed into a small builder module.
+- The Opal constraints of §2 (immutable Strings, Symbol==String, no
+  Thread/Fiber/Data) now apply only to the Ruby the server *analyzes*:
+  they surface as API-gate diagnostics, never as server limitations.
+- No Bundler/Gemfile/RuboCop integration and no `language_server-protocol`
+  gem equivalent: the same drops as planned, now moot in JS.
 
 ## 4. Server architecture
 
 ```
-lib/opal/exe/lsp.rb                      # entry: options, --check, start server
-lib/opal/language-server.rb              # umbrella require
-lib/opal/language-server/
-  protocol.rb          # constants (SymbolKind, DiagnosticSeverity, ErrorCodes, ...)
-                       # + Message/Notification/Request/Error/Result wrappers (port of utils.rb)
-  transport.rb         # stdio framing: fs.readSync stdin, TextDecoder, Content-Length write
-  json.rb              # thin: JS JSON.parse/stringify bridge
-  server.rb            # lifecycle + request routing (port of server.rb case)
-  global_state.rb      # client capabilities, configuration, index handle
-  store.rb document.rb ruby_document.rb   # doc sync, incremental edits (UTF-16 only
-                                           # scanner — port document.rb dropping
-                                           # Utf8/Utf32 scanners)
-  prism/
-    parser.rb          # require 'opal/parser/index.mjs'; Opal.esm["opal/parser/index"];
-                       # envelope cache + line-index (UTF-16 offsets -> LSP Position)
-    node.rb            # POJO AST wrapper: type, name, child_nodes, location as
-                       # {start_line:, start_column:, ...} + range helpers
-    dispatcher.rb      # walk nodes, fire on_<type>_enter/leave (ruby-lsp's
-                       # Prism::Dispatcher call shape, so listeners port cheaply)
-  indexer/
-    entry.rb index.rb visibility_scope.rb prefix_tree.rb reference_finder.rb
-                       # ported from ruby_indexer (entry/index/visibility/prefix/reference),
-                       # Dispatcher calls re-targeted at prism/dispatcher.rb;
-                       # "entries" are record graphs read through one small
-                       # accessor module (POJO-backed or Map-backed, §5/§10.6),
-                       # so the baked graph and live-indexed workspace files
-                       # share one representation and one query path
-    driver.rb          # build-time main (§5): indexes corelib/stdlib sources,
-                       # writes baked_index.mjs + corelib_sources.mjs;
-                       # never required at run time
-    baked_index.mjs    # GENERATED (§5): the corelib/stdlib record graph as one
-                       # literal (POJO or Map — decided by benchmark, §10.6);
-                       # the builder links it verbatim (JsProcessor), V8
-                       # allocates it at bundle evaluation — no compile step,
-                       # no parsing step, no constructors
-    corelib_sources.mjs # GENERATED (§5): path -> source strings, used only to
-                       # dump a single file on demand when navigating into
-                       # corelib without an opal checkout
-    jaro_winkler.rb    # replaces DidYouMean
-  listeners/           # ported: document_symbol, folding_ranges, document_highlight,
-                       # semantic_highlighting, inlay_hints, definition, hover,
-                       # completion, signature_help
-  requests/            # one per protocol method (ported structure from ruby_lsp/requests)
-  unsupported.rb       # gate 3: curated CRuby-not-in-Opal API table + quickfixes
-  keyword_docs.rb      # port of static_docs KEYWORD_DOCS (embed the two md files)
-  progress.rb          # window/workDoneProgress + $/progress helpers
+lib/opal/language-server/               # the shipped tree (P8; §13 for the port history)
+  js/
+    main.mjs           # entry: --stdio / --check DIR / --version / --help
+    server.mjs         # lifecycle + request routing (one synchronous loop)
+    transport.mjs      # stdio framing: fs.readSync stdin, TextDecoder, fs.writeSync out
+    protocol.mjs       # ErrorCodes + result/notification/error builders
+    parse_result.mjs   # parseWithMetadata envelope + line table (UTF-16 offsets
+                       # <-> LSP Position), diagnostics(), lineRange
+    node.mjs           # childNodes() over the Prism POJOs + walk (enter/leave)
+    document.mjs store.mjs  # doc sync (memoized parse, incremental utf-16 edits), open docs
+    check.mjs          # --check DIR: parse gate over a tree, exit status
+    features/          # one module per request: document_symbol, folding_ranges,
+                       # selection_ranges, document_highlight, semantic_highlighting,
+                       # inlay_hints, on_type_formatting, navigation_target (shared
+                       # cursor analysis), definition, references, rename, hover,
+                       # signature_help, type_hierarchy, completion, workspace_symbol,
+                       # code_actions (quickfixes + extract refactors), formatting
+                       # (external-command delegation only), syntax_tree, compile_to_js,
+                       # opal_gate (the API gate + the compile gate's Compiler pass)
+    indexer/
+      index.mjs declaration_listener.mjs global_state.mjs file_resolver.mjs
+                       # §5: queryable record stores + the live AST listener;
+                       # records are plain POJOs, one shape for baked and live
+      bake.mjs         # build-time main (§5): writes baked_index.mjs +
+                       # corelib_sources.mjs; never imported by the server
+  baked_index.mjs      # GENERATED (§5): the corelib/stdlib record graph as one
+                       # literal + per-file digests; V8 allocates it at bundle
+                       # evaluation - no compile, no parsing step, no constructors
+  corelib_sources.mjs  # GENERATED (§5): path -> source strings, dumped to
+                       # ~/.cache/opal-lsp on demand for navigation without a checkout
 ```
 
-Key data flow: `didOpen`/`didChange` → `RubyDocument#parse!` calls
-`parseWithMetadata(source)` once → `{ast: POJO, comments, errors, warnings,
-offsets}`; every listener walks the AST through `prism/dispatcher.rb`;
-`RubyDocument#locate(line, char)` is the BFS down `child_nodes` (port of
-`ruby_document.rb:25-113` with the code-unit cache removed, since UTF-16
-offsets are native). `Document#push_edits` maps LSP `{line, character}` to the
-UTF-16 offset via a newline table maintained per parse — and since both LSP
-positions and Prism offsets are UTF-16 units, `source[start...end]` on the
-unboxed string value is the edit splice. The surrogate-pair trap (AGENTS.md
-string-indexing note) is why the splice must go through the JS string value
-(`source.valueOf()` + `slice`), not Ruby character indexing; a spec with a
-`𠀀` before an edit pins this.
+Key data flow: `didOpen`/`didChange` → `Document#parse()` calls
+`parseWithMetadata(source)` once → `{ast: POJO, comments, magic_comments, errors, warnings,
+offsets}`; every feature walks the AST through `js/node.mjs` (`childNodes` +
+enter/leave `walk`, children in source order — the Prism Dispatcher order the
+Ruby listeners saw); `Document#locateNode(line, character)` is the DFS over
+`childNodes` returning the containing chain, innermost first.
+`Document#pushEdits` maps LSP `{line, character}` to the UTF-16 offset via a
+newline table rebuilt per edit — and since both LSP positions and Prism
+offsets are UTF-16 units, `source.slice(a, b)` is the edit splice (a spec
+with a `𠀀` before an edit pins the unit arithmetic).
 
 Position/offset conversion is one cached table per document: `envelope.offsets`
 gives line starts in UTF-16 units; `position ↔ offset` is a binary search.
@@ -268,12 +245,11 @@ in the user's home directory**: it is built when `exe/lsp`/`exe/lsp.exe` are
 built, and it travels inside the executable in ready-to-use form.
 
 - **Generator: `tasks/language-server/update_baked_index.mjs`** (a regen task
-  like `tasks/compiler/update_fixtures.mjs`). It builds a tiny driver bundle
-  (opal/full + `opal/language-server` + `indexer/driver.rb`) into `tmp/`,
-  runs it on Node, and the driver indexes the Ruby sources of
+  like `tasks/compiler/update_fixtures.mjs`). It runs the JS bake driver
+  (`js/indexer/bake.mjs`) in-process, and the driver indexes the Ruby sources of
   `opal/corelib/**`, `opal/opal/*.rb`, `stdlib/**/*.rb` and `stdlib/opal/*.rb`
   (~2.9 MB, read from the checkout at build time) with the same
-  DeclarationListener that indexes workspace files, `collect_comments: true`.
+  DeclarationListener that indexes workspace files, comments included.
 - **Output: two committed generated `.mjs` modules** (the
   `lib/opal/parser/parser.mjs` pattern — committed generated file, a lint
   step/spec regenerates and byte-compares to catch staleness):
@@ -287,9 +263,10 @@ built, and it travels inside the executable in ready-to-use form.
     constructors, no hydration.
   - **POJO vs Map — RESOLVED by measurement: POJO ships (§10.6 result: boot
     66.9ms vs 111.9 vs 184.3; the Map forms win only a chained-`get` micro
-    loop).** Entries are read
+    loop).** During the Ruby era entries were read
     through one accessor module (`indexer/entry.rb`), so the underlying
-    shape is a swappable detail:
+    shape was a swappable detail — with P8 the module is gone: baked and
+    live records answer one plain JS shape everywhere:
     - *POJO* (object/array/string literals, the prism/node.rb idiom): truly
       static allocation — V8 builds the graph from literals with hidden-class
       fast property access; but Ruby has no property access, every field
@@ -315,9 +292,12 @@ built, and it travels inside the executable in ready-to-use form.
     on demand (a real file VS Code can open; no custom URI scheme). No
     startup work, and the cache holds only the files actually opened.
   - `baked_index.mjs` also carries a content digest per indexed file.
-- **Server start**: `global_state.rb` grabs the esm export and treats it as
-  the immutable base of the `Index` — `[]`, `resolve*`, ancestor
-  linearization and the completion prefix trees read it directly. Only
+- **Server start**: `js/indexer/global_state.mjs` imports the baked module
+  directly and treats it as
+  the immutable base of the `Index` — `[]`, `resolve*` and ancestor
+  linearization read it directly (name-keyed lookups guard with
+  `Object.hasOwn`: prototype key names like `constructor` are ordinary
+  Ruby methods in the ported gems). Only
   *workspace* files are indexed at run time. This replaces ruby-lsp's
   `rbs_indexer.rb` (no RBS in Opal).
 - **Staleness**: at initialize, if the workspace is an opal checkout
@@ -338,32 +318,27 @@ built, and it travels inside the executable in ready-to-use form.
 
 Mirrors the `ruby`/`gem`/`bundler` trio exactly:
 
-- `tasks/lsp/bundle.mjs` — `buildLspBundle()`: Builder with
-  `dynamic_require_severity: "ignore"`; boot index (`load: true`): `opal`,
-  `opal/full`, `thread`, `json`, `set`, `strscan`, `uri`, `pp`,
-  `opal/language-server`; requirable-but-eager sweep of
-  `lib/opal/language-server/**` via `treeRequireNames` (so a bundle carries
-  the whole server even though the program requires it through one file;
-  the sweep takes `.rb` — the two generated `.mjs` modules are not swept,
-  the server code `require`s them by literal name and JsProcessor links
-  them verbatim); `opal-parser` at boot (the compile gate and `compileToJs`
-  need the compiler on every keystroke path); `OPAL_COMPILER_KEY` from
-  `tasks/ruby/bundle.mjs` (same key, so a future `--check` can share trees);
-  then `lib/opal/exe/lsp.rb` + `::Kernel.exit`; terser minify like the
-  others (terser also minifies the linked `.mjs` literals inside the bundle).
+- `tasks/lsp/bundle.mjs` — `buildLspBundle()`: the whole static ESM graph of
+  `js/main.mjs` (the server, its two bake payloads, the parser, and the
+  Compiler — the compile gate and `compileToJs` need the compiler at run
+  time) is inlined into one classic script by the builder's
+  `esm_linker.link()`, then terser-minified like the other exes. Named
+  imports only for `node:` builtins (the linker resolves a builtin's
+  default import to a missing `.default`), and the entry has no shebang
+  (it would parse inside the module bodies). terser's pass also drops
+  `console.*`: the CLI answers through `process.stdout.write`.
 - No staging in the bundle build: the index is already in the tree as
   `baked_index.mjs` (§5). `node tasks/language-server/update_baked_index.mjs`
   regenerates it and `corelib_sources.mjs`; the diff is reviewed like the
-  compiler fixtures, and a freshness check (regenerate to tmp, byte-compare)
-  joins `tasks/lint.mjs` next to the `parser.mjs`-matches-its-parts step.
-- `exe/lsp.rb` options (hand-parsed like `lib/opal/exe/ruby.rb`, no optparse
-  boot cost): `--version` (answers `Opal::VERSION` from `opal/version`,
+  compiler fixtures, and a freshness check (recompute digests over the live
+  tree) runs in `spec/lib/compiler/lsp_baked_index.test.mjs`.
+- `js/main.mjs` options (hand-parsed, no optparse boot cost):
+  `--version` (answers `OPAL_VERSION` from `opal/corelib/version.mjs`,
   which §0 makes one source), `--help`, `--check [DIR]` (batch mode: run
-  gates 1–3 over every `*.rb`/`*.rake`/`Gemfile`-ish file under DIR, print
+  the parse gate over every `*.rb` file under DIR, print
   `file:line:col: severity: message`, exit nonzero on any — this gives CI
   value and a testable entry point without protocol),
-  `--log-file PATH` (stderr defaults to quiet; logs never touch stdout),
-  `--time-index`.
+  `--stdio` (the default and only transport).
 - `tasks/lsp.mjs` → `exe/lsp` (`#!/usr/bin/env node` + bundle), `OUT` honored.
 - `tasks/lsp_exe.mjs` → `exe/lsp.exe` through the shared
   `buildSeaExecutable` (`tasks/sea_exe.mjs`, env flag `OPAL_LSP_EXE_NODE`).
@@ -636,13 +611,27 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   latencies per corpus file against warm parseWithMetadata - the gate +
   live-index + framing overhead measures 9-17x over the parser alone
   (~0.5s per keystroke at 640KB), the baseline for shrinking it.
-- **P8 — port the server to JavaScript. Planned (2026-10-24).** The
-  benchmark says the parser (29ms warm at s5_639kb) is not the cost - the
+- **P8 — port the server to JavaScript. LANDED (2026-10-24).** The
+  benchmark said the parser (29ms warm at s5_639kb) is not the cost - the
   other ~470ms of the keystroke is Opal Ruby walking the JS AST:
   ParseResult wrapper ~75ms over raw parse, API gate ~123ms, live
   re-index ~424ms, documentSymbol ~300ms. The compiler/parser precedent
   (§0, §10.6: JS and POJO literals are the fast path here) plus the last
-  big Opal piece this replaces: the plan is §13.
+  big Opal piece this replaces: the plan was §13, and the result: the
+  plain-JS tree `lib/opal/language-server/js/` replaced the Ruby server
+  file-for-file (scoreboard 16 -> 27 -> 45/45 across P8a..P8d, flip under
+  `LSP_EXE` parity harness), the Ruby tree and `lib/opal/exe/lsp.rb` are
+  deleted, `tasks/lsp/bundle.mjs` now links the ESM graph with
+  `esm_linker` + terser (3.96MB vs 4.86MB), and the bake driver is plain
+  node producing byte-identical payloads. Post-flip `bench_lsp`: s5
+  keystroke 498ms -> 57.7ms, documentSymbol 307ms -> 14.6ms, the
+  keystroke/parse ratio down from 9-17x to ~2.0x - both §13 targets met
+  with margin. New traps (§13 carries the details): the linker resolves a
+  builtin's default import to a missing `.default` (named imports only),
+  `Object.prototype` key names (`constructor`) poison name-keyed record
+  maps and method buckets (null-prototype maps + `Object.hasOwn` reads),
+  the entry's shebang parses inside the module bodies, and terser drops
+  `console.*` from the bundle.
 
 ## 10. Risks / spikes (first-week resolutions)
 
@@ -713,6 +702,9 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
 
 ## 12. Immediate next steps
 
+(all done — the shipped result is the §9 phase log and §13; the exe has
+since been ported to plain JS, §13/P8)
+
 1. Land Precondition A (§0): `opal/corelib/version.mjs` + repoint
    `version.mjs`, `constants.rb`, `stdlib/opal/version.rb`, `tasks/release.mjs`
    and `spec/lib/compiler/version.test.mjs` — a standalone PR. ✅ DONE.
@@ -725,6 +717,15 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
 4. Land P1 (documents + parse diagnostics) as the first reviewable PR.
 
 ## 13. P8 — port the language server to JavaScript
+
+> **Status: complete (2026-10-24).** P8a (core + documentSymbol, 16/45) →
+> P8b (indexer, 16/45) → P8c (navigation, 27/45) → P8d (text features +
+> gates, 45/45) → P8e flip: `exe/lsp` builds from `js/main.mjs` via
+> `esm_linker` + terser, the bake driver (`js/indexer/bake.mjs`) produces
+> byte-identical payloads, the Ruby tree and `lib/opal/exe/lsp.rb` are
+> deleted, and the `LSP_EXE` override stays in the harness as the
+> black-box parity seam. Benchmarks (§9 P8): s5 keystroke 498 -> 57.7ms,
+> documentSymbol 307 -> 14.6ms, ratio ~2.0x over parse.
 
 ### Why
 
@@ -859,7 +860,8 @@ index-on-idle instead of index-on-keystroke, a follow-up); documentSymbol
 - logMessage summary lines shift the publish/response sequence some
   cases assert on (the "N workspace files indexed" placement).
 - P3 corelib-dump tests drive HOME; workspace indexing caps at 300 files
-  and the summary string says "(limit hit)".
+  but the summary never says "(limit hit)" - the Ruby original never sets
+  the flag, and the port kept that behavior verbatim.
 - didChangeWatchedFiles skips open documents; Deleted removes index entries.
 - JSON object key order is free; arrays are not.
 - The on-type-formatting feature branches on `@state.client_name`
@@ -868,3 +870,18 @@ index-on-idle instead of index-on-keystroke, a follow-up); documentSymbol
   extract-method refuses return/break/next/super, keyword params, block
   params and foreign defs - keep the refusal matrix byte-for-byte (cases
   pin it).
+- The walk visits children in source order (the Prism Dispatcher recurses
+  forward): an iterative stack must push children reversed, or
+  documentHighlight/inlayHint/API-gate arrays come out reversed (arrays
+  are asserted).
+- `esm_linker` and `node:` builtins: a default import of a builtin
+  resolves to `.default` on the CJS exports, i.e. undefined - named
+  imports only (`import { readSync } from "node:fs"`).
+- Name-keyed index maps and method buckets are `Object.create(null)`,
+  and bucket lookups guard with `Object.hasOwn`: the ported gems call a
+  real method `constructor`, and through `??=`/plain `{}` literals a
+  prototype key masquerades as a record list (or `Object` answers as a
+  definition).
+- No shebang on the JS entry (esm_linker inlines the body, where `#!` is
+  a syntax error); no `console.*` in the server (terser drops it - the
+  CLI answers through `process.stdout.write`).

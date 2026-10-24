@@ -66,37 +66,45 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 
 ## Notes
 - The language server (`exe/lsp`, built by `tasks/lsp.mjs`/`tasks/lsp_exe.mjs`
-  from `lib/opal/language-server.rb` + `lib/opal/exe/lsp.rb`; plan in
-  `LSP.md`): its stdio transport frames are byte-exact JS (`fs.readSync` into
-  raw bytes, `TextDecoder('utf-8')` per body, `Buffer.byteLength` on write —
-  LSP counts UTF-8 bytes while Opal strings are UTF-16). LSP positions and
+  from the plain-JS tree `lib/opal/language-server/js/` - the Ruby server
+  and `lib/opal/exe/lsp.rb` were replaced by this port in P8, LSP.md §13;
+  plan in `LSP.md`): the exe is one minified Node program - `tasks/lsp/bundle.mjs`
+  inlines the static ESM graph (server + parser + Compiler + the two bake
+  payloads) with `lib/opal/compiler/builder/esm_linker.mjs`, then terser.
+  Its stdio transport is byte-exact (`fs.readSync` into raw bytes,
+  `TextDecoder('utf-8')` per body, `Buffer.byteLength` on write — LSP
+  counts UTF-8 bytes while JS strings are UTF-16). LSP positions and
   `parseWithMetadata`'s envelope offsets are both UTF-16 code-unit indices
-  (the envelope's `offsets` line table turns one into line/character), so the
-  utf-16 positionEncoding is arithmetic, no conversion; `stdlib/json.rb`
-  answers `JSON.parse` as plain Hashes with String keys. Tests are the async
-  stdio harness in `spec/lib/compiler/lsp_cli.test.mjs` (spawnSync would
-  block the loop piping the frames); `--check DIR` runs the parse gate
-  headless. The parse-tree POJOs (`parseWithMetadata`) carry no Opal
-  methods: never send them Ruby messages, test them in JS; `Node#raw`
-  turns missing fields into Opal `nil`, and `Opal.nil == null` is false,
-  so guard with `=== nil` (an `== null` guard silently never fires there).
+  (the envelope's `offsets` line table turns one into line/character), so
+  the utf-16 positionEncoding is arithmetic, no conversion. Tests are the
+  async stdio harness in `spec/lib/compiler/lsp_cli.test.mjs` (spawnSync
+  would block the loop piping the frames); `LSP_EXE=<entry>` points that
+  45-case parity suite at another server entry (the black-box scoreboard of
+  the port), `--check DIR` runs the parse gate headless.
+  esm_linker traps that cost a debugging cycle: a `node:` builtin must be
+  imported by name (a default import resolves to the missing `.default` of
+  the CJS exports -> undefined), the entry .mjs must carry no shebang (it
+  lands inside a module body and terser chokes), and terser drops
+  `console.*` - human output goes through `process.stdout.write`.
+  Name-keyed index maps and method buckets need `Object.create(null)` +
+  `Object.hasOwn` reads: the ported gems call a real method `constructor`,
+  and through a plain `{}` literal that key answers `Object` as if it were
+  a record.
 - The language server's corelib/stdlib index (LSP.md §5) is baked at exe
-  BUILD time: `node tasks/language-server/update_baked_index.mjs` runs a
-  driver bundle that regenerates the two committed generated modules
-  `lib/opal/language-server/baked_index.mjs` and `corelib_sources.mjs` —
-  re-run it (and commit) after changing corelib/stdlib sources or the
-  DeclarationListener. `spec/lib/compiler/lsp_baked_index.test.mjs` is the
-  staleness gate: it recomputes the bake's FNV-1a digests over the live
-  tree in plain node (no Opal build). The baked payload's POJOs/JS arrays
-  answer **no Ruby methods at all** — not `.nil?`, not `.is_a?`, not `[]`
-  — and stdlib `json.rb` sends `#to_json` to every response value, so
-  features guard presence with `x == null || x === nil` in JS, test shape
-  with `x.$$is_hash === true`, and copy POJO ranges to Ruby hashes
-  (`Record.ruby_range`) before answering. §10.6 settled the shape by
-  benchmark (`tasks/language-server/bench_index.mjs`): POJO literals boot
-  1.7-2.8x faster than either Map construction; keep it.
+  BUILD time: `node tasks/language-server/update_baked_index.mjs` runs the
+  plain-node bake driver (`js/indexer/bake.mjs`, the same
+  DeclarationListener the live server uses) and regenerates the two
+  committed generated modules `lib/opal/language-server/baked_index.mjs`
+  and `corelib_sources.mjs` — re-run it (and commit) after changing
+  corelib/stdlib sources or the indexer; the JS driver reproduces the
+  original Ruby driver's payloads byte-for-byte.
+  `spec/lib/compiler/lsp_baked_index.test.mjs` is the staleness gate: it
+  recomputes the bake's FNV-1a digests over the live tree in plain node.
+  §10.6 settled the record shape by benchmark (`tasks/language-server/bench_index.mjs`):
+  POJO literals boot 1.7-2.8x faster than either Map construction; baked
+  and live records share that one plain JS shape now, keep it.
 - The stdio transport writes frames with `fs.writeSync`, not
-  `process.stdout.write` (transport.rb): the stdout pipe drains inline only
+  `process.stdout.write` (js/transport.mjs): the stdout pipe drains inline only
   up to its ~64KB capacity, and `process.stdout.write` then queues the rest
   as an async libuv write the synchronous readSync loop never pumps - a
   >64KB response (documentSymbol on a 600KB file, semanticTokens on big
@@ -106,8 +114,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `process.stderr.write` - terser strips `console.*` from the exe/lsp
   bundle). benchmark/parser/bench_lsp.mjs compares exe/lsp's didOpen /
   didChange (keystroke) / documentSymbol latencies against the same files'
-  warm parseWithMetadata times: the gates+index+publish add ~9-17x over
-  parse, ~0.5s per keystroke at 640KB.
+  warm parseWithMetadata times: after the P8 port the gates+index+publish
+  add only ~2x over parse (~58ms per keystroke at 640KB; 9-17x/~0.5s was
+  the Ruby server).
 - More x-string traps, each costing a debugging cycle: a **multiline**
   backtick body splices as a *statement* (in a method tail or assignment
   the value is silently dropped — `digest` returned undefined this way);
