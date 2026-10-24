@@ -60,10 +60,20 @@ function activate(context) {
     },
   };
 
+  // One complete Executable ({command, args, transport}), not a
+  // {run, debug} pair: in the run/debug form each side must itself be a
+  // full Executable, and a bare command string there makes the client
+  // reject with "Unsupported server configuration". The client appends
+  // "--stdio" itself for a stdio transport, so args stay empty.
+  const serverOptions = {
+    command,
+    transport: TransportKind.stdio,
+  };
+
   client = new LanguageClient(
     "opalLanguageServer",
     "Opal Language Server",
-    { run: command, debug: command, transport: TransportKind.stdio, args: ["--stdio"] },
+    serverOptions,
     clientOptions
   );
   client.start();
