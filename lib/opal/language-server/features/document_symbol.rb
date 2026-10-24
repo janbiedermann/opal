@@ -15,6 +15,28 @@ module Opal
       KIND_METHOD   = 6
       KIND_CONSTANT = 14
 
+      # Lexicographic comparison of two LSP Positions ({line:, character:}).
+      def self.pos_cmp(a, b)
+        a["line"] != b["line"] ? a["line"] <=> b["line"] : a["character"] <=> b["character"]
+      end
+
+      # Clamps an LSP Range into a container Range (a Prism-recovered loc
+      # can escape its node's location) and keeps the result non-inverted.
+      # nil means "no separate selection: the container itself".
+      def self.clamp_selection(sel, container)
+        return container if sel.nil?
+        lo = container["start"]
+        hi = container["end"]
+        start_ = sel["start"]
+        start_ = lo if pos_cmp(start_, lo) < 0
+        start_ = hi if pos_cmp(start_, hi) > 0
+        end_ = sel["end"]
+        end_ = lo if pos_cmp(end_, lo) < 0
+        end_ = hi if pos_cmp(end_, hi) > 0
+        end_ = start_ if pos_cmp(end_, start_) < 0
+        { "start" => start_, "end" => end_ }
+      end
+
       # One found declaration.
       class Symbol
         attr_reader :name, :kind, :range, :selection_range, :start, :end
@@ -25,7 +47,12 @@ module Opal
           @start = node.location_start
           @end = node.location_end
           @range = node.to_range
-          @selection_range = selection_range || @range
+          # Prism error recovery can hand a loc outside the node's own
+          # location: a bare `def ` at EOF recovers to a DefNode with an
+          # empty-string name whose name_loc sits one past the node end.
+          # VS Code validates selectionRange inside range and rejects the
+          # whole documentSymbol response when it is not, so clamp.
+          @selection_range = DocumentSymbolFeature.clamp_selection(selection_range, @range)
         end
 
         def span

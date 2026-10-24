@@ -315,6 +315,32 @@ describe("the opal-language-server command", () => {
     client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
+  test("documentSymbol keeps a recovered half-typed def inside its range", async () => {
+    const client = await handshake();
+    // The mid-typing state: `def ` with the name not typed yet. Prism error
+    // recovery gives a DefNode with an empty name and a synthetic name loc
+    // *past* the truncated node location; VS Code drops the whole response
+    // unless every selectionRange is contained in its range.
+    await openDoc(client, "file:///half.rb", "class Foo\n  def one\n  end\n\n  def ");
+    const answer = await request(client, 30, "textDocument/documentSymbol", { textDocument: { uri: "file:///half.rb" } });
+
+    const within = (r, sel) =>
+      (sel.start.line > r.start.line || (sel.start.line === r.start.line && sel.start.character >= r.start.character)) &&
+      (sel.end.line < r.end.line || (sel.end.line === r.end.line && sel.end.character <= r.end.character));
+    const check = (symbols) => symbols.forEach((s) => {
+      assert.ok(within(s.range, s.selectionRange), `${s.name || "<empty>"}: selectionRange outside range`);
+      check(s.children || []);
+    });
+    check(answer.result);
+
+    const foo = answer.result.find((s) => s.name === "Foo");
+    assert.ok(foo.children.some((s) => s.name === "one"));
+    const half = foo.children.find((s) => s.name === ""); // the half-typed def
+    assert.ok(half, "the half-typed def should still appear as a symbol");
+    assert.deepEqual(half.selectionRange.start, half.range.end); // clamped to the node end
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
   test("foldingRange folds comments, imports and the keyword blocks", async () => {
     const client = await handshake();
     await openTree(client);
