@@ -7,10 +7,14 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
-const LSP = join(OPAL_ROOT, "exe", "lsp");
+// The parity scoreboard of LSP.md §13: LSP_EXE points the suite at another
+// server entry (the JS port's dev tree) while the bundle-shape case stays
+// pinned to the committed exe/lsp below.
+const LSP_BUNDLE = join(OPAL_ROOT, "exe", "lsp");
+const LSP = process.env.LSP_EXE ? resolve(OPAL_ROOT, process.env.LSP_EXE) : LSP_BUNDLE;
 
 // The version the server must answer comes from the single source (LSP.md §0).
 const OPAL_VERSION = /OPAL_VERSION = "([^"]+)"/.exec(
@@ -98,6 +102,7 @@ async function handshake(opts = {}) {
 
 describe("the opal-language-server command", () => {
   before(() => {
+    if (process.env.LSP_EXE) return; // the substitute is run as-is (LSP.md §13)
     const build = spawnSync(process.execPath, [join(OPAL_ROOT, "tasks", "lsp.mjs")], { encoding: "utf8" });
     assert.equal(build.status, 0, build.stderr);
   });
@@ -109,7 +114,7 @@ describe("the opal-language-server command", () => {
   });
 
   test("the bundle bakes no checkout path (relocatable exe)", () => {
-    const bundle = readFileSync(LSP, "utf8");
+    const bundle = readFileSync(LSP_BUNDLE, "utf8");
     assert.ok(!bundle.includes(OPAL_ROOT), "exe/lsp must not name the checkout it was built in");
   });
 
