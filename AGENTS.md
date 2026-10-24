@@ -114,10 +114,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `process.stderr.write` - terser strips `console.*` from the exe/lsp
   bundle). benchmark/parser/bench_lsp.mjs compares exe/lsp's didOpen /
   didChange (keystroke) / documentSymbol latencies against the same files'
-  warm parseWithMetadata times: after the P8 port + index-on-idle the
-  gates+publish add ~1.6x over parse (~47ms per keystroke at 640KB; the
-  live re-index runs once per typing burst at the next index-reading
-  request, not per key; 9-17x/~0.5s was the Ruby server).
+  warm parseWithMetadata times: after the P8 port + index-on-idle + the
+  single-walk API gate the gates+publish add ~1.5x over parse (~40ms per
+  keystroke at 640KB; the live re-index runs once per typing burst at the
+  next index-reading request, not per key; 9-17x/~0.5s was the Ruby server).
 - More x-string traps, each costing a debugging cycle: a **multiline**
   backtick body splices as a *statement* (in a method tail or assignment
   the value is silently dropped — `digest` returned undefined this way);

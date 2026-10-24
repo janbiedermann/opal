@@ -645,6 +645,26 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   46.6-47.0ms at s5 (-25%), ratio 2.0x -> 1.6x; navcold pays the one
   re-index (~13ms), navwarm is 0.1ms - once per typing burst, and if the
   burst is never navigated the work never runs on the hot path.
+- **P8 follow-up - single-walk API gate. LANDED (2026-10-24).**
+  `apiDiagnostics` walked the AST twice per keystroke (stringTypedNames,
+  then the check pass). Now one traversal collects the receiver-typing
+  facts and the syntactic CallNode candidates together - a superset
+  prefilter (`<<`/`===`/`define`/`require`/the bang list/the class checks/
+  Thread-Fiber-Data-Symbol constant receivers) - and resolves them
+  against the finished typed map afterwards, in walk order: identical
+  diagnostics (probe over the corpus's 53k nodes + hand edge cases,
+  byte-equal vs the HEAD gate; 45/45 parity untouched). bench_lsp min
+  of 3 alternating rounds: s5 keystroke 57.8 -> 40.2ms (-30%), total
+  keystroke 76.7 -> 53.1, ratio 2.0x -> 1.5x, open -9%. (The navcold
+  column carries pure noise: 12-17ms across rounds even for unchanged
+  code paths - trust keystroke/open/symbols there.)
+  Negative result worth keeping: replacing the `for..in` in childNodes/
+  walk with a cached per-type field list measured a 2.6x gate gain in
+  the plain-ESM probe but regressed documentSymbol ~15% in the terser
+  bundle (bench_lsp symbols), so node.mjs stayed as it was: V8's per-map
+  enumeration cache makes the per-node `for..in` cheap, and the walk's
+  real cost is the megamorphic property access the cache cannot fix.
+  Measure node-walk changes on the bundled exe, not on ESM micro probes.
 
 ## 10. Risks / spikes (first-week resolutions)
 
