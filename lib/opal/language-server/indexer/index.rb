@@ -202,6 +202,30 @@ module Opal
 
       # ---- name search (workspaceSymbol) ----
 
+      # Names a bare word can complete to at top level: unqualified
+      # module/class names plus non-module constant writes (live + baked).
+      def top_level_constant_names
+        names = []
+        @files.each_value do |listener|
+          listener.modules.each_key { |n| names << n unless n.include?("::") }
+          listener.constants.each_key { |n| names << n }
+        end
+        unless baked_absent?(@baked_modules)
+          js_keys(@baked_modules).each { |n| names << n unless n.include?("::") }
+        end
+        unless baked_absent?(@baked_constants)
+          js_keys(@baked_constants).each { |n| names << n }
+        end
+        names.uniq
+      end
+
+      # Direct children (last segment) of a scope: `String::` completes
+      # names whose qualified form starts with "String::".
+      def constant_names_under(scope)
+        prefix = "#{scope}::"
+        module_names.select { |n| n.start_with?(prefix) && !n[prefix.length..].include?("::") }
+      end
+
       def search(query, limit = 100)
         needle = query.downcase
         hits = []

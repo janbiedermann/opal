@@ -130,6 +130,12 @@ describe("the opal-language-server command", () => {
     assert.equal(answer.result.capabilities.referencesProvider, true);
     assert.deepEqual(answer.result.capabilities.renameProvider, { prepareProvider: true });
     assert.equal(answer.result.capabilities.workspaceSymbolProvider, true);
+    // P4 features are advertised
+    assert.equal(answer.result.capabilities.hoverProvider, true);
+    assert.deepEqual(answer.result.capabilities.signatureHelpProvider.triggerCharacters, ["(", ","]);
+    assert.equal(answer.result.capabilities.typeHierarchyProvider, true);
+    assert.equal(answer.result.capabilities.completionProvider.resolveProvider, true);
+    assert.ok(answer.result.capabilities.completionProvider.triggerCharacters.includes("."));
     client.send({ jsonrpc: "2.0", method: "initialized" });
     client.send({ jsonrpc: "2.0", method: "exit" });
     assert.equal(await client.exitCode(), 1); // exit without shutdown: status 1 per spec
@@ -651,6 +657,38 @@ describe("the opal-language-server command", () => {
     const item = { name: "Enumerable", kind: 2, data: "Enumerable" };
     const subs = await request(client, 47, "textDocument/typeHierarchy/subtypes", { item });
     assert.ok(subs.result.some((i) => i.name === "Array"), "Array includes Enumerable in corelib");
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("completion answers methods, constants, ivars, keywords and require names", async () => {
+    const client = await handshake();
+    // lines: 11 `Widget.s`, 12 `Comp`, 13 `Widget.new.rot`, 14 `x = @tur`,
+    // 15 `re`, 16 `require "jso` (last: an unterminated string would
+    // otherwise swallow the lines below it)
+    await openDoc(client, "file:///p4_cmp.rb", P4_SRC.replace(
+      "Widget.new.rotate(2)\nputs String\nclass MyErr < StandardError\nend\n",
+      "Widget.s\nComp\nWidget.new.rot\nx = @turns = @tur\nre\nrequire \"jso\n",
+    ));
+
+    const labels = async (line, character) =>
+      (await request(client, 50 + line + character, "textDocument/completion", {
+        textDocument: { uri: "file:///p4_cmp.rb" },
+        position: { line, character },
+      })).result;
+
+    assert.ok((await labels(11, 8)).some((i) => i.label === "spin"), "singleton method after .");
+    assert.ok((await labels(13, 14)).some((i) => i.label === "rotate"), "Klass.new.m instance method");
+    const konst = (await labels(12, 4)).find((i) => i.label === "Comparable");
+    assert.equal(konst.kind, 9); // module
+    assert.ok((await labels(14, 17)).some((i) => i.label === "@turns"), "ivar from this document");
+    const req = (await labels(16, 13)).find((i) => i.label === "json");
+    assert.equal(req.kind, 17, "require paths complete from the real stdlib");
+    assert.ok((await labels(15, 2)).some((i) => i.label === "return"), "keywords complete bare words");
+
+    const rotate = (await labels(13, 14)).find((i) => i.label === "rotate");
+    const resolved = await request(client, 60, "completionItem/resolve", rotate);
+    assert.match(resolved.result.detail, /Widget#rotate\(deg\)/);
+    assert.match(resolved.result.documentation.value, /Turns and spins/);
     client.send({ jsonrpc: "2.0", method: "exit" });
   });
 

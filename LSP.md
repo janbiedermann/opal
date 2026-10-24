@@ -480,8 +480,19 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   .method_owner/receiver_class` — shared with definition (and P4b).
   Envelope gotcha: CallNode locs are `opening_loc`/`closing_loc`, not
   `open_loc`/`close_loc` as in Ruby Prism.
-- **P4b — completion** (items + resolve, require-path completion against
-  the real stdlib set).
+- **P4b — completion. ✅ LANDED (2026-10-24).** `textDocument/completion`
+  + `completionItem/resolve` (trigger chars `. : @ " '`): `.` completes the
+  linearized visible methods of the receiver type (literals, constants,
+  `Klass.new.m`); bare capitalized words complete top-level constants,
+  `Mod::` its direct children; bare lowercase words complete implicit-self
+  methods (inside a class body) plus keywords; `@` the document's own
+  instance variables (not indexed); `require "` the real requireable
+  feature names derived from the baked digest keys. Items carry a small
+  data tag; resolve fills `detail` (Owner#m(params)) and `documentation`
+  from the baked record comment. Cap 100 items. Gotcha: an unterminated
+  string swallows the rest of the document (InterpolatedStringNode wraps
+  the StringNode - completion walks ancestors to find the `require` call,
+  and everything *below* an unterminated string is string content).
 - **P5 — Opal gates.** compile-gate diagnostics on save; unsupported-API
   linter + quickfixes; missing-stdlib require diagnostics.
 - **P6 — 3.18 & robustness.** pull diagnostics (+push fallback),

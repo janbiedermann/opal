@@ -22,6 +22,7 @@ require 'opal/language-server/features/workspace_symbol'
 require 'opal/language-server/features/hover'
 require 'opal/language-server/features/signature_help'
 require 'opal/language-server/features/type_hierarchy'
+require 'opal/language-server/features/completion'
 require 'opal/language-server/indexer/global_state'
 
 module Opal
@@ -110,6 +111,10 @@ module Opal
           @transport.write(Result.new(id, TypeHierarchyFeature.supertypes(@state, params["item"])))
         when 'textDocument/typeHierarchy/subtypes'
           @transport.write(Result.new(id, TypeHierarchyFeature.subtypes(@state, params["item"])))
+        when 'textDocument/completion'
+          with_document(id, params) { |d| CompletionFeature.perform(@state, d, params["position"]) }
+        when 'completionItem/resolve'
+          @transport.write(Result.new(id, CompletionFeature.resolve(@state, params)))
         when 'shutdown'
           @shutdown = true
           @transport.write(Result.new(id, nil))
@@ -171,6 +176,10 @@ module Opal
           "hoverProvider" => true,
           "signatureHelpProvider" => { "triggerCharacters" => ["(", ","] },
           "typeHierarchyProvider" => true,
+          "completionProvider" => {
+            "resolveProvider" => true,
+            "triggerCharacters" => [".", ":", "@", "\"", "'"],
+          },
           "semanticTokensProvider" => {
             "legend" => SemanticHighlightingFeature.legend,
             "full"   => true,
