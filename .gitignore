@@ -7,9 +7,7 @@ Gemfile.local
 build/
 /.github_access_token
 /cdn
-/exe/ruby.exe
-/exe/gem.exe
-/exe/bundler.exe
+/exe/*.exe
 /node_modules
 /gh-pages
 /tmp
