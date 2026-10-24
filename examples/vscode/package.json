@@ -17,6 +17,14 @@
   ],
   "main": "./client/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "ruby",
+        "aliases": ["Ruby", "ruby"],
+        "extensions": [".rb", ".rake", ".gemspec", ".opal"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
     "configuration": {
       "title": "Opal Language Server",
       "properties": {

@@ -13,15 +13,21 @@ node tasks/lsp.mjs          # produces exe/lsp in this checkout
 ## Run it
 
 1. `npm install` in this folder (pulls `vscode-languageclient`).
-2. Open VS Code with **this folder** as the workspace and press F5
-   ("Run Extension").
-3. In the Extension Development Host set `opal.languageServer.command`
-   to the absolute path of `exe/lsp` (the built server), then open a
-   `*.rb` file: go to definition, references, rename, completion, hover
-   and the diagnostics gates are live.
-4. Optional: set `opal.languageServer.opalHome` to this checkout so
-   "go to definition" into corelib lands in `opal/corelib/*.rb` instead
-   of dumped copies of the baked sources.
+2. Open **this folder** (`examples/vscode`) in VS Code and press F5
+   ("Run Extension"): the launch config pre-sets `OPAL_LSP_COMMAND` to
+   this checkout's `exe/lsp`, so the Extension Development Host starts
+   the server with no settings at all.
+3. In the Development Host open any `*.rb` file (the extension registers
+   the Ruby language id so bare VS Code recognizes it): go to
+   definition, references, rename, completion, hover and the
+   diagnostics gates are live. Try typing `Thread.new { }` or
+   `"a".gsub!` to see the unsupported-API warnings with quickfixes.
+4. To use the real checkout as workspace, in the Development Host do
+   File > Open Folder and pick the Opal checkout; optionally set
+   `opal.languageServer.opalHome` to it so "go to definition" into
+   corelib lands in `opal/corelib/*.rb` instead of dumped copies.
+5. To watch the server's traffic: View > Output > "Opal Language
+   Server".
 
 To install it for real instead of F5: `npx @vscode/vsce package`
 (adjust the `publisher` first, vsce rejects the placeholder) and install

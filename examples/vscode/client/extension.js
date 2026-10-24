@@ -18,6 +18,8 @@ let client;
 
 function activate(context) {
   const config = vscode.workspace.getConfiguration("opal.languageServer");
+  // OPAL_LSP_COMMAND is the zero-config path: the F5 launch config in this
+  // folder points it at the checkout's exe/lsp.
   const command = config.get("command") || process.env.OPAL_LSP_COMMAND;
   if (!command) {
     const configure = "Configure opal.languageServer.command";
