@@ -14,8 +14,6 @@
 #   *edit* time, so they only fire on unambiguous shapes (literal-receiver
 #   bangs, an exact require name), never on a plain identifier a workspace
 #   file might define itself.
-require 'opal/language-server/features/navigation_target'
-
 module Opal
   module LanguageServer
     module OpalGateFeature
@@ -25,7 +23,14 @@ module Opal
         gsub! sub! tr! squeeze! chop! chomp! slice! strip! lstrip! rstrip!
         upcase! downcase! capitalize! swapcase! delete! succ!
       ].freeze
-      STRING_LITERAL_TYPES = NavigationTarget::LITERAL_CLASSES.select { |_k, v| v == "String" }.keys.freeze
+      # Receiver types whose value IS a String. XStringNode is deliberately
+      # NOT one of them (it is in NavigationTarget's completion typing but
+      # not here): a backtick body answers arbitrary JavaScript - corelib
+      # pushes onto `js_arr` << id - and typing that as a String flagged
+      # Opal's own source in the §8 corpus audit.
+      STRING_LITERAL_TYPES = %w[
+        StringNode StringInterpolationNode StringHeredocNode
+      ].freeze
 
       # stdlib names that neither the baked set nor Opal's loader provides
       # (cross-checked against the stdlib/ tree): require resolves to
@@ -186,18 +191,17 @@ module Opal
 
         def check_node(node, out, typed_names)
           case node.type
-          when "ConstantReadNode"
-            case node.name
-            when "Thread"
-              out << diagnostic(node, "unsupported.thread",
-                               "Opal has no Thread: JavaScript has no OS threads")
-            when "Fiber"
-              out << diagnostic(node, "unsupported.fiber",
-                               "Opal has no Fiber: there is no scheduler to yield to")
-            end
           when "CallNode"
             receiver = node.child("receiver")
-            if node.name == "define" && receiver && receiver.type == "ConstantReadNode" && receiver.name == "Data"
+            # Thread.current is real (stdlib/thread.rb shims it); every
+            # other Thread entry point is not. Fiber has no shim at all.
+            if receiver && receiver.type == "ConstantReadNode" && receiver.name == "Thread" && node.name != "current"
+              out << diagnostic(node, "unsupported.thread",
+                                "Opal has no Thread: JavaScript has no OS threads")
+            elsif receiver && receiver.type == "ConstantReadNode" && receiver.name == "Fiber"
+              out << diagnostic(node, "unsupported.fiber",
+                                "Opal has no Fiber: there is no scheduler to yield to")
+            elsif node.name == "define" && receiver && receiver.type == "ConstantReadNode" && receiver.name == "Data"
               out << diagnostic(node, "unsupported.data-define", "Opal has no Data class")
             elsif node.name == "<<" && string_receiver?(node, typed_names)
               out << diagnostic(node, "unsupported.string-append",

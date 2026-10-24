@@ -541,6 +541,18 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   `stdlib/`; socket/thread/yaml/json/set/observer *do* exist and stay off
   the list); Thread/Fiber/Data.define diagnostics got "remove this call"
   quickfixes alongside, the call being the unsupported API itself.
+  *Corpus audit (694 real files: corelib+stdlib+lib+test/opal+spec/opal,
+  throwaway probe):* zero parse errors, zero compile errors, zero gate
+  crashes - and two false positives it caught, both now fixed: the
+  `` `js` << id `` xstring-push idiom (an XStringNode receiver answers
+  arbitrary JS - corelib stacks - so XStringNode left the gate's String
+  typing; NavigationTarget's completion list keeps it), and `Thread`
+  (stdlib/thread.rb shims `Thread.current`, so only *other* Thread entry
+  points are gated now; the constant-only rule is gone, Thread/Fiber fire
+  as CallNode receivers - Fiber still fires on any call, no shim exists).
+  Remaining corpus hits are honest: 6 Thread uses in `test/opal` files
+  that do raise on the shim, optparse/pp `Symbol ===` checks, the
+  `pathname.rb` /o warnings.
 - **P6 — pull diagnostics & file watching. ✅ LANDED (2026-10-24).**
   `textDocument/diagnostic` answers a full `DocumentDiagnosticReport`
   running all three gates on demand (parse + API always, the Compiler

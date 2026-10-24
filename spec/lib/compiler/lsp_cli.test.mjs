@@ -978,6 +978,16 @@ describe("the opal-language-server command", () => {
     client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
+  test("the API gate stays quiet on the xstring push idiom and Thread.current", async () => {
+    const client = await handshake();
+    // both shapes appear in Opal's own source (corelib inspect stacks,
+    // stdlib/pp.rb); the §8 corpus audit says they must not be flagged
+    const published = await openDoc(client, "file:///p5d_quiet.rb",
+      "stack = `[]`\nstack << 1\n`js` << 2\nseen = Thread.current[:tag]\nputs seen\n");
+    assert.deepEqual(published.params.diagnostics, []);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
   after(() => {
     // Every test closes its own server through "exit"; this catches any
     // child left alive by a failed assertion so the suite can't hang.
