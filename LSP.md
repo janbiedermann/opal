@@ -589,7 +589,19 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   with `extracted`. Multi-line or half-parsed selections get nothing.
   Requests honour `context`-less `only` filtering, so a quickfix-only
   client never sees the refactor and vice versa.
-  *Still deferred:* codeAction extract method, code lens + test discovery for `test/nodejs`
+  *Extract to method: ✅ LANDED (2026-10-24).* kind
+  `refactor.extract.method`, only inside a `def`: the single-line
+  selection parses as one statement, free bare identifiers that are the
+  enclosing def's own locals/params become arguments (Opal's parser
+  answers a bare identifier as a receiverless *CallNode*, not VCallNode -
+  both are collected, and real method calls fall through), the new def
+  splices below the enclosing one with its indentation (`self.` prefix
+  for class methods), and the selection becomes the call. Refusals:
+  return/break/next/super in the selection, references to block params
+  (scope would not survive), keyword params (`key: key` plumbing v1
+  declines), defs on other objects, multi-line selections. `only`
+  matching compares on dot-separated kind prefixes.
+  *Still deferred:* code lens + test discovery for `test/nodejs`
   Minitest files (`bin/test <file>` commands), and ERB/`.opalerb`
   documents via `prepareErb`.
 

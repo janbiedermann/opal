@@ -948,6 +948,36 @@ describe("the opal-language-server command", () => {
     client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
+  test("extract to method splices a new def below and parameterizes free locals", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p7c_m.rb", "class Calc\n  def total(n)\n    puts n * 2\n  end\nend\n");
+    const answer = await request(client, 92, "textDocument/codeAction", {
+      textDocument: { uri: "file:///p7c_m.rb" },
+      range: { start: { line: 2, character: 9 }, end: { line: 2, character: 14 } }, // "n * 2"
+      context: { diagnostics: [] },
+      only: ["refactor.extract.method"],
+    });
+    assert.equal(answer.result.length, 1);
+    const extract = answer.result[0];
+    assert.equal(extract.title, "Extract to method");
+    const [insert, replace] = extract.edit.changes["file:///p7c_m.rb"];
+    assert.deepEqual(insert.range, { start: { line: 3, character: 5 }, end: { line: 3, character: 5 } });
+    assert.equal(insert.newText, "\n  def extracted(n)\n    n * 2\n  end");
+    assert.deepEqual(replace,
+      { range: { start: { line: 2, character: 9 }, end: { line: 2, character: 14 } }, newText: "extracted(n)" });
+
+    // block-param uses refuse: their scope would not survive the move
+    await openDoc(client, "file:///p7c_b.rb", "def run\n  [1].each { |i| puts i }\nend\n");
+    const refused = await request(client, 93, "textDocument/codeAction", {
+      textDocument: { uri: "file:///p7c_b.rb" },
+      range: { start: { line: 1, character: 22 }, end: { line: 1, character: 23 } }, // "i"
+      context: { diagnostics: [] },
+      only: ["refactor.extract.method"],
+    });
+    assert.deepEqual(refused.result, []);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
   after(() => {
     // Every test closes its own server through "exit"; this catches any
     // child left alive by a failed assertion so the suite can't hang.

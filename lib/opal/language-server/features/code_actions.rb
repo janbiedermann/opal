@@ -24,7 +24,7 @@ module Opal
           parse_result = document.parse!
           actions = []
           allowed = only.nil? || only.empty? ? nil : only
-          if allowed.nil? || allowed.include?("quickfix")
+          if kind_allowed?(allowed, "quickfix")
             diagnostics.each do |diagnostic|
               case diagnostic["code"]
               when "unsupported.string-mutation"
@@ -50,14 +50,171 @@ module Opal
               end
             end
           end
-          if allowed.nil? || allowed.include?("refactor.extract")
+          if kind_allowed?(allowed, "refactor.extract")
             extract = extract_variable(document, parse_result, range)
             actions << extract unless extract.nil?
+          end
+          if kind_allowed?(allowed, "refactor.extract.method")
+            extracted = extract_method(document, parse_result, range)
+            actions << extracted unless extracted.nil?
           end
           actions
         end
 
         private
+
+        # LSP `only` is exact-kind matching, but an advertised parent kind
+        # asks for its subkinds too, so compare on the dot-separated prefix.
+        def kind_allowed?(allowed, kind)
+          allowed.nil? || allowed.any? { |a| kind == a || kind.start_with?("#{a}.") }
+        end
+
+        # refactor.extract.method (LSP.md §9 P7): v1 extracts only within
+        # a method body, single-line selections, the new def spliced right
+        # below the enclosing one. Bare identifiers in the selection that
+        # are locals or parameters of the enclosing def become arguments;
+        # uses of block parameters (their scope would not survive the
+        # move), of keyword params, of return/break/next or of super all
+        # refuse rather than mis-transform.
+        def extract_method(document, parse_result, range)
+          return nil if range.nil?
+          start_at = range["start"]
+          end_at = range["end"]
+          return nil if start_at["line"] != end_at["line"] || start_at == end_at
+          line = start_at["line"]
+          from = parse_result.offset_for(line, start_at["character"])
+          to = parse_result.offset_for(line, end_at["character"])
+          selection = document.source[from...to]
+          return nil if selection.nil? || selection.strip.empty?
+          check = ParseResult.new(selection)
+          return nil if check.syntax_error?
+          return nil if `check.envelope.ast.statements.body.length !== 1`
+          def_node = enclosing_def(parse_result.ast, start_at, end_at)
+          return nil if def_node.nil?
+
+          refuse = false
+          free = []
+          stack = [check.ast]
+          while (node = stack.pop)
+            case node.type
+            when "ReturnNode", "BreakNode", "NextNode", "ZSuperNode", "SuperNode"
+              refuse = true
+            when "VCallNode"
+              free << node.name
+            when "CallNode"
+              # Opal's parser answers a bare identifier as a receiverless
+              # CallNode; names the enclosing def does not own are real
+              # method calls and stay in the body untouched.
+              free << node.name if node.child("receiver").nil?
+            when "LocalVariableReadNode"
+              free << node.name
+            end
+            stack.concat(node.child_nodes)
+          end
+          return nil if refuse
+          return nil if free.any? { |name| def_block_param_names(def_node).include?(name) }
+
+          names = def_own_names(def_node) # nil: keyword params in play
+          return nil if names.nil?
+          args = (free.uniq & names)
+
+          indent = line_indent(document, parse_result, def_node)
+          return nil if indent.nil?
+          receiver = def_node.child("receiver")
+          prefix = ""
+          unless receiver.nil?
+            return nil unless receiver.type == "SelfNode" # def on another object: out of scope
+            prefix = "self."
+          end
+
+          name = "extracted"
+          sig = args.empty? ? "" : "(#{args.join(', ')})"
+          call = args.empty? ? name : "#{name}(#{args.join(', ')})"
+          end_line = def_node.to_range["end"]["line"]
+          at = { "line" => end_line, "character" => parse_result.line_range(end_line)["end"]["character"] }
+          insert = {
+            "range" => { "start" => at, "end" => at },
+            "newText" => "\n#{indent}def #{prefix}#{name}#{sig}\n#{indent}  #{selection.strip}\n#{indent}end",
+          }
+          replace = { "range" => range, "newText" => call }
+          {
+            "title" => "Extract to method",
+            "kind" => "refactor.extract.method",
+            "edit" => { "changes" => { document.uri => [insert, replace] } },
+          }
+        end
+
+        def enclosing_def(ast, start_at, end_at)
+          found = nil
+          stack = [ast]
+          while (node = stack.pop)
+            if node.type == "DefNode" && range_contains?(node.to_range, start_at, end_at)
+              if found.nil? || range_contains?(found.to_range, node.to_range["start"], node.to_range["end"])
+                found = node
+              end
+            end
+            stack.concat(node.child_nodes)
+          end
+          found
+        end
+
+        def range_contains?(range, start_at, end_at)
+          after_start = start_at["line"] > range["start"]["line"] ||
+            (start_at["line"] == range["start"]["line"] && start_at["character"] >= range["start"]["character"])
+          before_end = end_at["line"] < range["end"]["line"] ||
+            (end_at["line"] == range["end"]["line"] && end_at["character"] <= range["end"]["character"])
+          after_start && before_end
+        end
+
+        # The enclosing def's own name space: plain parameters plus every
+        # assignment target. nil answers when keyword parameters are in
+        # play (their extraction needs `key: key` plumbing v1 declines).
+        def def_own_names(def_node)
+          names = []
+          params = def_node.child("parameters")
+          unless params.nil?
+            params.child_nodes.each do |p|
+              next unless p.type.end_with?("ParameterNode")
+              return nil if p.type.include?("Keyword")
+              name = p.raw("name")
+              names << name unless name.nil?
+            end
+          end
+          stack = [def_node]
+          while (node = stack.pop)
+            names << node.raw("name") if node.type == "LocalVariableWriteNode"
+            stack.concat(node.child_nodes)
+          end
+          names
+        end
+
+        def def_block_param_names(def_node)
+          names = []
+          stack = [def_node]
+          while (node = stack.pop)
+            if node.type == "BlockParametersNode"
+              node.child_nodes.each do |params|
+                params.child_nodes.each do |p|
+                  next unless p.type.end_with?("ParameterNode")
+                  name = p.raw("name")
+                  names << name unless name.nil?
+                end
+              end
+            end
+            stack.concat(node.child_nodes)
+          end
+          names
+        end
+
+        # The blank (spaces/tabs) in front of the enclosing def's `def`
+        # keyword, reused for the inserted one.
+        def line_indent(document, parse_result, def_node)
+          start_at = def_node.to_range["start"]
+          from = parse_result.offset_for(start_at["line"], 0)
+          to = parse_result.offset_for(start_at["line"], start_at["character"])
+          indent = document.source[from...to]
+          indent =~ /\A[ \t]*\z/ ? indent : nil
+        end
 
         # refactor.extract (LSP.md §9 P7): pure-text, single-line only.
         # The selection must parse as exactly one expression (the check
