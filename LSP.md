@@ -527,6 +527,20 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   take `\d`, JS string literals still take `"\\"`); an assignment whose
   RHS starts with `#{...}` guarded by an x-string `if` silently swallows
   the following statement.
+  *Addendum (§8 acceptance alignment):* the API gate also catches
+  `String#<<` (the append trap that has no `!`): code
+  `unsupported.string-append` with a quickfix replacing the `<<` token
+  with `+=`. Receivers are typed by the literal rule *plus* one
+  inference-lite step: a local/ivar assigned exactly once in the document
+  with a String literal as that sole assignment, and never shadowed by a
+  method or block parameter, counts as a String (`msg = ""` then
+  `msg << x` fires; `buf = []` then `buf << 1` stays silent; a name with
+  two assignments or a non-literal one is untyped). `MISSING_REQUIRES`
+  grew to the CRuby stdlib this checkout verifiably lacks (net/http,
+  net/https, net/smtp, ripper, csv, pstore, fiber - cross-checked against
+  `stdlib/`; socket/thread/yaml/json/set/observer *do* exist and stay off
+  the list); Thread/Fiber/Data.define diagnostics got "remove this call"
+  quickfixes alongside, the call being the unsupported API itself.
 - **P6 — pull diagnostics & file watching. ✅ LANDED (2026-10-24).**
   `textDocument/diagnostic` answers a full `DocumentDiagnosticReport`
   running all three gates on demand (parse + API always, the Compiler

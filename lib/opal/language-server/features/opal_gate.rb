@@ -27,10 +27,14 @@ module Opal
       ].freeze
       STRING_LITERAL_TYPES = NavigationTarget::LITERAL_CLASSES.select { |_k, v| v == "String" }.keys.freeze
 
-      # stdlib names that neither the baked set nor Opal's loader provides:
-      # require resolves to nothing and the node platform loader silently
-      # skips it (no LoadError - AGENTS.md), so say so at the call.
-      MISSING_REQUIRES = %w[psych readline reline irb resolv Reline].freeze
+      # stdlib names that neither the baked set nor Opal's loader provides
+      # (cross-checked against the stdlib/ tree): require resolves to
+      # nothing and the node platform loader silently skips it (no LoadError
+      # - AGENTS.md), so say so at the call.
+      MISSING_REQUIRES = %w[
+        psych readline reline irb resolv Reline net/http net/https net/smtp
+        ripper csv pstore fiber
+      ].freeze
 
       class << self
         # ---- the compile gate (on save) ----
@@ -126,10 +130,11 @@ module Opal
 
         def api_diagnostics(document)
           ast = document.parse!.ast
+          typed = string_typed_names(ast)
           out = []
           stack = [ast]
           while (node = stack.pop)
-            check_node(node, out)
+            check_node(node, out, typed)
             stack.concat(node.child_nodes)
           end
           out
@@ -137,7 +142,49 @@ module Opal
 
         private
 
-        def check_node(node, out)
+        # Inference-lite receiver typing, the same philosophy as P2/P4:
+        # a name counts as a String when the document assigns it exactly
+        # once and that one assignment is a String literal, and no method
+        # or block parameter shadows the name. Anything beyond that is
+        # guesswork and stays un-gated.
+        def string_typed_names(ast)
+          single_string = []
+          assigned_twice = []
+          parameters = []
+          stack = [ast]
+          while (node = stack.pop)
+            case node.type
+            when "LocalVariableWriteNode", "InstanceVariableWriteNode"
+              name = node.raw("name")
+              if single_string.include?(name)
+                single_string.delete(name)
+                assigned_twice << name
+              elsif assigned_twice.include?(name)
+                # already rejected
+              else
+                value = node.child("value")
+                single_string << name if value && value.type == "StringNode"
+              end
+            when "RequiredParameterNode", "OptionalParameterNode", "RestParameterNode",
+                 "PostRequiredParameterNode", "RequiredKeywordParameterNode",
+                 "OptionalKeywordParameterNode", "KeywordRestParameterNode",
+                 "BlockParameterNode"
+              parameters << node.raw("name")
+            end
+            stack.concat(node.child_nodes)
+          end
+          single_string.reject { |name| parameters.include?(name) }
+        end
+
+        def string_receiver?(node, typed_names)
+          receiver = node.child("receiver")
+          return false if receiver.nil?
+          return true if STRING_LITERAL_TYPES.include?(receiver.type)
+          (receiver.type == "LocalVariableReadNode" || receiver.type == "InstanceVariableReadNode") &&
+            typed_names.include?(receiver.name)
+        end
+
+        def check_node(node, out, typed_names)
           case node.type
           when "ConstantReadNode"
             case node.name
@@ -152,7 +199,10 @@ module Opal
             receiver = node.child("receiver")
             if node.name == "define" && receiver && receiver.type == "ConstantReadNode" && receiver.name == "Data"
               out << diagnostic(node, "unsupported.data-define", "Opal has no Data class")
-            elsif BANG_METHODS.include?(node.name) && receiver && STRING_LITERAL_TYPES.include?(receiver.type)
+            elsif node.name == "<<" && string_receiver?(node, typed_names)
+              out << diagnostic(node, "unsupported.string-append",
+                                "String#<< raises NotImplementedError: String is immutable in Opal - use +=")
+            elsif BANG_METHODS.include?(node.name) && string_receiver?(node, typed_names)
               out << diagnostic(node, "unsupported.string-mutation",
                                 "String is immutable in Opal: String##{node.name} raises NotImplementedError")
             elsif (node.name == "is_a?" || node.name == "kind_of?" || node.name == "instance_of?") &&

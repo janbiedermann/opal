@@ -849,6 +849,34 @@ describe("the opal-language-server command", () => {
     }
   });
 
+  test("§8 acceptance: Thread.new, msg << x and net/http gate with quickfixes", async () => {
+    const client = await handshake();
+    const published = await openDoc(client, "file:///p5c_accept.rb",
+      "Thread.new { 1 }\nmsg = \"\"\nmsg << \"x\"\nrequire \"net/http\"\nbuf = []\nbuf << 1\n");
+    const codes = published.params.diagnostics.map((d) => d.code).sort();
+    assert.deepEqual(codes, ["unsupported.require", "unsupported.string-append", "unsupported.thread"]);
+    // buf was assigned a single Array literal, so `buf << 1` stays ungated
+    assert.deepEqual(published.params.diagnostics.map((d) => d.range.start.line).sort(), [0, 2, 3]);
+
+    const answer = await request(client, 86, "textDocument/codeAction", {
+      textDocument: { uri: "file:///p5c_accept.rb" },
+      range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } },
+      context: { diagnostics: published.params.diagnostics },
+    });
+    const titles = answer.result.map((a) => a.title);
+    assert.ok(titles.some((t) => t === "Remove this call - Opal does not have it")); // Thread.new
+    assert.ok(titles.some((t) => t === "Use += - String is immutable in Opal"));     // msg << x
+    assert.ok(titles.some((t) => t.startsWith("Remove this require")));             // net/http
+    const append = answer.result.find((a) => a.title.includes("Use +="));
+    assert.deepEqual(append.edit.changes["file:///p5c_accept.rb"],
+      [{ range: { start: { line: 2, character: 4 }, end: { line: 2, character: 6 } }, newText: "+=" }]);
+
+    // §8: the pull report answers the same set
+    const pull = await request(client, 87, "textDocument/diagnostic", { textDocument: { uri: "file:///p5c_accept.rb" } });
+    assert.deepEqual(pull.result.items.map((d) => d.code).sort(), codes);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
   after(() => {
     // Every test closes its own server through "exit"; this catches any
     // child left alive by a failed assertion so the suite can't hang.

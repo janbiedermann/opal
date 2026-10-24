@@ -26,9 +26,17 @@ module Opal
             when "unsupported.string-mutation"
               node = find_call_at(parse_result.ast, diagnostic["range"])
               actions << drop_bang(document, parse_result, diagnostic, node) unless node.nil?
+            when "unsupported.string-append"
+              node = find_call_at(parse_result.ast, diagnostic["range"])
+              actions << append_to_plus(document, parse_result, diagnostic, node) unless node.nil?
             when "unsupported.require"
               node = find_call_at(parse_result.ast, diagnostic["range"])
-              actions << remove_require(document, diagnostic, node) unless node.nil?
+              actions << remove_call(document, diagnostic, node, "Remove this require - Opal does not provide it") unless node.nil?
+            when "unsupported.thread", "unsupported.fiber", "unsupported.data-define"
+              # The call itself is the unsupported API; removal is offered
+              # as a suggestion (the code cannot work as written anyway).
+              node = find_call_at(parse_result.ast, diagnostic["range"])
+              actions << remove_call(document, diagnostic, node, "Remove this call - Opal does not have it") unless node.nil?
             when "compile-warning"
               next unless diagnostic["message"].include?("Skipping the 'o' Regexp flag")
               node = find_once_regexp_at(parse_result.ast, diagnostic["range"]["start"]["line"])
@@ -88,9 +96,15 @@ module Opal
           action(document, diagnostic, "Use String##{name[0...-1]} - String is immutable in Opal", edit)
         end
 
-        def remove_require(document, diagnostic, node)
+        def remove_call(document, diagnostic, node, title)
           edit = { "range" => node.to_range, "newText" => "" }
-          action(document, diagnostic, "Remove this require - Opal does not provide it", edit)
+          action(document, diagnostic, title, edit)
+        end
+
+        def append_to_plus(document, parse_result, diagnostic, node)
+          message = parse_result.range_for_loc(node.raw("message_loc"))
+          edit = { "range" => message, "newText" => "+=" }
+          action(document, diagnostic, "Use += - String is immutable in Opal", edit)
         end
 
         def drop_o_flag(document, parse_result, diagnostic, node)
