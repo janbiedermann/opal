@@ -108,6 +108,11 @@ describe("the opal-language-server command", () => {
     assert.match(run.stdout, new RegExp(`opal-language-server ${OPAL_VERSION} \\(Opal ${OPAL_VERSION}\\)`));
   });
 
+  test("the bundle bakes no checkout path (relocatable exe)", () => {
+    const bundle = readFileSync(LSP, "utf8");
+    assert.ok(!bundle.includes(OPAL_ROOT), "exe/lsp must not name the checkout it was built in");
+  });
+
   test("initialize answers the capabilities and serverInfo", async () => {
     const client = startServer();
     client.send(INITIALIZE);
