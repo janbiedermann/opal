@@ -536,6 +536,18 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   read the value back with a single-expression backtick:
   `%x{ window._x = build() }` then `` `window._x` `` (that shape is
   `stdlib/zlib.rb`'s gunzip, for one).
+- An x-string body is *raw JavaScript source*: backslashes pass through
+  untouched, so a JS regex literal inside takes one backslash (`/:(\d+)$/`)
+  - writing `\\d` in the Ruby file yields the JS regex `/\\d/`, which
+  matches a literal backslash and silently never fires. JS *string*
+  escapes are the opposite: they must already be doubled in the body
+  (`c === "\\"` is a JS source escape, correct as written).
+- A statement-`if` guard whose assignment RHS starts with interpolation and
+  whose condition is an x-string (`line = #{count} - 1 if \`#{line} >=
+  #{count}\``) silently swallows the *next statement* into that line: a
+  multiple assignment after it compiled as `line = [recv.$a(), (b = ...)]`
+  with LHS names turned into method calls - no error, wrong code. Reorder
+  or rephrase the guard (a plain RHS like `line = 0` does not trigger it).
 - `stdlib/uri/rfc3986_parser.rb`: upstream's `\g<seg>*+` is a *subexpression
   call* - the star applies to the whole re-expansion - so the relative-ref
   `path_absolute` is `/SEG*`, which is what makes `URI.parse("/")` parse. With a

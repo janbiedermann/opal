@@ -116,6 +116,20 @@ module Opal
         }
       end
 
+      # A whole source line as an LSP range (0-based line): wide enough
+      # that a position inside the line overlaps it, which is what makes
+      # a line-level warning associable with code actions.
+      def line_range(line)
+        line = 0 if `#{line} < 0`
+        line = line_count - 1 if `#{line} >= #{line_count}`
+        end_at = line + 1 < line_count ? line_start(line + 1) - 1 : `#{@source}.length`
+        end_pos = position_at(end_at)
+        {
+          "start" => { "line" => line, "character" => 0 },
+          "end" => { "line" => end_pos[0], "character" => end_pos[1] },
+        }
+      end
+
       private
 
       def line_start(line)

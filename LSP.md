@@ -101,7 +101,7 @@ without dynamic registration):
 | `definitionProvider`, `referencesProvider`, `renameProvider` (+`prepareProvider`), `workspaceSymbolProvider` | P3 |
 | `hoverProvider` ✅, `signatureHelpProvider` (triggers `(`, `,`) ✅, `typeHierarchyProvider` ✅ | P4a |
 | `completionProvider` (resolve, triggers `. : @ $`) | P4b |
-| `codeActionProvider` (quickfix, refactor.extract), `executeCommandProvider` (`opalLsp/compileToJs`, `opalLsp/showSyntaxTree`) | P5/P7 |
+| `codeActionProvider` (quickfix ✅ P5; refactor.extract), `executeCommandProvider` (`opalLsp/compileToJs`, `opalLsp/showSyntaxTree`) | P5/P7 |
 
 Out of scope for the protocol in v1: formatting/rangeFormatting (no
 formatter advertised; deferred delegation to an external CRuby formatter is
@@ -493,8 +493,40 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   string swallows the rest of the document (InterpolatedStringNode wraps
   the StringNode - completion walks ancestors to find the `require` call,
   and everything *below* an unterminated string is string content).
-- **P5 — Opal gates.** compile-gate diagnostics on save; unsupported-API
-  linter + quickfixes; missing-stdlib require diagnostics.
+- **P5 — Opal gates. ✅ LANDED (2026-10-24).** `features/opal_gate.rb`.
+  *Compile gate* (on `didSave` only): a real `Opal.esm["opal/compiler/index"]
+  .Compiler` pass over the document. A compiler refusal raises
+  `OpalSyntaxError` whose POJO `location` (1-based line, 0-based UTF-16
+  column, `sourceLine`) becomes a severity-1 `code:"compile"` diagnostic
+  spanning the failing source line; refusals without a position land at
+  the document start. The Compiler's `warning` callback is collected into
+  severity-2 `code:"compile-warning"` diagnostics - its text ends with
+  `-- <file>:<line>`, which is parsed back out to give the diagnostic a
+  whole-line range (`ParseResult#line_range`), and exact-message dedupe
+  keeps the parse gate's warnings single. Honest finding: the current
+  Compiler refuses far less than §2 expected (proc-destructuring params,
+  anonymous rest/`&`-forward, constant rescue targets, possessive regexes
+  all compile clean), so the warning channel carries most of the value:
+  the `/o` flag drop, backtick-intent, and x-string-semicolon warnings are
+  Opal-only knowledge no parser emits. `didSave` on an unparseable
+  document is skipped - the parse diagnostics already on screen stand.
+  *API gate* (published with the parse gate on every edit): curated
+  severity-2 `unsupported.*` rules on unambiguous shapes only - the
+  `Thread`/`Fiber` constants, `Data.define`, bang methods on string
+  literals (immutable String), `is_a?/kind_of?/instance_of?(Symbol)` and
+  `Symbol === x` (Symbol==String), `require` of stdlib Opal lacks
+  (psych/readline/reline/irb/resolv - silently skipped at run time).
+  *P5b quickfixes* (`features/code_actions.rb`,
+  `codeActionProvider:{codeActionKinds:["quickfix"]}`): recognized by the
+  diagnostic's `code` plus its exact range start; three mechanical
+  single-edit fixes - drop the bang character (`gsub!`→`gsub`), remove a
+  missing-stdlib require call, drop the `/o` flag character (the
+  RegularExpressionNode flag list carries `"once"`; the source probe
+  deletes the trailing `o` only when a non-word char precedes it).
+  Gotchas (in AGENTS.md): x-strings pass backslashes through raw (regexes
+  take `\d`, JS string literals still take `"\\"`); an assignment whose
+  RHS starts with `#{...}` guarded by an x-string `if` silently swallows
+  the following statement.
 - **P6 — 3.18 & robustness.** pull diagnostics (+push fallback),
   `$/cancelRequest` end-to-end, workDoneProgress for indexing,
   `workspace/didChangeWatchedFiles` incremental re-index, chunked indexing

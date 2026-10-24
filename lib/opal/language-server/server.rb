@@ -23,6 +23,8 @@ require 'opal/language-server/features/hover'
 require 'opal/language-server/features/signature_help'
 require 'opal/language-server/features/type_hierarchy'
 require 'opal/language-server/features/completion'
+require 'opal/language-server/features/opal_gate'
+require 'opal/language-server/features/code_actions'
 require 'opal/language-server/indexer/global_state'
 
 module Opal
@@ -67,9 +69,10 @@ module Opal
         when 'textDocument/didClose'
           @store.delete(params.dig("textDocument", "uri"))
         when 'textDocument/didSave'
-          # The parse gate already ran on the last edit (P5 moves the
-          # compile gate here); nothing to do.
-          nil
+          # The compile gate (LSP.md §2 gate 2) runs on save, never on a
+          # keystroke: it is a full Compiler pass.
+          document = @store[params.dig("textDocument", "uri")]
+          publish_compile_gate(document) if document
         when 'textDocument/documentSymbol'
           with_document(id, params) { |document| DocumentSymbolFeature.perform(document) }
         when 'textDocument/foldingRange'
@@ -115,6 +118,8 @@ module Opal
           with_document(id, params) { |d| CompletionFeature.perform(@state, d, params["position"]) }
         when 'completionItem/resolve'
           @transport.write(Result.new(id, CompletionFeature.resolve(@state, params)))
+        when 'textDocument/codeAction'
+          with_document(id, params) { |d| CodeActionsFeature.perform(d, params["context"]) }
         when 'shutdown'
           @shutdown = true
           @transport.write(Result.new(id, nil))
@@ -180,6 +185,7 @@ module Opal
             "resolveProvider" => true,
             "triggerCharacters" => [".", ":", "@", "\"", "'"],
           },
+          "codeActionProvider" => { "codeActionKinds" => ["quickfix"] },
           "semanticTokensProvider" => {
             "legend" => SemanticHighlightingFeature.legend,
             "full"   => true,
@@ -253,12 +259,29 @@ module Opal
                                           { "type" => severity, "message" => message }))
       end
 
-      # The parse gate on every edit (LSP.md §9 P1: the compile gate waits
-      # for save, P5). Publishing an empty array clears the squiggles.
+      # The parse gate on every edit (LSP.md §9 P1), joined by the API gate
+      # (§2 gate 3): both are single AST passes and belong on the keystroke
+      # path. Publishing an empty array clears the squiggles.
       def publish_parse_gate(document)
+        publish_diagnostics(document, document.diagnostics + OpalGateFeature.api_diagnostics(document))
+      end
+
+      # The compile gate on save (§2 gate 2). A document that does not
+      # parse is left to the parse diagnostics already on screen: feeding
+      # broken syntax to the Compiler would only re-report the same error.
+      def publish_compile_gate(document)
+        return if document.syntax_error?
+        publish_diagnostics(
+          document,
+          document.diagnostics + OpalGateFeature.api_diagnostics(document) +
+            OpalGateFeature.compile_diagnostics(document),
+        )
+      end
+
+      def publish_diagnostics(document, diagnostics)
         @transport.write(Notification.new(
           "textDocument/publishDiagnostics",
-          { "uri" => document.uri, "diagnostics" => document.diagnostics },
+          { "uri" => document.uri, "diagnostics" => diagnostics },
         ))
       end
 

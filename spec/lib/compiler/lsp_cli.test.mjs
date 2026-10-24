@@ -136,6 +136,9 @@ describe("the opal-language-server command", () => {
     assert.equal(answer.result.capabilities.typeHierarchyProvider, true);
     assert.equal(answer.result.capabilities.completionProvider.resolveProvider, true);
     assert.ok(answer.result.capabilities.completionProvider.triggerCharacters.includes("."));
+    // P5 gates: the compile gate needs save, the fixes advertise quickfixes
+    assert.deepEqual(answer.result.capabilities.textDocumentSync.save, { includeText: false });
+    assert.deepEqual(answer.result.capabilities.codeActionProvider, { codeActionKinds: ["quickfix"] });
     client.send({ jsonrpc: "2.0", method: "initialized" });
     client.send({ jsonrpc: "2.0", method: "exit" });
     assert.equal(await client.exitCode(), 1); // exit without shutdown: status 1 per spec
@@ -689,6 +692,109 @@ describe("the opal-language-server command", () => {
     const resolved = await request(client, 60, "completionItem/resolve", rotate);
     assert.match(resolved.result.detail, /Widget#rotate\(deg\)/);
     assert.match(resolved.result.documentation.value, /Turns and spins/);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  // ---- P5: the deeper Opal gates ----
+
+  test("the API gate flags unsupported APIs on the open publish", async () => {
+    const client = await handshake();
+    const published = await openDoc(client, "file:///p5_api.rb",
+      "Thread.new { 1 }\n\"a\".gsub!(\"b\", \"c\")\nrequire \"psych\"\nputs Fiber.current\nputs(x.is_a?(Symbol))\n");
+    const byLine = Object.fromEntries(published.params.diagnostics.map((d) => [d.range.start.line, d.code]));
+    assert.deepEqual(byLine, {
+      0: "unsupported.thread",
+      1: "unsupported.string-mutation",
+      2: "unsupported.require",
+      3: "unsupported.fiber",
+      4: "unsupported.symbol-check",
+    });
+    assert.ok(published.params.diagnostics.every((d) => d.source === "opal" && d.severity === 2));
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("the compile gate runs on save and surfaces Opal-only warnings", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p5_o.rb", "x = /foo/o\n");
+    client.send({ jsonrpc: "2.0", method: "textDocument/didSave",
+      params: { textDocument: { uri: "file:///p5_o.rb" } } });
+    const saved = await client.next();
+    assert.equal(saved.method, "textDocument/publishDiagnostics");
+    const dropped = saved.params.diagnostics.find((d) => d.code === "compile-warning");
+    assert.match(dropped.message, /Skipping the 'o' Regexp flag/); // §2 gate 2's own example
+    // the parse gate's warning is republished, not duplicated
+    assert.equal(saved.params.diagnostics.filter((d) => d.code === "unused_local_variable").length, 1);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("saving a document that does not parse leaves the parse diagnostics alone", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p5_bad.rb", "def foo(\n");
+    client.send({ jsonrpc: "2.0", method: "textDocument/didSave",
+      params: { textDocument: { uri: "file:///p5_bad.rb" } } });
+    // the compile gate skipped the unparseable document: no extra publish,
+    // and the next request answers normally (the gate cannot crash the loop)
+    const answer = await request(client, 70, "textDocument/documentSymbol", { textDocument: { uri: "file:///p5_bad.rb" } });
+    assert.equal(answer.id, 70);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("code actions fix the string bang and the missing require", async () => {
+    const client = await handshake();
+    const published = await openDoc(client, "file:///p5b_fix.rb",
+      "\"a\".gsub!(\"b\", \"c\")\nrequire \"psych\"\n");
+    const diags = published.params.diagnostics;
+    const answer = await request(client, 71, "textDocument/codeAction", {
+      textDocument: { uri: "file:///p5b_fix.rb" },
+      range: diags[0].range,
+      context: { diagnostics: diags },
+    });
+    const fixes = answer.result;
+    assert.equal(fixes.length, 2);
+    assert.ok(fixes.every((a) => a.kind === "quickfix" && a.diagnostics.length === 1));
+
+    const dropBang = fixes.find((a) => a.title.includes("gsub"));
+    assert.match(dropBang.title, /Use String#gsub/);
+    assert.deepEqual(dropBang.edit.changes["file:///p5b_fix.rb"],
+      [{ range: { start: { line: 0, character: 8 }, end: { line: 0, character: 9 } }, newText: "" }]);
+
+    const dropRequire = fixes.find((a) => a.title.includes("Remove this require"));
+    const removed = dropRequire.edit.changes["file:///p5b_fix.rb"];
+    assert.equal(removed[0].newText, "");
+    assert.deepEqual(removed[0].range,
+      { start: { line: 1, character: 0 }, end: { line: 1, character: 15 } });
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("a quickfix drops the /o flag and the warning stops on the next save", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p5b_o.rb", "x = /foo/o\nputs x\n");
+    client.send({ jsonrpc: "2.0", method: "textDocument/didSave",
+      params: { textDocument: { uri: "file:///p5b_o.rb" } } });
+    const saved = await client.next();
+    const warning = saved.params.diagnostics.find((d) => d.code === "compile-warning");
+    // the warning spans its source line, so a caret inside the line pairs with it
+    assert.deepEqual(warning.range, { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } });
+
+    const answer = await request(client, 72, "textDocument/codeAction", {
+      textDocument: { uri: "file:///p5b_o.rb" },
+      range: { start: { line: 0, character: 6 }, end: { line: 0, character: 6 } },
+      context: { diagnostics: [warning] },
+    });
+    const fix = answer.result[0];
+    assert.match(fix.title, /Drop the \/o flag/);
+    assert.deepEqual(fix.edit.changes["file:///p5b_o.rb"],
+      [{ range: { start: { line: 0, character: 9 }, end: { line: 0, character: 10 } }, newText: "" }]);
+
+    // apply the fix client-side: the warning is gone on the next save
+    client.send({ jsonrpc: "2.0", method: "textDocument/didChange",
+      params: { textDocument: { uri: "file:///p5b_o.rb", version: 2 },
+        contentChanges: [{ text: "x = /foo/\nputs x\n" }] } });
+    await client.next(); // the edit's publish
+    client.send({ jsonrpc: "2.0", method: "textDocument/didSave",
+      params: { textDocument: { uri: "file:///p5b_o.rb" } } });
+    const resaved = await client.next();
+    assert.equal(resaved.params.diagnostics.filter((d) => d.code === "compile-warning").length, 0);
     client.send({ jsonrpc: "2.0", method: "exit" });
   });
 
