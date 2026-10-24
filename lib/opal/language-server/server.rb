@@ -104,6 +104,30 @@ module Opal
           with_document(id, params) { |d| RenameFeature.perform(@state, d, params["position"], params["newName"]) }
         when 'workspace/symbol'
           @transport.write(Result.new(id, WorkspaceSymbolFeature.perform(@state, params["query"] || "")))
+        when 'workspace/didChangeWatchedFiles'
+          # A watched file moved on disk (a git checkout, another editor):
+          # keep the live index in step. Open documents are skipped - the
+          # editor buffer is authoritative and didChange already re-indexed
+          # it (LSP.md §9 P6).
+          (params["changes"] || []).each do |event|
+            uri = event["uri"]
+            next unless uri&.start_with?("file://") && uri.end_with?(".rb")
+            next unless @store[uri].nil?
+            if event["type"] == 3 # Deleted
+              @state.index.remove_document(uri)
+            else # Created (1) or Changed (2)
+              @state.index_workspace_file(uri)
+            end
+          end
+        when 'textDocument/diagnostic'
+          # Pull diagnostics (3.17, LSP.md §9 P6): the same gates as the
+          # push pair, answered on demand; documents the server does not
+          # know report none.
+          document = @store[params.dig("textDocument", "uri")]
+          @transport.write(Result.new(id, {
+            "kind" => "full",
+            "items" => document.nil? ? [] : gate_diagnostics(document),
+          }))
         when 'textDocument/hover'
           with_document(id, params) { |d| HoverFeature.perform(@state, d, params["position"]) }
         when 'textDocument/signatureHelp'
@@ -186,6 +210,12 @@ module Opal
             "triggerCharacters" => [".", ":", "@", "\"", "'"],
           },
           "codeActionProvider" => { "codeActionKinds" => ["quickfix"] },
+          # Pull diagnostics (3.17): per-document only - the three gates
+          # are per-file, no cross-file claims (workspaceDiagnostics off).
+          "diagnosticProvider" => {
+            "interFileDependencies" => false,
+            "workspaceDiagnostics" => false,
+          },
           "semanticTokensProvider" => {
             "legend" => SemanticHighlightingFeature.legend,
             "full"   => true,
@@ -271,11 +301,15 @@ module Opal
       # broken syntax to the Compiler would only re-report the same error.
       def publish_compile_gate(document)
         return if document.syntax_error?
-        publish_diagnostics(
-          document,
-          document.diagnostics + OpalGateFeature.api_diagnostics(document) +
-            OpalGateFeature.compile_diagnostics(document),
-        )
+        publish_diagnostics(document, gate_diagnostics(document))
+      end
+
+      # All three gates for one document (push-on-save and pull share it):
+      # parse + API always, the Compiler pass only over parsing source.
+      def gate_diagnostics(document)
+        diags = document.diagnostics + OpalGateFeature.api_diagnostics(document)
+        diags += OpalGateFeature.compile_diagnostics(document) unless document.syntax_error?
+        diags
       end
 
       def publish_diagnostics(document, diagnostics)

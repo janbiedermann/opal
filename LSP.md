@@ -96,7 +96,7 @@ without dynamic registration):
 | Capability | Phase |
 |---|---|
 | `textDocumentSync` (incremental, openClose, save) | P1 |
-| `diagnosticProvider` (pull, 3.18) + `publishDiagnostics` (push fallback) | P1 push / P6 pull |
+| `diagnosticProvider` (pull, 3.18) ✅ P6 + `publishDiagnostics` (push fallback) ✅ P1 | P1 push / P6 pull |
 | `documentSymbolProvider`, `foldingRangeProvider`, `selectionRangeProvider`, `documentHighlightProvider`, `semanticTokensProvider` (full+range), `inlayHintProvider`, `onTypeFormattingProvider` | P2 |
 | `definitionProvider`, `referencesProvider`, `renameProvider` (+`prepareProvider`), `workspaceSymbolProvider` | P3 |
 | `hoverProvider` ✅, `signatureHelpProvider` (triggers `(`, `,`) ✅, `typeHierarchyProvider` ✅ | P4a |
@@ -527,10 +527,29 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   take `\d`, JS string literals still take `"\\"`); an assignment whose
   RHS starts with `#{...}` guarded by an x-string `if` silently swallows
   the following statement.
-- **P6 — 3.18 & robustness.** pull diagnostics (+push fallback),
-  `$/cancelRequest` end-to-end, workDoneProgress for indexing,
-  `workspace/didChangeWatchedFiles` incremental re-index, chunked indexing
-  budget.
+- **P6 — pull diagnostics & file watching. ✅ LANDED (2026-10-24).**
+  `textDocument/diagnostic` answers a full `DocumentDiagnosticReport`
+  running all three gates on demand (parse + API always, the Compiler
+  pass whenever the source parses) - the same `gate_diagnostics` the
+  save-time push uses, so pull and push never disagree. Unknown documents
+  answer `{kind:"full", items:[]}`. `diagnosticProvider` advertises
+  `interFileDependencies:false, workspaceDiagnostics:false` (the gates are
+  per-file claims; a closed-file workspace sweep would need the index to
+  carry diagnostics, it does not).
+  `workspace/didChangeWatchedFiles` re-indexes Created/Changed `.rb`
+  files from disk and removes Deleted ones (`GlobalState
+  #index_workspace_file` → `Index#index_source` replaces a file's live
+  records whole); open documents are skipped, the editor buffer wins.
+  Gotcha: the path decode is JS `#{uri}.slice(7)` - Ruby `uri.slice(7)`
+  answers a *single character* (like `[]`), which turned every watched
+  path into "/" until the probe read EISDIR.
+  *Deferred with reasons:* `$/cancelRequest` stays a no-op - dispatch is
+  single-threaded and synchronous, a request either finishes or has not
+  started, and the loop already ignores the notification. workDoneProgress
+  and a chunking budget sit behind the same fact: boot indexing is the
+  bake (synchronous, already paid at module init) plus at most 300
+  workspace files, measured fast enough that initialize returns inside
+  the client's patience; revisit if the workspace cap ever grows.
 - **P7 — deferred until the server works end-to-end.**
   formatter delegation: the server spawns an external CRuby formatter
   (`rubocop` with Layout cops only, or the `syntax_tree`/`st` CLI, or

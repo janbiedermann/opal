@@ -139,6 +139,7 @@ describe("the opal-language-server command", () => {
     // P5 gates: the compile gate needs save, the fixes advertise quickfixes
     assert.deepEqual(answer.result.capabilities.textDocumentSync.save, { includeText: false });
     assert.deepEqual(answer.result.capabilities.codeActionProvider, { codeActionKinds: ["quickfix"] });
+    assert.deepEqual(answer.result.capabilities.diagnosticProvider, { interFileDependencies: false, workspaceDiagnostics: false });
     client.send({ jsonrpc: "2.0", method: "initialized" });
     client.send({ jsonrpc: "2.0", method: "exit" });
     assert.equal(await client.exitCode(), 1); // exit without shutdown: status 1 per spec
@@ -796,6 +797,56 @@ describe("the opal-language-server command", () => {
     const resaved = await client.next();
     assert.equal(resaved.params.diagnostics.filter((d) => d.code === "compile-warning").length, 0);
     client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  // ---- P6: pull diagnostics and file-watcher re-indexing ----
+
+  test("textDocument/diagnostic answers all three gates on demand", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p6_pull.rb", "Thread.new { 1 }\nx = /a/o\nputs x\n");
+    const answer = await request(client, 80, "textDocument/diagnostic", { textDocument: { uri: "file:///p6_pull.rb" } });
+    assert.equal(answer.result.kind, "full");
+    const codes = answer.result.items.map((d) => d.code);
+    assert.ok(codes.includes("unsupported.thread")); // the API gate, no save needed
+    assert.ok(codes.includes("compile-warning"));    // the compile gate runs at pull time
+    assert.ok(answer.result.items.every((d) => d.source === "opal" && d.range != null));
+
+    const closed = await request(client, 81, "textDocument/diagnostic", { textDocument: { uri: "file:///p6_never.rb" } });
+    assert.deepEqual(closed.result, { kind: "full", items: [] });
+
+    await openDoc(client, "file:///p6_pull_bad.rb", "def foo(\n");
+    const bad = await request(client, 82, "textDocument/diagnostic", { textDocument: { uri: "file:///p6_pull_bad.rb" } });
+    assert.ok(bad.result.items.length > 0);
+    assert.ok(bad.result.items.every((d) => d.severity === 1)); // parse errors only, no compile pass
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("workspace/didChangeWatchedFiles keeps closed workspace files in the index", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opal-lsp-watch-"));
+    try {
+      const file = join(dir, "watched.rb");
+      writeFileSync(file, "class WatchedGem\n  def spin; end\nend\n");
+      const client = await handshake();
+      client.send({ jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles",
+        params: { changes: [{ uri: "file://" + file, type: 1 }] } }); // Created
+      const found = await request(client, 83, "workspace/symbol", { query: "WatchedGem" });
+      assert.deepEqual(found.result.map((s) => s.name), ["WatchedGem"]);
+
+      writeFileSync(file, "class RetweakedGem\nend\n");
+      client.send({ jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles",
+        params: { changes: [{ uri: "file://" + file, type: 2 }] } }); // Changed
+      const changed = await request(client, 84, "workspace/symbol", { query: "Gem" });
+      const gems = changed.result.map((s) => s.name).filter((n) => /Gem/.test(n));
+      assert.deepEqual(gems, ["RetweakedGem"]); // re-index replaced the records whole
+
+      client.send({ jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles",
+        params: { changes: [{ uri: "file://" + file, type: 3 }] } }); // Deleted
+      const gone = await request(client, 85, "workspace/symbol", { query: "Retweaked" });
+      assert.deepEqual(gone.result, []);
+      client.send({ jsonrpc: "2.0", method: "exit" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   after(() => {

@@ -98,6 +98,20 @@ module Opal
         @workspace_limit_hit
       end
 
+      # One workspace file from disk (workspace/didChangeWatchedFiles):
+      # index_source replaces its live records whole. Answers whether the
+      # file was readable (a Created event can race a file that is already
+      # gone again).
+      def index_workspace_file(uri)
+        return false unless uri&.start_with?("file://")
+        fs = `Opal.platform.modules.fs`
+        path = `decodeURIComponent(#{uri}.slice(7))`
+        source = `(() => { try { return String(#{fs}.readFileSync(String(#{path}), "utf8")); } catch (e) { return null; } })()`
+        return false if `source == null`
+        @index.index_source(uri, source)
+        true
+      end
+
       private
 
       # depth-bounded so a workspace never drags in node_modules-scale
