@@ -12,6 +12,7 @@ const vscode = require("vscode");
 const {
   LanguageClient,
   TransportKind,
+  Trace,
 } = require("vscode-languageclient/node");
 
 let client;
@@ -49,6 +50,7 @@ function activate(context) {
   if (formatter) {
     initializationOptions.formatter = formatter;
   }
+  const trace = config.get("trace") || "off";
 
   const clientOptions = {
     documentSelector: [{ scheme: "file", language: "ruby" }],
@@ -76,7 +78,28 @@ function activate(context) {
     serverOptions,
     clientOptions
   );
-  client.start();
+  // start() resolves only after the server's initialize reply, so the
+  // "connected" line is proof the server is up; failures land in the
+  // same output channel. trace=messages/verbose logs the JSON-RPC
+  // traffic client-side (no wire change; see client.js setTrace).
+  client.start().then(
+    () => {
+      client.outputChannel.appendLine(
+        "Connected: " + command + " --stdio (trace: " + trace + ")"
+      );
+      if (trace === "messages" || trace === "verbose") {
+        client.setTrace(trace === "messages" ? Trace.Messages : Trace.Verbose);
+      }
+    },
+    (err) => {
+      client.outputChannel.appendLine(
+        "Failed to start: " + (err && err.message ? err.message : err)
+      );
+      vscode.window.showErrorMessage(
+        'Opal Language Server failed to start; see Output > "Opal Language Server".'
+      );
+    }
+  );
   context.subscriptions.push({ dispose: () => client && client.stop() });
 }
 

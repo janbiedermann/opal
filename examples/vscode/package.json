@@ -42,6 +42,12 @@
           "type": "string",
           "default": "",
           "description": "Optional external formatter command (e.g. \"st --baseline\"); the server pipes the document to it and applies its stdout. Leave empty to advertise no formatter."
+        },
+        "opal.languageServer.trace": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Log the JSON-RPC traffic in the \"Opal Language Server\" output channel: messages lists the requests, verbose includes the full payloads."
         }
       }
     }

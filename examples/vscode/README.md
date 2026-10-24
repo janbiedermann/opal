@@ -27,11 +27,27 @@ node tasks/lsp.mjs          # produces exe/lsp in this checkout
    `opal.languageServer.opalHome` to it so "go to definition" into
    corelib lands in `opal/corelib/*.rb` instead of dumped copies.
 5. To watch the server's traffic: View > Output > "Opal Language
-   Server". The server's stderr lands in that channel too — the
-   `DEP0169 url.parse()` warning an F5 session prints in the Debug
-   Console comes from VS Code's own extension host
-   (microsoft/vscode#328548), not from exe/lsp: the bundle contains
-   no `require("url")` at all.
+   Server". The channel prints a "Connected: ..." line once the
+   server answers `initialize` (it also catches start-up failures).
+   Set `opal.languageServer.trace` to `messages` or `verbose` to see
+   every JSON-RPC request/response there. The server's stderr lands
+   in that channel too — the `DEP0169 url.parse()` warning an F5
+   session prints in the Debug Console comes from VS Code's own
+   extension host (microsoft/vscode#328548), not from exe/lsp: the
+   bundle contains no `require("url")` at all.
+
+## Verify it is really parsing
+
+- View > Output > "Opal Language Server" shows `Connected: <path> --stdio`.
+- Type `def foo` with no `end`: a red error squiggle appears while
+  typing (the parse gate runs on every keystroke). With trace on,
+  the `textDocument/didOpen` + `textDocument/didChange` requests and
+  the `textDocument/publishDiagnostics` notification scroll past.
+- `Ctrl+Shift+O` lists the file's classes/methods (document symbols);
+  `F12` jumps to a definition; `Thread.new { }` or `"a".gsub!`
+  produce unsupported-API warnings with quickfixes (`Ctrl+.`).
+- In a terminal: `pgrep -af "exe/lsp --stdio"` shows the server
+  process the extension spawned.
 
 To install it for real instead of F5: `npx @vscode/vsce package`
 (adjust the `publisher` first, vsce rejects the placeholder) and install
