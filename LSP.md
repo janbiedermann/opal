@@ -636,6 +636,13 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   latencies per corpus file against warm parseWithMetadata - the gate +
   live-index + framing overhead measures 9-17x over the parser alone
   (~0.5s per keystroke at 640KB), the baseline for shrinking it.
+- **P8 — port the server to JavaScript. Planned (2026-10-24).** The
+  benchmark says the parser (29ms warm at s5_639kb) is not the cost - the
+  other ~470ms of the keystroke is Opal Ruby walking the JS AST:
+  ParseResult wrapper ~75ms over raw parse, API gate ~123ms, live
+  re-index ~424ms, documentSymbol ~300ms. The compiler/parser precedent
+  (§0, §10.6: JS and POJO literals are the fast path here) plus the last
+  big Opal piece this replaces: the plan is §13.
 
 ## 10. Risks / spikes (first-week resolutions)
 
@@ -716,3 +723,148 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
    a first `baked_index.mjs` generation in all three record variants (§5) to
    settle §10.4 (size/boot) and the §10.6 POJO-vs-Map benchmark.
 4. Land P1 (documents + parse diagnostics) as the first reviewable PR.
+
+## 13. P8 — port the language server to JavaScript
+
+### Why
+
+`benchmark/parser/bench_lsp.mjs` (§9 P7d) measures 794KB of corpus: parse
+alone 39.5ms (warm `parseWithMetadata`), LSP keystroke path 653ms - a 16x
+multiplier that grows with size (8.9x at 201b, 17.2x at 640kb). The s5
+in-process stage breakdown: parse ~104ms (29ms of it the parser proper),
+API gate ~123ms, live re-index ~424ms, documentSymbol ~300ms. All of it
+except the parser itself is Opal Ruby walking a JS POJO tree through the
+`Node` wrapper (`raw`/`child`/`child_nodes` per node) and building Ruby
+Hashes for every response. The parser, the compiler, the bake payload and
+the converter (`convert.mjs`, §10.6 POJO benchmark) are already the JS
+fast path; the server is the last large Opal program in the toolchain.
+A plain-JS server also drops the opal boot from process start and cuts
+the bundle (the bake payloads stay either way).
+
+### Invariants (what must NOT change)
+
+- The protocol surface and behavior stay identical - the port is a
+  black-box swap. The 45-case `spec/lib/compiler/lsp_cli.test.mjs` suite
+  is the parity gate (it spawns the exe and speaks raw stdio frames).
+- `exe/lsp` stays ONE relocatable file (the bundle-shape case pins that
+  no checkout path is embedded); terser-minified like today.
+- `--check` mode: same output format (the test greps it) and exit codes.
+- `serverInfo.version` keeps its single source: the harness reads
+  `opal/corelib/version.mjs` (§0 Precondition A) and the JS server must
+  answer the same string ("opal-language-server X (Opal X)").
+- The baked payloads `baked_index.mjs` / `corelib_sources.mjs` are plain
+  JS already: byte-identical format, unchanged, and the staleness gate
+  `spec/lib/compiler/lsp_baked_index.test.mjs` (plain-node FNV digests)
+  must stay green without edits.
+- The VS Code extension (`examples/vscode/`) needs no change.
+
+### Layout and tooling during the port
+
+- JS modules live in `lib/opal/language-server/js/`, mirroring the .rb
+  names (`transport.mjs`, `server.mjs`, `document_symbol.mjs`, ...).
+  Ruby stays authoritative for the shipped exe until the flip commit.
+- Dev entry: run the ESM tree unbundled -
+  `node lib/opal/language-server/js/main.mjs --stdio` (no bundler until
+  P8e; bundling only matters for the committed exe).
+- Parity scoreboard: the harness gains `const LSP = process.env.LSP_EXE ||
+  join(OPAL_ROOT, "exe", "lsp")`; the `before` hook skips the Ruby build
+  when LSP_EXE is set; the bundle-shape and `--version` cases stay pinned
+  to the committed exe/lsp regardless. Then
+  `LSP_EXE=lib/opal/language-server/js/main.mjs node --test
+  spec/lib/compiler/lsp_cli.test.mjs`
+  reports X/45 per session; every porting commit must not lower X, and
+  its message records X.
+
+### Runtime contracts for the ported code
+
+- `parseWithMetadata(source)` (lib/opal/parser/index.mjs) is the only AST
+  source; every offset in the envelope is a UTF-16 code-unit index
+  (AGENTS) - LSP positions need no conversion.
+- POJO conventions, both verified while fixing P7c/P7d: fields are
+  snake_case (`name_loc`, `constant_path`, `child_nodes` derivable), and
+  `node.type` is the CamelCase string ("CallNode", "DefNode"). Locs are
+  `{start:, end:}` (or `{start: nil...}` variants); comments are raw
+  `{type, start, end}` offsets.
+- `js/parse_result.mjs` exposes the contract the current `ParseResult` +
+  `Node` wrapper provide together: `{source, envelope, lineStarts,
+  positionAt(off)->[l,c], offsetAt(l,c) clamped, rangeForLoc,
+  rangeForNode, syntaxError, diagnostics (errors severity 1 / warnings
+  severity 2, code = Prism diagnostic id, positions already LSP-shaped),
+  comments}`. Document keeps memoized `parse()`, `pushEdits(changes)`
+  (incremental, utf-16 arithmetic, clamp - port document.rb verbatim),
+  `needsParsing`.
+- Features become plain functions returning JSON-safe plain objects
+  (never boxed values): `perform(state, doc, params) -> POJO | array |
+  null`. `state` is GlobalState: `{index, baked, clientName, opalHome,
+  formatter}`.
+- No Opal semantics anywhere: only `null`, no nil boxing, no
+  Symbol-is-String; JSON.stringify for the wire; transport framing
+  unchanged including the fs.writeSync lesson (§9 P7d).
+
+### Ruby -> JS file map (~4.6k lines)
+
+| ruby (LOC) | js counterpart | phase |
+|---|---|---|
+| exe/lsp.rb (51) | js/main.mjs (CLI: --stdio/--check/--version) | P8a |
+| transport.rb (109) | js/transport.mjs (port the x-string bodies as-is) | P8a |
+| protocol.rb (117) | js/protocol.mjs (ErrorCodes + result/error/notification builders) | P8a |
+| store.rb (34) | js/store.mjs | P8a |
+| document.rb (85) + ruby_document.rb (46) | js/document.mjs | P8a |
+| prism/parser.rb (164) + prism/node.rb (175) | js/parse_result.mjs + js/node.mjs (thin helpers over POJOs) | P8a |
+| server.rb (336) | js/server.mjs (dispatch table verbatim) | P8a (lifecycle) |
+| check.rb (36) | js/check.mjs | P8a |
+| features/document_symbol.rb (159) | js/features/document_symbol.mjs (first vertical slice) | P8a |
+| indexer/declaration_listener.rb (243), index.rb (299), entry.rb (144), global_state.rb (150), file_resolver.rb (53) | js/indexer/*.mjs - live records become the SAME POJO shape as the baked ones (Record's hash-vs-POJO branch collapses; ruby_range disappears) | P8b |
+| features/navigation_target.rb (148), definition.rb (61), references.rb (46), rename.rb (68), workspace_symbol.rb (55), hover.rb (74), signature_help.rb (80), type_hierarchy.rb (79), completion.rb (213) | js/features/* | P8c |
+| features/folding_ranges.rb (137), selection_ranges.rb (35), document_highlight.rb (116), semantic_highlighting.rb (159), inlay_hints.rb (76), on_type_formatting.rb (161), code_actions.rb (339), formatting.rb (40), opal_gate.rb (250), syntax_tree.rb (21), compile_to_js.rb (22) | js/features/*; opal_gate's compile gate imports lib/opal/compiler directly (already JS) | P8d |
+| indexer/driver.rb (181) (the bake) | js/indexer/driver.mjs + rewire tasks/language-server/update_baked_index.mjs | P8e |
+| prism/dispatcher.rb (38) | dropped: JS features visit POJOs directly (a small `walk(node, enter)` helper at most) | P8e |
+
+### Phases and exit criteria
+
+- **P8a - core + first slice.** main/transport/protocol/store/document/
+  parse_result/node + server dispatch for handshake, document lifecycle,
+  push+pull parse-gate diagnostics, --check, --version, plus
+  documentSymbol. Exit: the handshake/sync/parse-diagnostic/documentSymbol/
+  big-frame/--check cases pass under LSP_EXE; scoreboard in the commit
+  message; repo suite untouched and green (Ruby exe still shipped).
+- **P8b - indexer.** DeclarationListener/Index/GlobalState/FileResolver in
+  JS with POJO records. Exit: scoreboard rises; corelib-navigation cases
+  (P3 tests incl. the opalHome/dump-HOME pair) pass once P8c lands, so
+  P8b's own gate is scoreboard + new plain-node unit checks for
+  Index queries if convenient.
+- **P8c - navigation.** the P8c feature rows above. Exit: every
+  navigation/rename/completion/hover case green under LSP_EXE.
+- **P8d - text features + gates.** the P8d rows. Exit: 45/45 under
+  LSP_EXE, including the code-action extracts, the API-gate cases
+  (Thread/Fiber/String#<</requires), compile-gate-on-save, formatting
+  delegation, the 2000-def big-frame case and the P7c half-typed-def clamp.
+- **P8e - flip.** tasks/lsp.mjs builds the single file from the JS tree
+  (static-import inliner + terser - the import style is controlled, so a
+  simple bundler is reliable); bundle-shape case green; bake driver
+  ported, staleness gate green without edits; delete every Ruby server
+  file (features/, prism/, indexer/, server, transport, protocol, store,
+  check, ruby_document, exe/lsp.rb); rewrite §3 (its premise "the server
+  is Ruby compiled by Opal" is reversed); update AGENTS.md; record the
+  new bench_lsp table.
+
+### Performance target
+
+s5_639kb keystroke 498ms -> <=150ms after the port (and <=70ms more with
+index-on-idle instead of index-on-keystroke, a follow-up); documentSymbol
+307ms -> <=60ms; initialize/boot down by the opal removal.
+
+### Parity traps to carry
+
+- logMessage summary lines shift the publish/response sequence some
+  cases assert on (the "N workspace files indexed" placement).
+- P3 corelib-dump tests drive HOME; workspace indexing caps at 300 files
+  and the summary string says "(limit hit)".
+- didChangeWatchedFiles skips open documents; Deleted removes index entries.
+- JSON object key order is free; arrays are not.
+- The on-type-formatting feature branches on `@state.client_name`
+  (VS Code quirks) - port the string checks verbatim.
+- Code-action kinds match dot-prefixed prefixes with the `only` filter;
+  extract-method refuses return/break/next/super, keyword params, block
+  params and foreign defs - keep the refusal matrix byte-for-byte (cases
+  pin it).
