@@ -14,19 +14,24 @@ require 'opal/language-server/features/inlay_hints'
 require 'opal/language-server/features/on_type_formatting'
 require 'opal/language-server/features/syntax_tree'
 require 'opal/language-server/features/compile_to_js'
+require 'opal/language-server/features/navigation_target'
+require 'opal/language-server/features/definition'
+require 'opal/language-server/features/references'
+require 'opal/language-server/features/rename'
+require 'opal/language-server/features/workspace_symbol'
+require 'opal/language-server/indexer/global_state'
 
 module Opal
   module LanguageServer
     class Server
-      attr_reader :transport, :store
+      attr_reader :transport, :store, :state
 
       def initialize(transport = Transport.new)
         @transport = transport
         @store = Store.new
         @stopped = false
         @shutdown = false
-        @client_capabilities = {}
-        @client_name = ""
+        @state = GlobalState.new
       end
 
       # Read messages until the client closes stdin or asks to exit.
@@ -74,11 +79,24 @@ module Opal
         when 'textDocument/inlayHint'
           with_document(id, params) { |d| InlayHintsFeature.perform(d, params["range"]) }
         when 'textDocument/onTypeFormatting'
-          with_document(id, params) { |d| OnTypeFormattingFeature.perform(d, params, @client_name) }
+          with_document(id, params) { |d| OnTypeFormattingFeature.perform(d, params, @state.client_name) }
         when 'opalLsp/showSyntaxTree'
           with_document(id, params) { |d| SyntaxTreeFeature.perform(d) }
         when 'opalLsp/compileToJs'
           with_document(id, params) { |d| CompileToJsFeature.perform(d) }
+        when 'textDocument/definition'
+          with_document(id, params) { |d| DefinitionFeature.perform(@state, d, params["position"]) }
+        when 'textDocument/references'
+          with_document(id, params) do |d|
+            include_decl = (params["context"] || {})["includeDeclaration"]
+            ReferencesFeature.perform(@state, d, params["position"], include_decl != false)
+          end
+        when 'textDocument/prepareRename'
+          with_document(id, params) { |d| RenameFeature.prepare(@state, d, params["position"]) }
+        when 'textDocument/rename'
+          with_document(id, params) { |d| RenameFeature.perform(@state, d, params["position"], params["newName"]) }
+        when 'workspace/symbol'
+          @transport.write(Result.new(id, WorkspaceSymbolFeature.perform(@state, params["query"] || "")))
         when 'shutdown'
           @shutdown = true
           @transport.write(Result.new(id, nil))
@@ -113,8 +131,9 @@ module Opal
       end
 
       def run_initialize(_id, params)
-        @client_capabilities = params ? (params["capabilities"] || {}) : {}
-        @client_name = params ? ((params["clientInfo"] || {})["name"] || "") : ""
+        params ||= {}
+        summary = @state.client_initialized(params)
+        log(3, "opal-language-server: #{summary}") unless summary.empty?
 
         # P2 capabilities: incremental sync, push diagnostics (the 3.17
         # shape), and the AST features. Pull diagnostics
@@ -132,6 +151,10 @@ module Opal
           "foldingRangeProvider"   => true,
           "selectionRangeProvider" => true,
           "documentHighlightProvider" => true,
+          "definitionProvider" => true,
+          "referencesProvider" => true,
+          "renameProvider" => { "prepareProvider" => true },
+          "workspaceSymbolProvider" => true,
           "semanticTokensProvider" => {
             "legend" => SemanticHighlightingFeature.legend,
             "full"   => true,
@@ -176,6 +199,7 @@ module Opal
         )
         @store.set(document)
         publish_parse_gate(document)
+        index_document(document)
       end
 
       def change_document(params)
@@ -184,6 +208,24 @@ module Opal
         document.version = params["textDocument"]["version"] if params.dig("textDocument", "version")
         document.push_edits(params["contentChanges"] || [])
         publish_parse_gate(document)
+        index_document(document)
+      end
+
+      # The live index entry for an open document (P3): didChange replaces
+      # it whole, so stale records never answer a definition. A closed
+      # document keeps its records - the file on disk still exists, and the
+      # workspace index would re-add them anyway.
+      def index_document(document)
+        @state.index.index_document(document)
+      rescue StandardError => e
+        # Navigation must never take the parse gate down with it.
+        log(2, "indexing failed for #{document.uri}: #{e.class}: #{e.message}")
+      end
+
+      # window/logMessage: severity 1=error 2=warning 3=info 4=log.
+      def log(severity, message)
+        @transport.write(Notification.new("window/logMessage",
+                                          { "type" => severity, "message" => message }))
       end
 
       # The parse gate on every edit (LSP.md §9 P1: the compile gate waits

@@ -80,6 +80,31 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   methods: never send them Ruby messages, test them in JS; `Node#raw`
   turns missing fields into Opal `nil`, and `Opal.nil == null` is false,
   so guard with `=== nil` (an `== null` guard silently never fires there).
+- The language server's corelib/stdlib index (LSP.md §5) is baked at exe
+  BUILD time: `node tasks/language-server/update_baked_index.mjs` runs a
+  driver bundle that regenerates the two committed generated modules
+  `lib/opal/language-server/baked_index.mjs` and `corelib_sources.mjs` —
+  re-run it (and commit) after changing corelib/stdlib sources or the
+  DeclarationListener. `spec/lib/compiler/lsp_baked_index.test.mjs` is the
+  staleness gate: it recomputes the bake's FNV-1a digests over the live
+  tree in plain node (no Opal build). The baked payload's POJOs/JS arrays
+  answer **no Ruby methods at all** — not `.nil?`, not `.is_a?`, not `[]`
+  — and stdlib `json.rb` sends `#to_json` to every response value, so
+  features guard presence with `x == null || x === nil` in JS, test shape
+  with `x.$$is_hash === true`, and copy POJO ranges to Ruby hashes
+  (`Record.ruby_range`) before answering. §10.6 settled the shape by
+  benchmark (`tasks/language-server/bench_index.mjs`): POJO literals boot
+  1.7-2.8x faster than either Map construction; keep it.
+- More x-string traps, each costing a debugging cycle: a **multiline**
+  backtick body splices as a *statement* (in a method tail or assignment
+  the value is silently dropped — `digest` returned undefined this way);
+  only a **single-line** backtick splices as an expression, so multiline
+  expression x-strings must be a single-line `` `(() => {...})()` `` or a
+  `%x{}` whose body ends with an explicit `return`. Inside `#{}` in an
+  x-string the text is **Ruby**: naming a body-local JS variable there
+  parses as a method call (`undefined method 'path'`). And node's fs
+  rejects *any* Ruby-built path string — both interpolation and `String#+`
+  box (`typeof` says object) — wrap them as `String(#{x})` inside the JS.
 - `tmp/` is gitignored scratch space. Some of it is created by the tasks:
   `tmp/performance` (tasks/performance.mjs clones the Asciidoctor checkouts
   and writes asciidoctor_test.rb and asciidoctor_test.js there),

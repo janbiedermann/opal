@@ -5,7 +5,7 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
@@ -22,10 +22,14 @@ function frame(object) {
 }
 
 // Spawns exe/lsp and parses its framed stdout into messages; next()
-// answers the next message in order.
+// answers the next message in order. opts.env augments the child's
+// environment (P3 tests give it another HOME for the corelib dump).
 const servers = [];
-function startServer() {
-  const child = spawn(process.execPath, [LSP], { stdio: ["pipe", "pipe", "pipe"] });
+function startServer(opts = {}) {
+  const child = spawn(process.execPath, [LSP], {
+    stdio: ["pipe", "pipe", "pipe"],
+    env: opts.env ? { ...process.env, ...opts.env } : process.env,
+  });
   servers.push(child);
   const queue = [];
   const waiters = [];
@@ -76,9 +80,16 @@ const INITIALIZE = {
 };
 
 // initialize -> initialized, the handshake every client starts with.
-async function handshake() {
-  const client = startServer();
-  client.send(INITIALIZE);
+// opts.initializationOptions and opts.env go through to the child (P3).
+async function handshake(opts = {}) {
+  const client = startServer(opts);
+  client.send({
+    ...INITIALIZE,
+    params: {
+      ...INITIALIZE.params,
+      ...(opts.initializationOptions ? { initializationOptions: opts.initializationOptions } : {}),
+    },
+  });
   const answer = await client.next();
   assert.equal(answer.id, 1);
   client.send({ jsonrpc: "2.0", method: "initialized" });
@@ -114,6 +125,11 @@ describe("the opal-language-server command", () => {
     assert.equal(answer.result.capabilities.documentSymbolProvider, true);
     assert.equal(answer.result.capabilities.foldingRangeProvider, true);
     assert.equal(answer.result.capabilities.selectionRangeProvider, true);
+    // P3 navigation features are advertised
+    assert.equal(answer.result.capabilities.definitionProvider, true);
+    assert.equal(answer.result.capabilities.referencesProvider, true);
+    assert.deepEqual(answer.result.capabilities.renameProvider, { prepareProvider: true });
+    assert.equal(answer.result.capabilities.workspaceSymbolProvider, true);
     client.send({ jsonrpc: "2.0", method: "initialized" });
     client.send({ jsonrpc: "2.0", method: "exit" });
     assert.equal(await client.exitCode(), 1); // exit without shutdown: status 1 per spec
@@ -448,6 +464,120 @@ describe("the opal-language-server command", () => {
     const bad = await request(client, 30, "opalLsp/compileToJs", { textDocument: { uri: "file:///bad.rb" } });
     assert.match(bad.result.error.message, /expected a `\)`/);
     client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  // ---- P3: the index and its navigation features ----
+
+  test("definition follows a constant to corelib in the checkout", async () => {
+    const client = await handshake({ initializationOptions: { opalHome: OPAL_ROOT } });
+    await openDoc(client, "file:///p3_const.rb", "String\n");
+    const answer = await request(client, 31, "textDocument/definition", {
+      textDocument: { uri: "file:///p3_const.rb" },
+      position: { line: 0, character: 2 },
+    });
+    // String reopens across corelib and stdlib; the primary declaration is
+    // the `class String` line, its *name* segment as the definition range.
+    const primary = answer.result.find((l) => l.uri.endsWith("/opal/corelib/string.rb"));
+    assert.ok(primary, "one definition lands in corelib/string.rb");
+    assert.deepEqual([primary.range.start.line, primary.range.start.character], [39, 6]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("F12 on a literal receiver's method reaches the corelib definition", async () => {
+    const client = await handshake({ initializationOptions: { opalHome: OPAL_ROOT } });
+    await openDoc(client, "file:///p3_gsub.rb", '"a".gsub("b", "c")\n');
+    const answer = await request(client, 32, "textDocument/definition", {
+      textDocument: { uri: "file:///p3_gsub.rb" },
+      position: { line: 0, character: 4 }, // inside the gsub message
+    });
+    // the LSP.md §2 heuristic: a String literal receiver resolves against
+    // String and its ancestors, no type inference - the P3 exit criterion
+    assert.equal(answer.result.length, 1);
+    assert.ok(answer.result[0].uri.endsWith("/opal/corelib/string.rb"));
+    assert.equal(answer.result[0].range.start.line, 1663); // def gsub
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("cross-document methods: definition, references and rename share one index", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p3_def.rb", "class Widget\n  def self.spin\n    1\n  end\nend\n");
+    await openDoc(client, "file:///p3_call.rb", "Widget.spin\n");
+
+    const def = await request(client, 33, "textDocument/definition", {
+      textDocument: { uri: "file:///p3_call.rb" },
+      position: { line: 0, character: 8 },
+    });
+    assert.equal(def.result.length, 1);
+    assert.equal(def.result[0].uri, "file:///p3_def.rb");
+    assert.deepEqual([def.result[0].range.start.line, def.result[0].range.start.character], [1, 11]);
+
+    const refs = await request(client, 34, "textDocument/references", {
+      textDocument: { uri: "file:///p3_call.rb" },
+      position: { line: 0, character: 8 },
+      context: { includeDeclaration: true },
+    });
+    // the call site (a live method-reference record) + the declaration
+    const sites = refs.result.map((l) => `${l.uri}:${l.range.start.line}:${l.range.start.character}`).sort();
+    assert.deepEqual(sites, ["file:///p3_call.rb:0:7", "file:///p3_def.rb:1:11"]);
+
+    const prepared = await request(client, 35, "textDocument/prepareRename", {
+      textDocument: { uri: "file:///p3_def.rb" },
+      position: { line: 1, character: 12 },
+    });
+    assert.equal(prepared.result.placeholder, "spin");
+
+    const renamed = await request(client, 36, "textDocument/rename", {
+      textDocument: { uri: "file:///p3_def.rb" },
+      position: { line: 1, character: 12 },
+      newName: "twirl",
+    });
+    assert.deepEqual(Object.keys(renamed.result.changes).sort(), ["file:///p3_call.rb", "file:///p3_def.rb"]);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("workspace/symbol finds baked modules by substring", async () => {
+    const client = await handshake();
+    // "compa" (not "compat": the needle must really substring "Comparable",
+    // whose fifth letter is an r) also hits Encoding::CompatibilityError and
+    // Encoding.compatible? - the index is a name search, not an exact match
+    const answer = await request(client, 37, "workspace/symbol", { query: "compa" });
+    const hit = answer.result.find((s) => s.name === "Comparable");
+    assert.ok(hit, "Comparable answers the substring");
+    assert.equal(hit.kind, 2); // SymbolKind.Module
+    assert.ok(hit.location.uri.endsWith("/opal/corelib/comparable.rb"));
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("prepareRename refuses a position with no renameable name", async () => {
+    const client = await handshake();
+    await openDoc(client, "file:///p3_lit.rb", 'x = "text"\n');
+    const answer = await request(client, 38, "textDocument/prepareRename", {
+      textDocument: { uri: "file:///p3_lit.rb" },
+      position: { line: 0, character: 5 }, // inside the string literal
+    });
+    assert.equal(answer.result, null);
+    client.send({ jsonrpc: "2.0", method: "exit" });
+  });
+
+  test("without opalHome, corelib navigation opens a dumped copy of the source", async () => {
+    const home = mkdtempSync(join(tmpdir(), "opal-lsp-home-"));
+    try {
+      const client = await handshake({ env: { HOME: home } });
+      await openDoc(client, "file:///p3_dump.rb", "String\n");
+      const answer = await request(client, 39, "textDocument/definition", {
+        textDocument: { uri: "file:///p3_dump.rb" },
+        position: { line: 0, character: 2 },
+      });
+      const dumped = answer.result.find((l) => l.uri.includes("/.cache/opal-lsp/sources/"));
+      assert.ok(dumped, "the definition points at the cache dump");
+      const onDisk = join(home, ".cache/opal-lsp/sources/opal/corelib/string.rb");
+      assert.ok(existsSync(onDisk), "the dumped file exists for the editor to open");
+      // corelib declares it as `class ::String < `String`` (the JS bridge)
+      assert.match(readFileSync(onDisk, "utf8"), /^class ::String/m);
+      client.send({ jsonrpc: "2.0", method: "exit" });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   after(() => {

@@ -120,6 +120,12 @@ module Opal
         Node.new(pojo, @parse_result)
       end
 
+      # Is a field absent (null/undefined)? A POJO answers no Ruby methods,
+      # so the test happens in JS and answers a real JS boolean.
+      def absent?(field)
+        `#{@node}[#{field}] == null`
+      end
+
       # A child-array field as Nodes (empty when absent), source order.
       def children(field)
         pojos = `#{@node}[#{field}] || []`

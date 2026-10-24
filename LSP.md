@@ -284,7 +284,9 @@ built, and it travels inside the executable in ready-to-use form.
     evaluation, terser minifies the whole bundle around it. Startup cost:
     one V8 parse of the literal — no JSON step, no Marshal format, no
     constructors, no hydration.
-  - **POJO vs Map — decide by measurement (P3 spike).** Entries are read
+  - **POJO vs Map — RESOLVED by measurement: POJO ships (§10.6 result: boot
+    66.9ms vs 111.9 vs 184.3; the Map forms win only a chained-`get` micro
+    loop).** Entries are read
     through one accessor module (`indexer/entry.rb`), so the underlying
     shape is a swappable detail:
     - *POJO* (object/array/string literals, the prism/node.rb idiom): truly
@@ -442,14 +444,30 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   fields to **Opal nil** (so `x == null` never matches - use `x === nil`),
   and any file whose backticks *compile* needs `# backtick_javascript:
   true` or they compile to shell calls. No indexer yet.
-- **P3 — index.** the generator (`indexer/driver.rb` +
-  `tasks/language-server/update_baked_index.mjs`) producing
-  `baked_index.mjs`/`corelib_sources.mjs`; the record-based Index
-  (POJO vs Map settled by the §10.6 benchmark); workspace file indexing;
-  definition, references, rename/prepareRename,
-  workspaceSymbol. Exit criteria: F12 on `String#gsub` lands in the checkout
-  (opalHome) or the on-demand-dumped source, with no corelib indexing at
-  startup; rename across files.
+- **P3 — index. ✅ LANDED (2026-10-24).** The generator
+  (`indexer/driver.rb` + `tasks/language-server/update_baked_index.mjs`)
+  bakes 188 corelib/stdlib files into the two committed modules (1.7MB index +
+  1.7MB sources; exe/lsp grows 1.46MB → 4.8MB); the §10.6 benchmark settled on
+  the **POJO** shape (§10.6 result below). The record accessor is
+  `indexer/entry.rb` `Record` (branches per record: baked POJOs, live Ruby
+  Hashes; baked records take **no Ruby sends at all** — every presence test
+  is `x == null || x === nil` in JS, and ranges must be copied to Ruby hashes
+  (`Record.ruby_range`) before json.rb encodes them). `Index` reads baked +
+  live stores, linearizes Opal's real ancestors (Object gains Kernel, bare
+  classes get Object); live records shadow baked ones. GlobalState: baked
+  load, opalHome digest-staleness re-index (FNV-1a hex + length, same
+  function on both sides), workspaceFolders indexing (≤300 files);
+  didOpen/didChange re-index. Features: definition (nesting-aware constants;
+  literal-receiver/`Klass.new.m`/constant-receiver method typing),
+  references, prepareRename/rename (live scope edited; baked never),
+  workspaceSymbol. File keys: baked = checkout-relative, live = uri;
+  `FileResolver` maps via opalHome or dumps the one file to
+  `~/.cache/opal-lsp/sources/` on demand. Freshness gate:
+  `spec/lib/compiler/lsp_baked_index.test.mjs` recomputes the digests over
+  the live tree (~ms, no Opal build) — edit corelib, forget the bake, the
+  suite fails. Exit criteria met: F12 on `"a".gsub` lands in
+  `opal/corelib/string.rb:1663` (opalHome) or the dumped copy; rename
+  crosses documents. lsp_cli suite: 26 cases.
 - **P4 — hover/completion/signature help/type hierarchy**, completion
   resolve (docs from index entries), require-path completion against the
   real stdlib set.
@@ -513,6 +531,16 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
    (Opal's `Hash` is Map-backed); the POJO variant trades backtick field
    accessors for hidden-class fast property reads. Ship the winner; swap
    is one file.
+   **Result (2026-10-24): POJO.** `tasks/language-server/bench_index.mjs`
+   on the real 1.7MB payload (variants emitted by the bake task): boot in
+   fresh processes 66.9ms (pojo) / 111.9ms (pair-arrays) / 184.3ms
+   (.set-chain), RSS 122/142/158MB; a workspaceSymbol-style sweep of all
+   280 modules' method keys ~0.0/0.1/0.1ms. Only the hand-microscopied
+   five-deep resolve chain favored Map (69-77ns vs 93ns — megamorphic
+   property reads vs monomorphic `Map.get`), which no request runs more
+   than a few hundred times. Boot cost repeats at every server start and
+   the POJO graph is also what terser shrinks best; the accessor module
+   keeps the decision reversible.
 7. **Hover comments**: corelib/stdlib comments are baked into the records at
    generation time — nothing re-parsed at run time. For workspace files,
    ruby-lsp's lazy `Entry#comments` re-parse (`Prism.parse_file_comments`
