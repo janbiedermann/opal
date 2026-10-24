@@ -1,11 +1,15 @@
 // LSP ingest latency vs the raw parser, on the same corpus files.
 //
-// The parser benchmark (bench_parser.mjs) times parseWithMetadata warm and
-// in-process. This times what exe/lsp costs for the same files at the two
-// moments a user feels: opening a file (didOpen -> publishDiagnostics) and
+// The parser benchmark (bench_parser.mjs) times what parseWithMetadata costs
+// warm and in-process. This times what exe/lsp costs for the same files at
+// the moments a user feels: opening a file (didOpen -> publishDiagnostics),
 // typing a keystroke (didChange -> publishDiagnostics: push_edits, parse,
-// parse+API gates, live re-index, publish), plus a feature request
-// (documentSymbol) answered from the parse the gate just left warm.
+// parse+API gates, publish - the live re-index runs at the next
+// index-reading request instead, index-on-idle), a feature request that
+// needs no index (documentSymbol, answered from the parse the gate just
+// left warm) and the navigation pair: the first definition after an edit
+// (which pays the index catch-up) and its immediate repeat (warm: the
+// catch-up cost is once per burst, not per keystroke).
 //
 // Methodology mirrors bench_parser.mjs: warm iterations, median of samples,
 // fewer samples for big files. One shared server, files opened one at a
@@ -104,10 +108,10 @@ async function main() {
 
   const files = readdirSync(CORPUS).filter((f) => f.endsWith(".rb")).sort();
   console.log(
-    "| file | bytes | parse_ms | open_ms | keystroke_ms | keystroke/parse | symbols_ms |",
+    "| file | bytes | parse_ms | open_ms | keystroke_ms | keystroke/parse | symbols_ms | navcold_ms | navwarm_ms |",
   );
-  console.log("|---|---:|---:|---:|---:|---:|---:|");
-  const totals = { bytes: 0, parse: 0, open: 0, keystroke: 0, symbols: 0 };
+  console.log("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+  const totals = { bytes: 0, parse: 0, open: 0, keystroke: 0, symbols: 0, navCold: 0, navWarm: 0 };
 
   for (const f of files) {
     console.error(`[bench] ${f}`);
@@ -167,18 +171,48 @@ async function main() {
       rootCount = (a.result || []).length;
     }
 
+    // Navigate: the first index-reading request after the last edit pays
+    // the index catch-up (index-on-idle moved it off the keystroke path,
+    // LSP.md §13 follow-up); the immediate second request shows the work
+    // happens once per burst, not per keystroke. The position needs no
+    // resolvable target - the catch-up runs at dispatch, before locate.
+    const navRuns = big ? 3 : 7;
+    const navCold = [], navWarm = [];
+    for (let i = 0; i < navRuns; i++) {
+      const insert = i % 2 === 0;
+      await sendAwaitPublish({
+        jsonrpc: "2.0", method: "textDocument/didChange",
+        params: {
+          textDocument: { uri, version: version++ },
+          contentChanges: [insert
+            ? { range: { start: { line: 4, character: 0 }, end: { line: 4, character: 0 } }, text: "  " }
+            : { range: { start: { line: 4, character: 0 }, end: { line: 4, character: 2 } }, text: "" }],
+        },
+      }, uri);
+      const s1 = performance.now();
+      await request("textDocument/definition", { textDocument: { uri }, position: { line: 4, character: 0 } });
+      navCold.push(performance.now() - s1);
+      const s2 = performance.now();
+      await request("textDocument/definition", { textDocument: { uri }, position: { line: 4, character: 0 } });
+      navWarm.push(performance.now() - s2);
+    }
+
     const openMs = med(opens), keyMs = med(edits), symMs = med(syms);
+    const navColdMs = med(navCold), navWarmMs = med(navWarm);
     console.log(
       `| ${f.replace(/^\d+_/, "")} | ${bytes} | ${parseMs.toFixed(2)} | ${openMs.toFixed(2)} | ` +
-      `${keyMs.toFixed(2)} | ${(keyMs / parseMs).toFixed(1)}x (${rootCount} roots) | ${symMs.toFixed(2)} |`,
+      `${keyMs.toFixed(2)} | ${(keyMs / parseMs).toFixed(1)}x (${rootCount} roots) | ${symMs.toFixed(2)} | ` +
+      `${navColdMs.toFixed(2)} | ${navWarmMs.toFixed(2)} |`,
     );
     totals.bytes += bytes; totals.parse += parseMs; totals.open += openMs;
     totals.keystroke += keyMs; totals.symbols += symMs;
+    totals.navCold += navColdMs; totals.navWarm += navWarmMs;
   }
 
   console.log(
     `| **total** | ${totals.bytes} | ${totals.parse.toFixed(1)} | ${totals.open.toFixed(1)} | ` +
-    `${totals.keystroke.toFixed(1)} | ${(totals.keystroke / totals.parse).toFixed(1)}x | ${totals.symbols.toFixed(1)} |`,
+    `${totals.keystroke.toFixed(1)} | ${(totals.keystroke / totals.parse).toFixed(1)}x | ${totals.symbols.toFixed(1)} | ` +
+    `${totals.navCold.toFixed(1)} | ${totals.navWarm.toFixed(1)} |`,
   );
   proc.kill();
 }

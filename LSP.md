@@ -632,6 +632,19 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   maps and method buckets (null-prototype maps + `Object.hasOwn` reads),
   the entry's shebang parses inside the module bodies, and terser drops
   `console.*` from the bundle.
+- **P8 follow-up - index-on-idle. LANDED (2026-10-24).** didOpen/didChange
+  no longer re-index (the re-index was the keystroke's biggest stage after
+  the parse, ~17ms at s5); `Index#stale` compares the listener's ParseResult
+  identity, and `Server#catchUpIndex` replaces stale documents' records
+  whole before every index-reading request (a dispatch-level `INDEX_READERS`
+  set - the text features and the gates never pay it) and on didClose (the
+  closed document's records keep the final buffer state, as the eager
+  server left them). Black-box parity holds (45/45 untouched): one sync
+  loop, no reader can observe the stale window. bench_lsp gains the
+  navigation pair (`navcold_ms`/`navwarm_ms`): keystroke 60.5-63.4 ->
+  46.6-47.0ms at s5 (-25%), ratio 2.0x -> 1.6x; navcold pays the one
+  re-index (~13ms), navwarm is 0.1ms - once per typing burst, and if the
+  burst is never navigated the work never runs on the hot path.
 
 ## 10. Risks / spikes (first-week resolutions)
 
@@ -854,6 +867,19 @@ the bundle (the bake payloads stay either way).
 s5_639kb keystroke 498ms -> <=150ms after the port (and <=70ms more with
 index-on-idle instead of index-on-keystroke, a follow-up); documentSymbol
 307ms -> <=60ms; initialize/boot down by the opal removal.
+
+**Both met at the flip (57.7 / 14.6ms), and the follow-up landed:**
+index-on-idle moved the live re-index off didOpen/didChange - any
+index-reading request (and didClose, so closed documents keep their
+final records) first runs `Server#catchUpIndex`, replacing each stale
+document's listener whole. The stale window is unobservable (one
+synchronous dispatch loop; the catch-up precedes every index read), so
+the parity suite is untouched at 45/45. bench_lsp (paired old/new runs,
+min): keystroke 60.5-63.4 -> 46.6-47.0ms at s5 (-25%; total 81 -> 64),
+ratio 2.0x -> 1.6x; the shifted cost shows as the navigation pair: the
+first definition after an edit pays the one re-index (~13ms, exactly
+what the old server spent per key in the didChange queue tail), its
+immediate repeat is warm at 0.1ms - once per burst, not per keystroke.
 
 ### Parity traps to carry
 
