@@ -2113,7 +2113,6 @@ class Gem::Specification < Gem::BasicSpecification
   # probably want to build_extensions
 
   def missing_extensions?
-    return false if RUBY_ENGINE == "jruby"
     return false if extensions.empty?
     return false if default_gem?
     return false if File.exist? gem_build_complete_path
