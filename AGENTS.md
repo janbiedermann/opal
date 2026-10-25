@@ -8,8 +8,9 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
 
 
 ## Setup
-- Run `npm run setup` once after cloning to install the git submodules and the
-  npm packages.
+- Run `npm run setup` once after cloning to install the git submodules and
+  the npm packages, then build the `exe/*` bundles and executables (the
+  `.exe` steps need nvm's Node 26 and exit 69 without it).
 
 ## Directory overview
 - `lib/opal/` holds the toolchain, written in JavaScript (`.mjs`):
