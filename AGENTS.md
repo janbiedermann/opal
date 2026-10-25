@@ -60,7 +60,10 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   semicolon rule after the commit) and the tasks, then builds the corelib
   and stdlib and lints the result.
 - After editing `lib/opal/parser/parts/*.mjs`, regenerate `parser.mjs` with
-  `node tasks/parser/assemble.mjs`.
+  `node tasks/parser/assemble.mjs` (`node tasks/build-parser.mjs
+  --config=<prism>/config.yml` runs all three parser generators; the npm
+  scripts are `parser-assemble`, `parser-gen-converter`,
+  `parser-gen-field-order` and `build-parser`).
 - The Ruby code style is described by `.rubocop.yml`; checking it needs a Ruby
   with `rubocop` and `rubocop-performance` (optional).
 

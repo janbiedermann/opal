@@ -199,6 +199,12 @@ node tasks/parser/assemble.mjs           # (re)writes lib/opal/parser/parser.mjs
 node tasks/parser/assemble.mjs --check   # verifies it's up to date without writing (part of tasks/lint.mjs)
 ```
 
+The whole set can also be run through package.json: `npm run parser-assemble`,
+`npm run parser-gen-converter`, `npm run parser-gen-field-order`, or all
+three at once with `npm run build-parser` (`node tasks/build-parser.mjs
+--config=<path>`; pass extra flags after `--`, e.g. `npm run build-parser --
+--check --config=<path>`).
+
 `lib/opal/parser/field_order.mjs` and `lib/opal/parser/convert.mjs` are
 generated from Prism's `config.yml` by `tasks/parser/gen_field_order.mjs
 --config=<path>` and `tasks/parser/gen_convert.mjs --config=<path>` (Prism

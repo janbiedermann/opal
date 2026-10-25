@@ -28,7 +28,10 @@
     "build-bundler-exe": "node tasks/bundler_exe.mjs",
     "build-lsp": "node tasks/lsp.mjs",
     "build-lsp-exe": "node tasks/lsp_exe.mjs",
-    "parser:assemble": "node tasks/parser/assemble.mjs"
+    "build-parser": "node tasks/build-parser.mjs",
+    "parser-assemble": "node tasks/parser/assemble.mjs",
+    "parser-gen-converter": "node tasks/parser/gen_convert.mjs",
+    "parser-gen-field-order": "node tasks/parser/gen_field_order.mjs"
   },
   "dependencies": {
     "benchmark": "^2.1.4",
