@@ -6,6 +6,11 @@
 # and never evaluates it, so defining it there is inert.
 JAVASCRIPT_IO_MODULE="nodejs"
 require "asciidoctor"
+# asciidoctor's BOM probe calls String#unpack("C3"); opal/mini keeps unpack
+# lazy (only opal/full eager-loads it) and the old asciidoctor.js pin patched
+# that exact call away, so the probe must name the lazy feature itself.
+# The guard is folded away at compile time, but must not run under CRuby.
+require "corelib/string/unpack" if RUBY_ENGINE == "opal"
 data = DATA.read
 100.times { Asciidoctor.convert(data) }
 puts Asciidoctor.convert(data)
