@@ -1,5 +1,5 @@
 // The freshness gate for the two committed generated modules of P3
-// (LSP.md §5): lib/opal/language-server/baked_index.mjs and
+// (LSP.md §5): lib/opal/language/baked_index.mjs and
 // corelib_sources.mjs. They are rebuilt by
 // node tasks/language-server/update_baked_index.mjs; this spec catches a
 // checkout where corelib/stdlib changed but the bake was not re-run, in
@@ -11,8 +11,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
-const INDEX = (await import(join(OPAL_ROOT, "lib/opal/language-server/baked_index.mjs"))).default;
-const SOURCES = (await import(join(OPAL_ROOT, "lib/opal/language-server/corelib_sources.mjs"))).default;
+const INDEX = (await import(join(OPAL_ROOT, "lib/opal/language/baked_index.mjs"))).default;
+const SOURCES = (await import(join(OPAL_ROOT, "lib/opal/language/corelib_sources.mjs"))).default;
 
 // The roots the bake driver indexes (indexer/driver.rb ROOTS, mirrored).
 const ROOTS = [
@@ -91,6 +91,6 @@ describe("the baked corelib index", () => {
     // guards the mirror between ROOTS here and indexer/driver.rb: an entry
     // that one side misses shows up as a digest count difference
     assert.equal(Object.keys(INDEX.digests).length, collectFiles().length);
-    assert.ok(statSync(join(OPAL_ROOT, "lib/opal/language-server/baked_index.mjs")).size > 1000000);
+    assert.ok(statSync(join(OPAL_ROOT, "lib/opal/language/baked_index.mjs")).size > 1000000);
   });
 });
