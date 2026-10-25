@@ -104,7 +104,7 @@ above does).
 |---|---|
 | `lib/opal/parser/index.mjs` | Public API (`parse`, `parseWithMetadata`, `lexWithMetadata`, `envelopeOffsetsToBytes`, `inspect`, `version`) |
 | `lib/opal/parser/parts/*.mjs` | The parser itself, as plain fragments with no imports or exports |
-| `lib/opal/parser/parser.mjs` | Generated from `parts/` (committed, see below) |
+| `lib/opal/parser/parser.mjs` | Generated from `parts/` (gitignored build output, see below) |
 | `lib/opal/parser/*.mjs`, `util/*.mjs` | AST constants, diagnostics, encoding, options, regexp, static literals, … |
 | `lib/opal/parser/cli.mjs` | The command-line tool, run as `exe/potch` |
 | `spec/lib/parser/*.test.mjs` | Specs (`node --test`) |

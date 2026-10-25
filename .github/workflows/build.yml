@@ -105,6 +105,7 @@ jobs:
             ${{ runner.os }}-npm-master
             ${{ runner.os }}-npm-
       - run: npm install
+      - run: npm run build
       - name: set environment variables USE_STRICT
         if: ${{ matrix.combo.strict == 'true' }}
         run: |

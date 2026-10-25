@@ -100,8 +100,9 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   BUILD time: `node tasks/language-server/update_baked_index.mjs` runs the
   plain-node bake driver (`indexer/bake.mjs`, the same
   DeclarationListener the live server uses) and regenerates the two
-  committed generated modules `lib/opal/language-server/baked_index.mjs`
-  and `corelib_sources.mjs` — re-run it (and commit) after changing
+  generated modules `lib/opal/language-server/baked_index.mjs`
+  and `corelib_sources.mjs` (gitignored build outputs, rebuilt by
+  `npm run lsp-gen-index-sources`) — re-run it after changing
   corelib/stdlib sources or the indexer; the JS driver reproduces the
   original Ruby driver's payloads byte-for-byte.
   `spec/lib/compiler/lsp_baked_index.test.mjs` is the staleness gate: it
@@ -162,9 +163,10 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
 - Tests depend on initialized submodules (`spec/mspec`, `spec/ruby`,
   `test/cruby`); `node bin/git-submodule-fast-install` fetches them as
   archives.
-- The compiler fixtures (`spec/lib/fixtures/compiler/**/*.rb` and their
-  expected `.js`) are regenerated with `node tasks/compiler/update_fixtures.mjs`;
-  review the diff.
+- The compiler fixtures' expected `.js` are generated from the committed
+  `.rb` inputs by `node tasks/compiler/update_fixtures.mjs`
+  (`npm run compiler-gen-fixtures`) and are gitignored; review the regenerated
+  diff before relying on it.
 - `tasks/performance.mjs` builds Asciidoctor from pinned checkouts it clones into
   `tmp/performance`: `asciidoctor/asciidoctor@869e8236` and the *fork*
   `janbiedermann/asciidoctor.js@3bdf345` (branch `opal2_compat`).
@@ -419,12 +421,15 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   so a feature that no gem owns must raise LoadError, not the ENOENT
   `Opal.platform.load_file` raises (Opal compiles `require` to the runtime, so
   upstream's `core_ext/kernel_require.rb` hook has no Ruby-level hook point).
-- The committed `exe/gem`, `exe/ruby` and `exe/bundler` are generated bundles
-  and the `gems` suite rebuilds `exe/gem` in place (`tasks/gem.mjs`'s default
-  OUT): if a committed bundle lags its `lib/` sources, a test run dirties it.
-  Rebuild the exes that carry a changed source (`node tasks/{ruby,gem,bundler}.mjs`)
-  and commit them in the same commit; corelib/stdlib changes additionally need
-  the baked-index re-run above and an `exe/lsp` rebuild.
+- The `exe/ruby`, `exe/gem`, `exe/bundler` and `exe/lsp` bundles are generated
+  build outputs: gitignored, never committed, produced by `npm run build`
+  (which `npm run setup` runs). The `.exe` files were already gitignored.
+  Suites that spawn an exe rebuild it in place first (the `gems` suite rebuilds
+  `exe/gem` through `tasks/gem.mjs`'s default OUT, the lsp specs rebuild
+  `exe/lsp`), and CI runs `npm run build` before the matrix. Changes to `lib/`
+  only reach an exe after rebuilding the exes that carry the changed source
+  (`node tasks/{ruby,gem,bundler,lsp}.mjs`); corelib/stdlib changes additionally
+  need the baked-index re-run above.
 - The four exe-bundle tasks minify with terser `{ mangle: true }` only (no
   compress): the bundle builds roughly halve (ruby and bundler 10s -> 5s,
   gem 7.5 -> 3.7s, lsp 4.7 -> 2.7s) for +1-5% bytes on the bundles (+0.1%
