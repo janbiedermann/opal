@@ -1,11 +1,12 @@
 // The JS bundle of the `ruby` command, shared by tasks/ruby.mjs (exe/ruby)
 // and tasks/ruby_exe.mjs (exe/ruby.exe): the full corelib (opal), the
-// parser and compiler (opal-parser), RubyGems (lib/rubygems.rb, so an
-// installed gem is requirable), the whole stdlib and the port's lib/ as
-// requirable modules, the OPAL_COMPILED_BUNDLE and OPAL_COMPILER_KEY
-// constants, and lib/opal/exe/ruby.rb, minified with terser.
+// parser and compiler (opal-parser), RubyGems (stdlib/rubygems.rb, so an
+// installed gem is requirable), and the whole stdlib - the gem port's
+// stdlib/rubygems*/stdlib/bundler* included - as requirable modules, the
+// OPAL_COMPILED_BUNDLE and OPAL_COMPILER_KEY constants, and
+// lib/opal/exe/ruby.rb, minified with terser.
 //
-// The stdlib and lib/ sweeps are what let a script `require 'optparse'` or
+// The stdlib sweep is what lets a script `require 'optparse'` or
 // `require 'bundler/setup'` under exe/ruby with no checkout beside the
 // program: Opal.require consults the module table before the loader touches
 // $LOAD_PATH, so every file the bundle carries answers from inside it. This
@@ -76,13 +77,14 @@ export async function buildRubyBundle() {
   // Kernel#caller_locations needs, and of Thread.current thread-locals.
   // It is a single-threaded shim: no Thread.new (GEMS.md D13).
   builder.build("thread", { requirable: true, load: true });
-  // lib/rubygems.rb, loaded at boot: it is what lets a script `require` a
+  // stdlib/rubygems.rb, loaded at boot: it is what lets a script `require` a
   // file an installed gem owns, with no -I and no require of its own (M4).
   // The loader below calls Gem.try_activate when a path is not on the load
   // path, and the activated gem's lib directories land on $LOAD_PATH.
   builder.build("rubygems", { requirable: true, load: true });
   builder.build("opal-parser", { requirable: true, load: true });
-  // The whole stdlib and the port's lib/, compiled and requirable but not
+  // The whole stdlib (the gem port's stdlib/rubygems.rb, stdlib/bundler.rb
+  // and their trees included), compiled and requirable but not
   // loaded: no checkout sits beside the program, so a script's runtime
   // require of any of them must answer from the module table (the loader
   // below only runs once Opal.require misses). The explicit builds above
@@ -97,11 +99,9 @@ export async function buildRubyBundle() {
   for (const name of treeRequireNames("stdlib")) {
     if (!bootNames.has(name)) builder.buildRequire(name);
   }
-  for (const name of treeRequireNames("lib/bundler", "bundler/")) builder.buildRequire(name);
-  for (const name of treeRequireNames("lib/rubygems", "rubygems/")) builder.buildRequire(name);
   builder.buildRequire("opal/base");
   builder.buildRequire("opal/mini");
-  // What the program is, with no path in it: lib/bundler branches on this
+  // What the program is, with no path in it: stdlib/bundler branches on this
   // instead of OPAL_HOME, the build checkout's path that used to be baked
   // in and made the executables need that tree to work.
   builder.buildStr("OPAL_COMPILED_BUNDLE = true\n", "(opal-compiled-bundle)", { no_export: true });

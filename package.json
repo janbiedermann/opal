@@ -38,7 +38,9 @@
   },
   "devDependencies": {
     "@ruby/prism": "^1.9.0",
-    "eslint": "^9.10.0"
+    "buffer-from": "^1.1.2",
+    "eslint": "^9.10.0",
+    "source-map": "^0.6.1"
   },
   "repository": {
     "type": "git",

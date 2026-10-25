@@ -892,7 +892,11 @@ describe("the opal-language-server command", () => {
       client.send({ jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles",
         params: { changes: [{ uri: "file://" + file, type: 2 }] } }); // Changed
       const changed = await request(client, 84, "workspace/symbol", { query: "Gem" });
-      const gems = changed.result.map((s) => s.name).filter((n) => /Gem/.test(n));
+      // the stdlib index holds Gem names of its own (Bundler::GemfileError,
+      // the Gem module...); the point here is this file's record:
+      const gems = changed.result
+        .filter((s) => /Gem/.test(s.name) && s.location.uri.endsWith("watched.rb"))
+        .map((s) => s.name);
       assert.deepEqual(gems, ["RetweakedGem"]); // re-index replaced the records whole
 
       client.send({ jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles",

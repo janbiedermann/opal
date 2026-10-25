@@ -154,7 +154,7 @@ describe("the ruby command", () => {
   });
 
   describe("installed gems", () => {
-    // lib/rubygems.rb is built into the bundle, so a script needs no -I and
+    // stdlib/rubygems.rb is built into the bundle, so a script needs no -I and
     // no require of its own to use a gem installed in GEM_HOME (GEMS.md M4).
     const GEM_HOME = join(DIR, "gem_home");
     const GEM_SRC = join(DIR, "gem_src");

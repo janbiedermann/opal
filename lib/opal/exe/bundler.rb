@@ -3,7 +3,7 @@
 # The `bundle` command: lock and install the gems of a Gemfile (GEMS.md's
 # milestone M8). tasks/bundler.mjs builds it into exe/bundler: a standalone
 # Node.js program bundling opal/full, the single-thread shim, RubyGems and
-# Bundler (lib/bundler.rb, which requires its layer eagerly), plus this
+# Bundler (stdlib/bundler.rb, which requires its layer eagerly), plus this
 # script. Like upstream's exe/bundle it only hands the command line to
 # Bundler::CLI inside Bundler.with_friendly_errors; a failing command ends
 # the run through exit_status and Kernel#exit, and an uncaught SystemExit

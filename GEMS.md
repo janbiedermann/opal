@@ -487,11 +487,15 @@ upstream files can be copied and patched rather than rewritten. `exe/gem` and
 `exe/bundler` are Opal programs bundled to standalone Node executables the way
 `exe/ruby` is (`tasks/ruby.mjs` + `tasks/ruby/bundle.mjs`).
 
+Path note: this doc predates the port's move from `lib/` to `stdlib/`; where
+it says `lib/rubygems…`/`lib/bundler…` about *our* tree, read `stdlib/…`
+(upstream's own paths keep their layout).
+
 **D2 — directory layout** (as requested):
 
 ```
-lib/rubygems/…                 # the ported RubyGems (upstream-shaped)
-lib/bundler/…                  # the ported Bundler subset (upstream-shaped)
+stdlib/rubygems/…              # the ported RubyGems (upstream-shaped)
+stdlib/bundler/…               # the ported Bundler subset (upstream-shaped)
 lib/opal/gems/…                # Opal-specific glue used by exe/gem (and exe/bundler)
   http.mjs / http.rb           # Node HTTP transport for Gem::RemoteFetcher
   node_platform.rb             # Gem::TargetRbConfig, Gem.default_dir, Gem::Platform.local

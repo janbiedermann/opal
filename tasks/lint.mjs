@@ -20,7 +20,11 @@ const rubyFiles = (dir) => readdirSync(join(ROOT, dir)).filter((f) => f.endsWith
 // with an embedded source map (the form tasks/dist.mjs used to emit):
 // ESLint then reads these, and missing requires fail the build.
 function buildLintBundles() {
-  const files = [...rubyFiles("opal"), ...rubyFiles("stdlib"), ...rubyFiles("opal/opal").map((f) => `opal/${f}`)].sort();
+  // The gem port (bundler.rb, rubygems.rb and their trees) stays out of
+  // the JS lint like before the move to stdlib/: its compiled bundles trip
+  // rules tuned for corelib's JS shape, and its style gate is rubocop.
+  const files = [...rubyFiles("opal"), ...rubyFiles("stdlib"), ...rubyFiles("opal/opal").map((f) => `opal/${f}`)]
+    .filter((lib) => lib !== "bundler" && lib !== "rubygems").sort();
   mkdirSync("tmp/lint", { recursive: true });
   for (const lib of files) {
     // Set requirable to true, unless building opal. This allows opal to be auto-loaded.

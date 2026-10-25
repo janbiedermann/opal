@@ -1,7 +1,7 @@
 // The JS bundle of the `bundle` command, shared by tasks/bundler.mjs
 // (exe/bundler) and tasks/bundler_exe.mjs (exe/bundler.exe): the full
 // corelib (opal and opal/full), the single-thread shim, RubyGems
-// (lib/rubygems.rb), Bundler (lib/bundler.rb, which requires its layer
+// (stdlib/rubygems.rb), Bundler (stdlib/bundler.rb, which requires its layer
 // eagerly), the whole stdlib as requirable modules (so a binstub loaded
 // by bundle exec finds what it requires inside the program) and
 // lib/opal/exe/bundler.rb, minified with terser.
@@ -55,7 +55,7 @@ export async function buildBundlerBundle() {
   for (const name of treeRequireNames("stdlib")) {
     if (!bootNames.has(name)) builder.buildRequire(name);
   }
-  // What the program is, with no path in it: lib/bundler branches on this
+  // What the program is, with no path in it: stdlib/bundler branches on this
   // instead of OPAL_HOME, the build checkout's path that used to be baked
   // in and made the executables need that tree to work.
   builder.buildStr("OPAL_COMPILED_BUNDLE = true\n", "(opal-compiled-bundle)", { no_export: true });

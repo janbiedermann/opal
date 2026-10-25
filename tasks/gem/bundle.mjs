@@ -1,6 +1,6 @@
 // The JS bundle of the `gem` command, shared by tasks/gem.mjs (exe/gem) and
 // tasks/gem_exe.mjs (exe/gem.exe): the full corelib (opal and opal/full), the
-// single-thread shim, RubyGems (lib/rubygems.rb, which requires the command
+// single-thread shim, RubyGems (stdlib/rubygems.rb, which requires the command
 // classes eagerly), opal-parser for reading .gemspec files, and
 // lib/opal/exe/gem.rb, minified with terser.
 //
@@ -18,7 +18,7 @@ import { compilerKey } from "../ruby/bundle.mjs";
 
 export async function buildGemBundle() {
   // dynamic_require_severity: Gem::CommandManager loads a command with a
-  // computed require path, and the file is already in the bundle (lib/rubygems.rb
+  // computed require path, and the file is already in the bundle (stdlib/rubygems.rb
   // requires the commands), so neither the warning nor the failure applies.
   const builder = new Builder({ compilerOptions: { dynamic_require_severity: "ignore" }, warn: (msg) => process.stderr.write(msg + "\n") });
   // load: true puts them in the bundle's boot index, as the CLI does for

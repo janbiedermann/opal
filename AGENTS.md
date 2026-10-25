@@ -414,9 +414,9 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   require still answers built-ins inside. That is how the HTTP transport
   (lib/opal/gems/http.cjs, OPAL_HTTP_TRANSPORT) loads; `new Function` and
   eval'd Workers are unrestricted in a SEA.
-- The gem port (GEMS.md, `lib/rubygems/`) requires its files eagerly - no
+- The gem port (GEMS.md, `stdlib/rubygems/`) requires its files eagerly - no
   `autoload` - so a compiled bundle can carry them; `tasks/ruby/bundle.mjs`
-  bundles `lib/rubygems.rb` into `exe/ruby` (1.4MB -> 2.06MB as the port grew) and
+  bundles `stdlib/rubygems.rb` into `exe/ruby` (1.4MB -> 2.06MB as the port grew) and
   `find_feature` calls `Gem.try_activate` when a path is not on `$LOAD_PATH`,
   so a feature that no gem owns must raise LoadError, not the ENOENT
   `Opal.platform.load_file` raises (Opal compiles `require` to the runtime, so
@@ -446,19 +446,19 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   checkout path: every exe is relocatable (pinned by bundle-shape cases
   in `cli.test.mjs`, `ruby_exe.test.mjs` and `bundler_cli.test.mjs`). No
   bundle bakes a path now: `tasks/{ruby,bundler}/bundle.mjs` stamp
-  `OPAL_COMPILED_BUNDLE`/`OPAL_PROGRAM` (name-only constants lib/bundler
+  `OPAL_COMPILED_BUNDLE`/`OPAL_PROGRAM` (name-only constants stdlib/bundler
   answers paths with: `SharedHelpers#program_path` is `process.execPath`
   in a single-file executable and node's argv[1] in a node bundle; a
   hosting program names its sibling `bundler` in the same directory),
   and the stdlib sweep means no loader ever needs a tree. Plus
   `OPAL_COMPILER_KEY` (below, for
   compiled trees). The command classes are required eagerly by
-  `lib/rubygems.rb`, which is also why `Gem::CommandManager` no longer requires
+  `stdlib/rubygems.rb`, which is also why `Gem::CommandManager` no longer requires
   a command by name: a require path with an interpolation in it still reads as
   static to the builder, which then asks for `rubygems/commands/_command`.
 - `exe/bundler` is `tasks/bundler.mjs` (bundle in `tasks/bundler/bundle.mjs`,
   single-file executable in `tasks/bundler_exe.mjs`): the gem bundle's shape
-  plus `lib/bundler.rb` at boot and `lib/opal/exe/bundler.rb` as the program.
+  plus `stdlib/bundler.rb` at boot and `lib/opal/exe/bundler.rb` as the program.
   Thor is not vendored, so `Bundler::CLI` restates every `method_option` in
   per-command tables and a hand-rolled scanner builds the same options hash
   (Opal's Symbol == String makes the String/Symbol key mix the command
@@ -550,7 +550,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   stream holds bytes, and none of `force_encoding`, `encode`, `pack('C*')` or
   `unpack('U*')` decodes UTF-8 bytes into characters - they retag or keep one
   character per byte, so "café" reads back as 5 characters. Decode with
-  `new TextDecoder('utf-8')` over the bytes (`lib/rubygems/safe_marshal/visitors/to_ruby.rb#decode_utf8`).
+  `new TextDecoder('utf-8')` over the bytes (`stdlib/rubygems/safe_marshal/visitors/to_ruby.rb#decode_utf8`).
   A string tagged US-ASCII/BINARY must keep its bytes or "\xff" becomes U+FFFD.
   `Marshal` here has no Time support either: `Time._load` (and `#_dump`) do not
   exist, it reads CRuby's user-defined body as a `time_t` and answers 1970 -
@@ -670,7 +670,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   the greedy one swallows both holes on the `load Gem.bin_path(...)` line.
   The generated shebang reads `opal` because stdlib/rbconfig names the
   interpreter that; run a binstub through `exe/ruby`, not straight.
-- `lib/bundler/fetcher.rb` reads `Bundler.settings` at require time, so files
+- `stdlib/bundler/fetcher.rb` reads `Bundler.settings` at require time, so files
   loaded while the root is still being defined (`source/rubygems.rb`) must not
   require it - `require_relative "fetcher"` belongs at first use instead
   (the autoload shape upstream leans on).

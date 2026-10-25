@@ -19,7 +19,7 @@ function write(path, contents = "") {
   return path;
 }
 
-// A repository as lib/rubygems leaves it: specifications/<full>.gemspec stubs
+// A repository as stdlib/rubygems leaves it: specifications/<full>.gemspec stubs
 // and a gems/<full>/ directory each.
 function install(repo, name, version, { requirePaths, compiled } = {}) {
   const full = `${name}-${version}`;

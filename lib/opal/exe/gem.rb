@@ -2,7 +2,7 @@
 #
 # tasks/gem.mjs builds it into exe/gem: a standalone Node.js program bundling
 # the full corelib (opal/full), the single-thread shim and RubyGems
-# (lib/rubygems.rb, which requires the command classes eagerly), and this
+# (stdlib/rubygems.rb, which requires the command classes eagerly), and this
 # script. Like upstream's exe/gem it only hands the command line to
 # Gem::GemRunner; a command ends with Gem::Command#terminate_interaction, which
 # raises Gem::SystemExitException, and an uncaught SystemExit ends an Opal
