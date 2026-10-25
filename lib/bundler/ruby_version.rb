@@ -106,7 +106,9 @@ module Bundler
     def self.system
       ruby_engine = RUBY_ENGINE.dup
       ruby_version = Gem.ruby_version.to_s
-      ruby_engine_version = RUBY_ENGINE == "ruby" ? ruby_version : RUBY_ENGINE_VERSION.dup
+      # Upstream answers its own Gem.ruby_version when the engine is CRuby,
+      # the engine's RUBY_ENGINE_VERSION otherwise; Opal takes the second.
+      ruby_engine_version = RUBY_ENGINE_VERSION.dup
       patchlevel = RUBY_PATCHLEVEL.to_s
 
       @system ||= RubyVersion.new(ruby_version, patchlevel, ruby_engine, ruby_engine_version)
