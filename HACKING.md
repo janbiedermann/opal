@@ -8,7 +8,7 @@
 $ git clone git://github.com/<YOUR-GITHUB-USERNAME>/opal.git
 ```
 
-Setup the project (you need Node.js 22 or later, git and yarn):
+Setup the project (you need Node.js 22 or later, git and npm):
 
 ```
 $ bin/setup

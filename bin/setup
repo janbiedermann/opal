@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Installs Opal's development dependencies: the git submodules (ruby/spec,
-# mspec, the CRuby tests) and the yarn packages. Needs git, Node.js and yarn.
+# mspec, the CRuby tests) and the npm packages. Needs git and Node.js.
 set -euo pipefail
 IFS=$'\n\t'
 set -vx
 
 cd "$(dirname "$0")/.."
 git submodule update --init
-bin/yarn install
+npm install

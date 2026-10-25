@@ -123,7 +123,7 @@ async function compare() {
   sh(`git checkout --recurse-submodules ${ref}`);
   try {
     if (existsSync(join(ROOT, "Gemfile"))) sh("bundle install > /dev/null 2>&1");
-    else sh("bin/yarn install > /dev/null 2>&1");
+    else sh("npm install > /dev/null 2>&1");
     previous = await measure("previous");
   } finally {
     sh("git checkout --recurse-submodules -");

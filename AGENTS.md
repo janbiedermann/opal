@@ -4,12 +4,12 @@ This file explains how automation and human contributors should work in this
 repository. Follow the steps below to set up the project, run tests and keep the
 codebase healthy.
 
-Opal needs only Node.js (22 or later), git and yarn; no Ruby.
+Opal needs only Node.js (22 or later), git and npm; no Ruby.
 
 
 ## Setup
 - Run `bin/setup` once after cloning to install the git submodules and the
-  yarn packages.
+  npm packages.
 
 ## Directory overview
 - `lib/opal/` holds the toolchain, written in JavaScript (`.mjs`):
@@ -35,7 +35,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 - `tasks/` holds the development scripts (`tasks/*.mjs`, run with `node`).
 
 ## Running tests
-- `node tasks/test.mjs` (or `yarn test`) runs every Node.js suite in about
+- `node tasks/test.mjs` (or `npm test`) runs every Node.js suite in about
   40 seconds; ensure it passes before committing:
   - `parser`: the parser specs (`spec/lib/parser/*.test.mjs`, about 8,500 cases)
   - `compiler`: the compiler, builder and CLI specs (`spec/lib/compiler`)
@@ -53,7 +53,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   `RANDOM_SEED` repeats a randomized order.
 
 ## Linting
-- Run `node tasks/lint.mjs` (or `yarn lint`) to check the JavaScript style. It
+- Run `node tasks/lint.mjs` (or `npm run lint`) to check the JavaScript style. It
   checks that `lib/opal/parser/parser.mjs` matches its parts, runs ESLint on
   the parser, the compiler, `lib/opal/gems`, the JS specs under `spec/lib`
   (the compiler step covers `spec/lib/gems` - bundler specs once failed its

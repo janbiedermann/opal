@@ -4,7 +4,7 @@ Numbers below come from `benchmark/parser/run.mjs`, comparing
 the parser against the real C WASM parser via the published `@ruby/prism` npm
 package ("ref" - the actual Prism WASM build: same parser, same WASM
 binary, used here instead of a Ruby install because it needs no native
-build toolchain, just `bin/yarn install`). Nothing here reaches outside this
+build toolchain, just `npm install`). Nothing here reaches outside this
 project - no other native-parser backends, no Ruby.
 
 ## How to reproduce

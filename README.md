@@ -137,7 +137,7 @@ on opal.
 
 ## Running tests
 
-Opal needs Node.js (22 or later), git and yarn. Setup the project:
+Opal needs Node.js (22 or later), git and npm. Setup the project:
 
     $ bin/setup
 
