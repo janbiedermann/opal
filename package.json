@@ -16,6 +16,7 @@
     "compiler-gen-fixtures": "node tasks/compiler/update_fixtures.mjs",
     "dist": "node tasks/dist.mjs",
     "lint": "node tasks/lint.mjs",
+    "lsp-gen-index-sources": "node tasks/language-server/update_baked_index.mjs",
     "parser-assemble": "node tasks/parser/assemble.mjs",
     "parser-gen-converter": "node tasks/parser/gen_convert.mjs",
     "parser-gen-field-order": "node tasks/parser/gen_field_order.mjs",
