@@ -32,22 +32,28 @@ module Bundler
       spec[1]&.each {|version| hash[:"#{platform}_#{version}"] = spec[0] }
     end.freeze
 
-    def ruby?
-      return true if Bundler::MatchPlatform.generic_local_platform_is_ruby?
+    # Opal: upstream reads the RUBY_ENGINE constant to answer these engine
+    # predicates. On Opal that constant is "opal", so none of the engines it
+    # tests - ruby, rbx, maglev, truffleruby, jruby - ever match: the engine
+    # halves of the answers are gone and what survives is what Opal always
+    # answered. The predicates stay as methods because PLATFORM_MAP generates
+    # the `#{platform}_#{version}?` predicates from their names, and Gemfile
+    # platform matching sends them.
 
-      !windows? && (RUBY_ENGINE == "ruby" || RUBY_ENGINE == "rbx" || RUBY_ENGINE == "maglev" || RUBY_ENGINE == "truffleruby")
+    def ruby?
+      Bundler::MatchPlatform.generic_local_platform_is_ruby?
     end
 
     def mri?
-      !windows? && RUBY_ENGINE == "ruby"
+      false
     end
 
     def rbx?
-      ruby? && RUBY_ENGINE == "rbx"
+      false
     end
 
     def jruby?
-      RUBY_ENGINE == "jruby"
+      false
     end
 
     def maglev?
@@ -58,7 +64,7 @@ module Bundler
     end
 
     def truffleruby?
-      RUBY_ENGINE == "truffleruby"
+      false
     end
 
     def windows?
