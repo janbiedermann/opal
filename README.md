@@ -139,7 +139,7 @@ on opal.
 
 Opal needs Node.js (22 or later), git and npm. Setup the project:
 
-    $ bin/setup
+    $ npm run setup
 
 The test suite (the parser and compiler specs, [MSpec][] with ruby/spec
 and Opal's own specs, and the Minitest suites) can be run using:

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Integer" do
   fails "Integer is the class of both small and large integers" # Expected Number to be identical to Integer
   fails "Integer#& fixnum raises a TypeError when passed a Float" # Expected TypeError but no exception was raised (3 was returned)

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Module" do
   fails "Module#alias_method creates methods that are == to each other" # Expected #<Method: #<Class:0x3c38e>#uno (defined in #<Class:0x3c38e> in ruby/core/module/fixtures/classes.rb:214)> == #<Method: #<Class:0x3c38e>#public_one (defined in ModuleSpecs::Aliasing in ruby/core/module/fixtures/classes.rb:214)> to be truthy but was false
   fails "Module#alias_method handles aliasing a method only present in a refinement" # Expected #<UnboundMethod: #<Module:0x3c30c>#uno_refined_method (defined in #<Module:0x3c30c> in ruby/core/module/alias_method_spec.rb:49)> == #<UnboundMethod: #<Module:0x3c30c>#double_refined_method (defined in #<Module:0x3c30c> in ruby/core/module/alias_method_spec.rb:49)> to be truthy but was false

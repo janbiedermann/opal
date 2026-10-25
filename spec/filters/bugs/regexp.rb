@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "regular_expressions" do
   fails "Literal Regexps is frozen" # Expected /Hello/.frozen? to be truthy but was false
   fails "MatchData#byteoffset accepts String as a reference to a named capture" # NoMethodError: undefined method `byteoffset' for #<MatchData "foobar" f:"foo" b:"bar">

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Marshal" do
   fails "Marshal.dump ignores the recursion limit if the limit is negative" # ArgumentError: [Marshal.dump] wrong number of arguments (given 2, expected 1)
   fails "Marshal.dump raises a TypeError if dumping a Mutex instance" # Expected TypeError but no exception was raised ( "\x04\bo: Mutex\x06:\f@lockedF" was returned)

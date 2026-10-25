@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Specs that use temporary files" do
   fails "A Symbol literal inherits the encoding of the magic comment and can have a binary encoding" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x94928>
   fails "The BEGIN keyword returns the top-level script's filename for __FILE__" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0xab0bc>

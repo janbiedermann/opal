@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Exception" do
   fails "Interrupt.new returns an instance of interrupt with no message given" # NoMethodError: undefined method `[]' for nil
   fails "Interrupt.new takes an optional message argument" # NoMethodError: undefined method `[]' for nil

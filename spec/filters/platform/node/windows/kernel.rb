@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Kernel" do
   fails "Kernel#` raises an Errno::ENOENT if the command is not executable" # Expected Errno::ENOENT but no exception was raised ("" was returned)
   fails "Kernel#` returns the standard output of the executed sub-process" # Expected  "disc world\r " ==  "disc world " to be truthy but was false

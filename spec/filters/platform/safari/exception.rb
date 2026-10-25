@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Exception" do
   fails "Exception#backtrace contains lines of the same format for each prior position in the stack" # Expected "http://localhost:9445/index.js:168275:15:in `'" =~ /^.+:\d+:in `[^`]+'$/ to be truthy but was nil
   fails "Interrupt.new returns an instance of interrupt with no message given" # NoMethodError: undefined method `[]' for nil

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Hash" do
   fails "Hash#== compares keys with eql? semantics" # Expected true to be false
   fails "Hash#[] compares keys with eql? semantics" # Expected "x" == nil to be truthy but was false

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Float" do
   fails "Float constant MAX is 1.7976931348623157e+308" # Exception: Maximum call stack size exceeded
   fails "Float constant MIN is 2.2250738585072014e-308" # Expected 5e-324 == (1/4.49423283715579e+307) to be truthy but was false

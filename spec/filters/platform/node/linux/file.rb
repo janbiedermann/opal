@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "File" do
   fails "File.atime returns the last access time for the named file with microseconds" # Expected 122000 == 123000 to be truthy but was false
   fails "File.expand_path raises an ArgumentError if the path is not valid" # Expected ArgumentError but no exception was raised ("/home/jan" was returned)

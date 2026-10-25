@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Process" do
   fails "Process.clock_gettime supports the platform clocks mentioned in the documentation CLOCK_PROF" # NameError: uninitialized constant Process::CLOCK_PROF
   fails "Process.clock_gettime supports the platform clocks mentioned in the documentation CLOCK_REALTIME_FAST and CLOCK_REALTIME_PRECISE" # NameError: uninitialized constant Process::CLOCK_REALTIME_FAST

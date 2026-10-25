@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "BasicObject" do
   fails "BasicObject raises NoMethodError for nonexistent methods after #method_missing is removed" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0xb5dc8>
   fails "BasicObject#initialize does not accept arguments" # NoMethodError: undefined method `class' for #<BasicObject:0x99f0>

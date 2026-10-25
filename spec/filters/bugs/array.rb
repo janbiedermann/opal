@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Array" do
   fails "Array#== compares with an equivalent Array-like object using #to_ary" # Expected false to be true
   fails "Array#== returns true for [NaN] == [NaN] because Array#== first checks with #equal? and NaN.equal?(NaN) is true" # Expected [NaN] == [NaN] to be truthy but was false

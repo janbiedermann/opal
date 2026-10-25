@@ -10,7 +10,7 @@ its development dependencies:
 ```
 $ git clone https://github.com/opal/opal.git
 $ cd opal
-$ bin/setup
+$ npm run setup
 ```
 
 `exe/opal` is the command line interface (add `exe/` to your `PATH` to call it

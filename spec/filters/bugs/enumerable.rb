@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Enumerable" do
   fails "Enumerable#all? when given a pattern argument ignores the block if there is an argument" # Expected warning to match: /given block not used/ but got: ""
   fails "Enumerable#any? when given a pattern argument ignores the block if there is an argument" # Expected warning to match: /given block not used/ but got: ""

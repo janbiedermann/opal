@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "English" do
   fails "English aliases $! to $ERROR_INFO and $ERROR_INFO still returns an Exception with a backtrace" # Integer#/ returns a Float, so 1/0 gives Infinity instead of raising
   fails "English aliases $@ to $ERROR_POSITION and $ERROR_POSITION still returns a backtrace" # Integer#/ returns a Float, so 1/0 gives Infinity instead of raising

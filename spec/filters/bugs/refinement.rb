@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "refinement" do
   fails "Refinement#import_methods doesn't import any methods if one of the arguments is not a module" # Expected TypeError but got: NoMethodError (undefined method `import_methods' for #<refinement:String@#<Module:0x42ca2>>)
   fails "Refinement#import_methods doesn't import methods from included/prepended modules" # NoMethodError: undefined method `import_methods' for #<refinement:String@#<Module:0x42cb0>>

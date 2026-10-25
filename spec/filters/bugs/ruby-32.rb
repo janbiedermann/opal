@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Ruby 3.2" do
   fails "A block yielded a single Array does not autosplat single argument to required arguments when a keyword rest argument is present" # ArgumentError: expected kwargs
   fails "Fixnum is no longer defined" # Expected Object.const_defined? "Fixnum" to be falsy but was true

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "ObjectSpace" do
   fails "ObjectSpace._id2ref converts an object id to a reference to the object" # NoMethodError: undefined method `_id2ref' for ObjectSpace
   fails "ObjectSpace._id2ref raises RangeError when an object could not be found" # Expected RangeError but got: NoMethodError (undefined method `_id2ref' for ObjectSpace)

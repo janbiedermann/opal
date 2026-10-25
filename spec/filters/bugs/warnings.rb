@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "warnings" do
   fails "Array#join when $, is not nil warns" # Expected warning to match: /warning: \$, is set to non-nil value/ but got: ""
   fails "Constant resolution within methods with dynamically assigned constants returns the updated value when a constant is reassigned" # Expected warning to match: /already initialized constant/ but got: ""

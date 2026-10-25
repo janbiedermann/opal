@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Marshal" do
   fails "Marshal.dump dumps subsequent appearances of a symbol as a link" # Expected "\x04\b[\a\"\x06a@\x06" == "\x04\b[\a:\x06a;\x00" to be truthy but was false
   fails "Marshal.dump raises a TypeError if dumping a IO/File instance" # Expected TypeError but got: Exception (Maximum call stack size exceeded)

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Regexp" do
   fails "Regexp#options does not include Regexp::FIXEDENCODING for a Regexp literal with the 'n' option" # NameError: uninitialized constant Regexp::FIXEDENCODING
   fails "Regexp#options includes Regexp::FIXEDENCODING for a Regexp literal with the 'e' option" # NameError: uninitialized constant Regexp::FIXEDENCODING

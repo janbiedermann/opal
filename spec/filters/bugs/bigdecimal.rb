@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "BigDecimal" do
   fails "BidDecimal#hash two BigDecimal objects with numerically equal values should have the same hash value" # Expected 417830 == 417834 to be truthy but was false
   fails "BidDecimal#hash two BigDecimal objects with the same value should have the same hash for NaNs" # Expected 417786 == 417790 to be truthy but was false

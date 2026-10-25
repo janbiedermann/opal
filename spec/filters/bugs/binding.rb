@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Binding" do
   fails "Binding#eval does not leak variables to cloned bindings" # Expected [] == ["x"] to be truthy but was false
   fails "Binding#eval reflects refinements activated in the binding scope" # NoMethodError: undefined method `foo' for "bar"

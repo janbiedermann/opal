@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "MatchData" do
   fails "MatchData#[Symbol] returns matches in the String's encoding" # ArgumentError: unknown encoding name - euc-jp
   fails "MatchData#[Symbol] returns the last match when multiple named matches exist with the same name" # Exception: Invalid regular expression: /(?<word>hay)(?<word>stack)/: Duplicate capture group name

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "String" do
   fails "String#each_grapheme_cluster is unicode aware" # Exception: 'Intl' is not defined
   fails "String#each_grapheme_cluster passes each char in self to the given block" # Exception: 'Intl' is not defined

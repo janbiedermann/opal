@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Kernel" do
   fails "Kernel has private instance method Array()" # Expected Kernel to have private instance method 'Array' but it does not
   fails "Kernel has private instance method Hash()" # Expected Kernel to have private instance method 'Hash' but it does not

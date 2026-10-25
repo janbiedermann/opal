@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Range" do
   fails "Range#bsearch with Float values with a block returning negative, zero, positive numbers accepts (+/-)Float::INFINITY from the block" # TypeError: can't iterate from Float
   fails "Range#bsearch with Float values with a block returning negative, zero, positive numbers returns a boundary element if appropriate" # Expected nil == 2.9999999999999996 to be truthy but was false

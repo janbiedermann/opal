@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Time" do
   fails "Time#+ accepts arguments that can be coerced into Rational" # Mock '10' expected to receive to_r("any_args") exactly 1 times but received it 0 times
   fails "Time#+ adds a negative Float" # Expected 700000 == 699999 to be truthy but was false

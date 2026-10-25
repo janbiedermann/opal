@@ -8,7 +8,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
 
 
 ## Setup
-- Run `bin/setup` once after cloning to install the git submodules and the
+- Run `npm run setup` once after cloning to install the git submodules and the
   npm packages.
 
 ## Directory overview
@@ -156,7 +156,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
 - The list of MSpec files is in `spec/selection/common` (with per-platform
   additions/exclusions in `spec/selection/<platform>`, `!` lines exclude) and
   filters live in
-  `spec/filters` (`bin/format-filters` sorts them, `bin/remove-filters`
+  `spec/filters` (`npm run format-filters` sorts them, `bin/remove-filters`
   removes the ones given on stdin).
 - Tests depend on initialized submodules (`spec/mspec`, `spec/ruby`,
   `test/cruby`); `node bin/git-submodule-fast-install` fetches them as

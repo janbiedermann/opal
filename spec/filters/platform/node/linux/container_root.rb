@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Container root" do
   fails "Dir.chroot as root calls #to_path on non-String argument" # Mock 'path' expected to receive to_path("any_args") exactly 1 times but received it 0 times
   fails "Dir.chroot as root can be escaped from with ../" # NotImplementedError: NotImplementedError

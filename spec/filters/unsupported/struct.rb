@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Struct" do
   fails "Struct#initialize is private" # Expected StructClasses::Car to have private instance method 'initialize' but it does not
   fails "Struct.new does not create a constant with symbol as first argument" # Expected true to be false

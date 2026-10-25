@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "StringIO" do
   fails "StringIO#each_codepoint raises an error if reading invalid sequence" # Expected ArgumentError but no exception was raised (65533 was returned)
   fails "StringIO#external_encoding changes to match string if string's encoding is changed" # Expected #<Encoding:UTF-8> == #<Encoding:EUC-JP> to be truthy but was false

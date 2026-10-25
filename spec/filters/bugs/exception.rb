@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Exception" do
   fails "An Exception reaching the top level is printed on STDERR" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x830fa>
   fails "An Exception reaching the top level the Exception#cause is printed to STDERR with backtraces" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x830fa>

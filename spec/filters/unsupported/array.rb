@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Array" do
   fails "Array#[] raises a RangeError when the length is out of range of Fixnum" # Expected RangeError but no exception was raised ([2, 3, 4, 5, 6] was returned)
   fails "Array#[] raises a RangeError when the start index is out of range of Fixnum" # Expected RangeError but no exception was raised (nil was returned)

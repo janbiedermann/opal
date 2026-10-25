@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "CGI" do
   fails "CGI#http_header CGI#http_header when passed Hash includes Cookies in the @output_cookies field" # NoMethodError: undefined method `http_header' for #<CGI:0x98198 @output_cookies=["multiple", "cookies"]>
   fails "CGI#http_header CGI#http_header when passed Hash returns a HTTP header based on the Hash's key/value pairs" # NoMethodError: undefined method `http_header' for #<CGI:0x98194>

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Kernel" do
   fails "Kernel#=== does not call #object_id nor #equal? but still returns true for #== or #=== on the same object" # Mock '#<Object:0x2514>' expected to receive object_id("any_args") exactly 0 times but received it 2 times
   fails "Kernel#Float for hexadecimal literals with binary exponent allows embedded _ in a number on either side of the P" # ArgumentError: invalid value for Float(): "0x1_0P10"

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Etc" do
   fails "Etc.confstr raises Errno::EINVAL for unknown configuration variables" # Expected Errno::EINVAL but no exception was raised (nil was returned)
   fails "Etc.confstr returns a String for Etc::CS_PATH" # NameError: uninitialized constant Etc::CS_PATH

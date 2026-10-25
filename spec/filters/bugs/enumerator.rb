@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Enumerator" do
   fails "Enumerator#feed can be called for each iteration" # NotImplementedError: Opal doesn't support Enumerator#feed
   fails "Enumerator#feed causes yield to return the value if called during iteration" # NotImplementedError: Opal doesn't support Enumerator#feed

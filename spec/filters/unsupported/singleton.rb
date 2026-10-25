@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Singleton" do
   fails "Singleton#_dump returns an empty string from a singleton subclass" # NoMethodError: undefined method `_dump' for #<SingletonSpecs::MyClassChild:0x9dc>
   fails "Singleton#_dump returns an empty string" # NoMethodError: undefined method `_dump' for #<SingletonSpecs::MyClass:0x794>

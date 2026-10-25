@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "language" do
   fails "Ruby String literals with a magic frozen comment produce different objects for literals with the same content in different files if the other file doesn't have the comment" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x14b20 @ip="xxx" @my_ip="xxx">
   fails "Ruby String literals with a magic frozen comment produce different objects for literals with the same content in different files if they have different encodings" # NoMethodError: undefined method `tmp' for #<MSpecEnv:0x14b20 @ip="xxx" @my_ip="xxx">

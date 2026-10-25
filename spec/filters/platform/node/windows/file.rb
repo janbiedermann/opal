@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "File" do
   fails "File#chmod with '0444' makes file readable and executable but not writable" # Expected false == true to be truthy but was false
   fails "File#chmod with '0644' makes file readable and writable and also executable" # Expected false == true to be truthy but was false

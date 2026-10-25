@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "UnboundMethod" do
   fails "UnboundMethod#== considers methods through aliasing and visibility change equal" # Expected #<Method: Class#new (defined in Class in <internal:corelib/class.rb>:40)> == #<Method: Class#n (defined in #<Class:> in <internal:corelib/class.rb>:40)> to be truthy but was false
   fails "UnboundMethod#== considers methods through aliasing equal" # Expected #<Method: Class#new (defined in Class in <internal:corelib/class.rb>:40)> == #<Method: Class#n (defined in #<Class:> in <internal:corelib/class.rb>:40)> to be truthy but was false

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "URI" do
   fails "URI#select conforms to the MatzRuby tests" # the parts of the shared examples that run touch the ftp scheme, which is not ported
   fails "URI#select raises an ArgumentError if a component is requested that isn't valid under the given scheme" # the components involved belong to the mailto and ftp schemes, which are not ported

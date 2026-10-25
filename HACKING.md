@@ -11,7 +11,7 @@ $ git clone git://github.com/<YOUR-GITHUB-USERNAME>/opal.git
 Setup the project (you need Node.js 22 or later, git and npm):
 
 ```
-$ bin/setup
+$ npm run setup
 ```
 
 Run the test suite:

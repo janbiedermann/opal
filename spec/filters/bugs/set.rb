@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Set" do
   fails "Set#& raises an ArgumentError when passed a non-Enumerable" # Expected ArgumentError but got: NoMethodError (undefined method `&' for #<Set: {a,b,c}>)
   fails "Set#& returns a new Set containing only elements shared by self and the passed Enumerable" # NoMethodError: undefined method `&' for #<Set: {a,b,c}>

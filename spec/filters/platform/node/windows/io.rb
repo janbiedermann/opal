@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "IO" do
   fails "IO#syswrite on a file does not modify the passed argument" # Expected [198, 32, 25] == [198, 146] to be truthy but was false
   fails "IO.popen raises IOError when writing a read-only pipe" # Expected  "foo\r " ==  "foo " to be truthy but was false

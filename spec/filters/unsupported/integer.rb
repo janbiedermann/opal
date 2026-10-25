@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "Integer" do
   fails "Integer#% bignum returns the modulus obtained from dividing self by the given argument" # Expected 0 == 18446744073709552000 to be truthy but was false
   fails "Integer#& bignum raises a TypeError when passed a Float" # Expected TypeError but no exception was raised (0 was returned)

@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "TracePoint" do
   fails "TracePoint#inspect returns a String showing the event and thread for :thread_begin event" # RuntimeError: Only the :class event is supported
   fails "TracePoint#inspect returns a String showing the event and thread for :thread_end event" # RuntimeError: Only the :class event is supported

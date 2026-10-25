@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Time" do
   fails "Time#+ zone is a timezone object preserves time zone" # ArgumentError: Opal doesn't support other types for a timezone argument than Integer and String
   fails "Time#- tracks microseconds from a Rational" # Expected 0 == 123456 to be truthy but was false

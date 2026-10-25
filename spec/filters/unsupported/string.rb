@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_unsupported_filter "String" do
   fails "BasicObject#__id__ returns a different value for two String literals" # Expected "hello" == "hello" to be falsy but was true
   fails "Module#const_defined? returns true when passed a constant name with EUC-JP characters" # ArgumentError: unknown encoding name - euc-jp

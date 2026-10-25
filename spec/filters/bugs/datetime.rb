@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "DateTime" do
   fails "DateTime#+ is able to add sub-millisecond precision values" # Expected 0 == 864864 to be truthy but was false
   fails "DateTime#- correctly calculates sub-millisecond time differences" # Expected 5097600 == 59.000001 to be truthy but was false

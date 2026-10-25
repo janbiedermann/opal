@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Process" do
   fails "Process.setpriority sets the scheduling priority for a specified process group" # NotImplementedError: NotImplementedError
   fails "Process.setproctitle should set the process title" # Expected "" to include "rubyspec-proctitle-test"

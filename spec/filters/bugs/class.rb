@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Class" do
   fails "Class#allocate raises TypeError for #superclass" # Expected TypeError but no exception was raised (nil was returned)
   fails "Class#dup raises TypeError if called on BasicObject" # Expected TypeError (can't copy the root class) but got: Exception (Cannot read properties of null (reading '$$is_number'))

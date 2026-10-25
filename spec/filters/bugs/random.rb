@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Random" do
   fails "Random#bytes returns the same numeric output for a given huge seed across all implementations and platforms" # Expected "àË" == "_\x91" to be truthy but was false
   fails "Random#bytes returns the same numeric output for a given seed across all implementations and platforms" # Expected "ç\x16" == "\x14\\" to be truthy but was false

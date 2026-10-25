@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "main" do
   fails "main#include in a file loaded with wrapping includes the given Module in the load wrapper" # ArgumentError: [MSpecEnv#load] wrong number of arguments (given 2, expected 1)
   fails "main#private raises a NameError when at least one of given method names is undefined" # Expected NameError but no exception was raised (["main_public_method", "main_undefined_method"] was returned)

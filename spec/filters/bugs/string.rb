@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "String" do
   fails "String#% %c raises error when a codepoint isn't representable in an encoding of a format string" # Expected RangeError (out of char range) but no exception was raised ("Ԇ" was returned)
   fails "String#% %c uses the encoding of the format string to interpret codepoints" # Exception: Invalid code point 9415601

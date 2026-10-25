@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "Method" do
   fails "Method#<< does not try to coerce argument with #to_proc" # Expected TypeError (callable object is expected) but no exception was raised (#<Proc:0x3c64> was returned)
   fails "Method#<< raises TypeError if passed not callable object" # Expected TypeError (callable object is expected) but no exception was raised (#<Proc:0x3ca0> was returned)

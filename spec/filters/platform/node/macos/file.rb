@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "File" do
   fails "File#size returns the file's current size even if modified" # Expected 8 == 9 to be truthy but was false
   fails "File.expand_path raises an ArgumentError if the path is not valid" # Expected ArgumentError but no exception was raised ("/Users/jan" was returned)

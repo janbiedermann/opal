@@ -1,4 +1,4 @@
-# NOTE: run bin/format-filters after changing this file
+# NOTE: run npm run format-filters after changing this file
 opal_filter "ARGF" do
   fails "ARGF.filename returns the current file name on each file" # Expected ["/home/jan/workspace/opal/spec/ruby/core/argf/fixtures/file1.txt",  "/home/jan/workspace/opal/spec/ruby/core/argf/fixtures/file1.txt",  "/home/jan/workspace/opal/spec/ruby/core/argf/fixtures/file1.txt",  "/home/jan/workspace/opal/spec/ruby/core/argf/fixtures/file2.txt",  "/home/jan/workspace/opal/spec/ruby/core/argf/fixtures/file2.txt",  "/home/jan/workspace/opal/spec/ruby/core/argf/fixtures/file2.txt"] == ["ruby/core/argf/fixtures/file1.txt",  "ruby/core/argf/fixtures/file1.txt",  "ruby/core/argf/fixtures/file1.txt",  "ruby/core/argf/fixtures/file2.txt",  "ruby/core/argf/fixtures/file2.txt",  "ruby/core/argf/fixtures/file2.txt"] to be truthy but was false
   fails "ARGF.fileno returns the current file number on each file" # Expected [Number, Number, Number, Number] == [Integer, Integer, Integer, Integer] to be truthy but was false
