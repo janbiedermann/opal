@@ -26,7 +26,8 @@ module Bundler
       # Opal: Thor answered options.keep_file_descriptors? off its options
       # hash; the port's options are a plain hash under the flag's spelled
       # name. The flag itself is rejected below, so this reads the default.
-      @args << { close_others: !options["keep-file-descriptors"] } unless Bundler.current_ruby.jruby?
+      # Upstream skipped the hash on JRuby, whose spawn options differ.
+      @args << { close_others: !options["keep-file-descriptors"] }
     end
 
     def run
