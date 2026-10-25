@@ -412,6 +412,12 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   so a feature that no gem owns must raise LoadError, not the ENOENT
   `Opal.platform.load_file` raises (Opal compiles `require` to the runtime, so
   upstream's `core_ext/kernel_require.rb` hook has no Ruby-level hook point).
+- The committed `exe/gem`, `exe/ruby` and `exe/bundler` are generated bundles
+  and the `gems` suite rebuilds `exe/gem` in place (`tasks/gem.mjs`'s default
+  OUT): if a committed bundle lags its `lib/` sources, a test run dirties it.
+  Rebuild the exes that carry a changed source (`node tasks/{ruby,gem,bundler}.mjs`)
+  and commit them in the same commit; corelib/stdlib changes additionally need
+  the baked-index re-run above and an `exe/lsp` rebuild.
 - `exe/gem` is `tasks/gem.mjs` (bundle in `tasks/gem/bundle.mjs`, single-file
   executable in `tasks/gem_exe.mjs` and `tasks/sea_exe.mjs`, which both `*_exe`
   tasks share): opal, opal/full, thread and rubygems at boot, opal-parser
