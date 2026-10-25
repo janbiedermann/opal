@@ -25,7 +25,9 @@ const ASCIIDOCTOR_COMMIT = "869e8236";
 // The asciidoctor.js fork pins a branch (opal2_compat) adding the
 // backtick_javascript comments the x-strings of the upstream repo need.
 const ASCIIDOCTOR_JS_COMMIT = "3bdf345";
-const TERSER = join(ROOT, "node_modules", "terser", "bin", "terser");
+// the vendored terser of the compiler CLI (lib/opal/dependencies) - the root
+// package has no terser dependency of its own
+const TERSER = join(ROOT, "lib", "opal", "dependencies", "node_modules", "terser", "bin", "terser");
 
 const failures = [];
 const sh = (cmd, options = {}) => execSync(cmd, { cwd: ROOT, stdio: "inherit", shell: true, ...options });
