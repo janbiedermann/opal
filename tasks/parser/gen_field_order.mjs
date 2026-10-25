@@ -6,7 +6,10 @@
 // emit. The conversion plan cache in lib/opal/parser/index.mjs is built from
 // this table.
 //
-//   node tasks/parser/gen_field_order.mjs --config=<path to prism/config.yml> [--check]
+//   node tasks/parser/gen_field_order.mjs [--config=<path to a prism config.yml>] [--check]
+//
+// Without --config it uses the vendored lib/opal/parser/prism-1.9.0.config.yml
+// (a copy of the prism 1.9.0 gem's config.yml — swap it when Prism moves).
 //
 // Only needed when moving parser to a new Prism version; field_order.mjs is
 // committed.
@@ -18,11 +21,10 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const target = join(root, "lib", "opal", "parser", "field_order.mjs");
 const configArg = process.argv.find((a) => a.startsWith("--config="));
-if (!configArg) {
-    console.error("usage: node tasks/parser/gen_field_order.mjs --config=<path to prism/config.yml> [--check]");
-    process.exit(2);
-}
-const config = readFileSync(configArg.slice("--config=".length), "utf8");
+const configFile = configArg
+    ? configArg.slice("--config=".length)
+    : join(root, "lib", "opal", "parser", "prism-1.9.0.config.yml");
+const config = readFileSync(configFile, "utf8");
 
 const entries = [];
 const names = [...config.matchAll(/^  - name: (\w+)$/gm)];
@@ -47,7 +49,7 @@ const out = [
 if (process.argv.includes("--check")) {
     const current = readFileSync(target, "utf8");
     if (current !== out) {
-        console.error("lib/opal/parser/field_order.mjs is out of date with config.yml; run: node tasks/parser/gen_field_order.mjs --config=...");
+        console.error("lib/opal/parser/field_order.mjs is out of date with config.yml; run: node tasks/parser/gen_field_order.mjs");
         process.exit(1);
     }
     console.log(`lib/opal/parser/field_order.mjs matches config.yml (${entries.length} node types)`);

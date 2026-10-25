@@ -201,14 +201,16 @@ node tasks/parser/assemble.mjs --check   # verifies it's up to date without writ
 
 The whole set can also be run through package.json: `npm run parser-assemble`,
 `npm run parser-gen-converter`, `npm run parser-gen-field-order`, or all
-three at once with `npm run build-parser` (`node tasks/build-parser.mjs
---config=<path>`; pass extra flags after `--`, e.g. `npm run build-parser --
---check --config=<path>`).
+three at once with `npm run build-parser` (pass extra flags after `--`,
+e.g. `npm run build-parser -- --check`).
 
 `lib/opal/parser/field_order.mjs` and `lib/opal/parser/convert.mjs` are
-generated from Prism's `config.yml` by `tasks/parser/gen_field_order.mjs
---config=<path>` and `tasks/parser/gen_convert.mjs --config=<path>` (Prism
-1.9's `config.yml` comes with its gem). `convert.mjs` holds one function
+generated from Prism's `config.yml` by `tasks/parser/gen_field_order.mjs`
+and `tasks/parser/gen_convert.mjs`. Both default to the vendored
+`lib/opal/parser/prism-1.9.0.config.yml` - a verbatim copy of the prism
+1.9.0 gem's `config.yml` (MIT, `prism-1.9.0-LICENSE.md` next to it; swap
+both when the parser moves to a new Prism version) - and `--config=<path>`
+overrides that default. `convert.mjs` holds one function
 per node type that turns the parser's node into the plain AST object; the
 generic conversion in `index.mjs` (from the field order) remains for
 reference and for node types without one. They only need regenerating when

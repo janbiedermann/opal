@@ -7,11 +7,12 @@
 // Locations are the parser's own { start, end } objects (each belongs to one
 // node) instead of copies.
 //
-//   node tasks/parser/gen_convert.mjs --config=<path to prism/config.yml> [--check]
+//   node tasks/parser/gen_convert.mjs [--config=<path to a prism config.yml>] [--check]
 //
 // Only needed when moving parser to a new Prism version; convert.mjs is
-// committed. (Prism 1.9's config.yml comes with its gem:
-// gems/prism-1.9.0/config.yml.)
+// committed. Without --config the generator uses the vendored
+// lib/opal/parser/prism-1.9.0.config.yml (a copy of the prism 1.9.0 gem's
+// config.yml — swap it when Prism moves).
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -20,11 +21,10 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const target = join(root, "lib", "opal", "parser", "convert.mjs");
 const configArg = process.argv.find((a) => a.startsWith("--config="));
-if (!configArg) {
-  console.error("usage: node tasks/parser/gen_convert.mjs --config=<path to prism/config.yml> [--check]");
-  process.exit(2);
-}
-const config = readFileSync(configArg.slice("--config=".length), "utf8");
+const configFile = configArg
+  ? configArg.slice("--config=".length)
+  : join(root, "lib", "opal", "parser", "prism-1.9.0.config.yml");
+const config = readFileSync(configFile, "utf8");
 
 // [{ name, fields: [{ name, type }] }] of the `nodes:` section
 const nodes = [];
@@ -100,7 +100,7 @@ const text = out.join("\n");
 if (process.argv.includes("--check")) {
   const current = readFileSync(target, "utf8");
   if (current !== text) {
-    console.error(`${target} is out of date; run node tasks/parser/gen_convert.mjs --config=...`);
+    console.error(`${target} is out of date; run node tasks/parser/gen_convert.mjs`);
     process.exit(1);
   }
 } else {
