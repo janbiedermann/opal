@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Regenerates the committed baked index modules (LSP.md §5):
-//   lib/opal/language/baked_index.mjs     - the corelib/stdlib record graph
-//   lib/opal/language/corelib_sources.mjs - path -> source
+//   lib/opal/language-server/baked_index.mjs     - the corelib/stdlib record graph
+//   lib/opal/language-server/corelib_sources.mjs - path -> source
 //
 // Like tasks/compiler/update_fixtures.mjs: bake, diff, commit. It runs the
-// JS bake driver (lib/opal/language/server/indexer/bake.mjs - the same
+// JS bake driver (lib/opal/language-server/indexer/bake.mjs - the same
 // DeclarationListener the live server uses) over this checkout, and the
 // driver writes the two modules. Run it after changing corelib/stdlib
 // sources or the indexer.
@@ -15,7 +15,7 @@
 import { writeFileSync, mkdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT } from "../testing/common.mjs";
-import { runBake } from "../../lib/opal/language/server/indexer/bake.mjs";
+import { runBake } from "../../lib/opal/language-server/indexer/bake.mjs";
 
 const BAKE_DIR = join(ROOT, "tmp", "lsp_bake");
 
@@ -67,7 +67,7 @@ function emitVariants(payload) {
 function main() {
   mkdirSync(BAKE_DIR, { recursive: true });
 
-  const outDir = process.env.BAKED_OUT_DIR || join(ROOT, "lib", "opal", "language");
+  const outDir = process.env.BAKED_OUT_DIR || join(ROOT, "lib", "opal", "language-server");
   const stats = runBake({ home: ROOT, outDir });
   process.stdout.write(`baked ${stats.fileCount} files: ${stats.modules} modules, ${stats.constants} constants\n`);
 

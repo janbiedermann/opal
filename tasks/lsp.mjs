@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds the `opal-language-server` command (lib/opal/language/server/)
+// Builds the `opal-language-server` command (lib/opal/language-server/)
 // into exe/lsp (or OUT): a standalone minified Node.js program speaking LSP over
 // stdio. See tasks/lsp/bundle.mjs for the bundle's contents.
 import { writeFileSync, chmodSync, mkdirSync } from "node:fs";

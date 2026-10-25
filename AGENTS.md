@@ -66,7 +66,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
 
 ## Notes
 - The language server (`exe/lsp`, built by `tasks/lsp.mjs`/`tasks/lsp_exe.mjs`
-  from the plain-JS tree `lib/opal/language/server/` - the Ruby server
+  from the plain-JS tree `lib/opal/language-server/` - the Ruby server
   and `lib/opal/exe/lsp.rb` were replaced by this port in P8, LSP.md §13;
   plan in `LSP.md`): the exe is one minified Node program - `tasks/lsp/bundle.mjs`
   inlines the static ESM graph (server + parser + Compiler + the two bake
@@ -92,9 +92,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   a record.
 - The language server's corelib/stdlib index (LSP.md §5) is baked at exe
   BUILD time: `node tasks/language-server/update_baked_index.mjs` runs the
-  plain-node bake driver (`server/indexer/bake.mjs`, the same
+  plain-node bake driver (`indexer/bake.mjs`, the same
   DeclarationListener the live server uses) and regenerates the two
-  committed generated modules `lib/opal/language/baked_index.mjs`
+  committed generated modules `lib/opal/language-server/baked_index.mjs`
   and `corelib_sources.mjs` — re-run it (and commit) after changing
   corelib/stdlib sources or the indexer; the JS driver reproduces the
   original Ruby driver's payloads byte-for-byte.
@@ -104,7 +104,7 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   POJO literals boot 1.7-2.8x faster than either Map construction; baked
   and live records share that one plain JS shape now, keep it.
 - The stdio transport writes frames with `fs.writeSync`, not
-  `process.stdout.write` (server/transport.mjs): the stdout pipe drains inline only
+  `process.stdout.write` (transport.mjs): the stdout pipe drains inline only
   up to its ~64KB capacity, and `process.stdout.write` then queues the rest
   as an async libuv write the synchronous readSync loop never pumps - a
   >64KB response (documentSymbol on a 600KB file, semanticTokens on big
