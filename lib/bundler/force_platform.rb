@@ -3,14 +3,12 @@
 module Bundler
   module ForcePlatform
     # The `:force_ruby_platform` value used by dependencies for resolution, and
-    # by locked specifications for materialization is `false` by default, except
-    # for TruffleRuby. TruffleRuby generally needs to force the RUBY platform
-    # variant unless the name is explicitly allowlisted.
+    # by locked specifications for materialization is `false` by default.
+    # Upstream answers true only on TruffleRuby, whose native extensions can
+    # still match the RUBY platform; there is no such engine here.
 
     def default_force_ruby_platform
-      return false unless RUBY_ENGINE == "truffleruby"
-
-      !Gem::Platform::REUSE_AS_BINARY_ON_TRUFFLERUBY.include?(name)
+      false
     end
   end
 end
