@@ -32,20 +32,8 @@ class Gem::Platform
     match_gem?(spec.platform, spec.name)
   end
 
-  if RUBY_ENGINE == "truffleruby"
-    def self.match_gem?(platform, gem_name)
-      raise "Not a string: #{gem_name.inspect}" unless String === gem_name
-
-      if REUSE_AS_BINARY_ON_TRUFFLERUBY.include?(gem_name)
-        match_platforms?(platform, [Gem::Platform::RUBY, Gem::Platform.local])
-      else
-        match_platforms?(platform, Gem.platforms)
-      end
-    end
-  else
-    def self.match_gem?(platform, gem_name)
-      match_platforms?(platform, Gem.platforms)
-    end
+  def self.match_gem?(platform, gem_name)
+    match_platforms?(platform, Gem.platforms)
   end
 
   def self.sort_priority(platform)
