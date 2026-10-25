@@ -2,15 +2,40 @@
 // Lints Opal's JavaScript with ESLint (Ruby code style: see HACKING.md):
 //   * the parser (and that lib/opal/parser/parser.mjs matches its parts)
 //   * the JS compiler, builder, CLI and the Node.js tasks
-//   * corelib and stdlib as built by tasks/dist.mjs (in tmp/lint); errors
+//   * corelib and stdlib built as bundles (in tmp/lint); errors
 //     there are mapped back to the Ruby sources by
 //     tasks/linting-parse-eslint-results.js
-import { rmSync } from "node:fs";
+import { readdirSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { Builder } from "../lib/opal/compiler/builder/builder.mjs";
 import { glob } from "./testing/glob.mjs";
 import { ROOT, run } from "./testing/common.mjs";
 
 const ESLINT = `${ROOT}/node_modules/eslint/bin/eslint.js`;
 const eslint = (...args) => run(process.execPath, [ESLINT, ...args]);
+
+const rubyFiles = (dir) => readdirSync(join(ROOT, dir)).filter((f) => f.endsWith(".rb")).map((f) => basename(f, ".rb"));
+
+// Build every corelib/stdlib library to tmp/lint as a development bundle
+// with an embedded source map (the form tasks/dist.mjs used to emit):
+// ESLint then reads these, and missing requires fail the build.
+function buildLintBundles() {
+  const files = [...rubyFiles("opal"), ...rubyFiles("stdlib"), ...rubyFiles("opal/opal").map((f) => `opal/${f}`)].sort();
+  mkdirSync("tmp/lint", { recursive: true });
+  for (const lib of files) {
+    // Set requirable to true, unless building opal. This allows opal to be auto-loaded.
+    const requirable = !["opal", "opal/mini", "opal/base"].includes(lib);
+    const builder = new Builder({
+      compilerOptions: { arity_check: false, dynamic_require_severity: "warning" },
+      missingRequireSeverity: "error",
+      esmPrune: true,
+    });
+    builder.build(lib, { requirable });
+    const out = join("tmp/lint", `${lib}.js`);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, `${builder.toString()};${builder.sourceMap.toDataUriComment()}`);
+  }
+}
 
 async function main() {
   process.chdir(ROOT);
@@ -20,8 +45,12 @@ async function main() {
     ["compiler", () => eslint("lib/opal/compiler", "lib/opal/language-server", "spec/lib/compiler", "lib/opal/gems", "spec/lib/gems", "tasks/compiler", "tasks/language-server", ...glob("tasks/*.mjs"), "tasks/testing")],
     ["corelib and stdlib", async () => {
       rmSync("tmp/lint", { recursive: true, force: true });
-      const built = await run(process.execPath, ["tasks/dist.mjs"], { env: { ...process.env, DIR: "tmp/lint", FORMATS: "js,map" } });
-      if (built !== 0) return built;
+      try {
+        buildLintBundles();
+      } catch (err) {
+        console.error(err);
+        return 1;
+      }
       const status = await eslint(...glob("tmp/lint/*.js"), "--format", "json", "--output-file", "tmp/lint/result.json");
       if (status === 0) return 0;
       await run(process.execPath, ["tasks/linting-parse-eslint-results.js"]);

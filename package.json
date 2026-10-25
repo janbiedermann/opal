@@ -15,7 +15,6 @@
     "build-ruby-exe": "node tasks/ruby_exe.mjs",
     "codesize": "node tasks/codesize.mjs",
     "compiler-gen-fixtures": "node tasks/compiler/update_fixtures.mjs",
-    "dist": "node tasks/dist.mjs",
     "lint": "node tasks/lint.mjs",
     "lsp-gen-index-sources": "node tasks/language-server/update_baked_index.mjs",
     "parser-assemble": "node tasks/parser/assemble.mjs",
@@ -37,7 +36,6 @@
   },
   "dependencies": {
     "benchmark": "^2.1.4",
-    "source-map-support": "0.5.21",
     "terser": "^5.31.6"
   },
   "devDependencies": {

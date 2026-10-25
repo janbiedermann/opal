@@ -24,7 +24,7 @@ All of the following is now covered by `node tasks/release.mjs prepare v1.2.3`
 - Push the commit to `master` or the current stable branch
 - Tag the commit (`git tag v1.2.3`) and push the tag
 - Go to GitHub releases and create a new release from the latest tag pasting the contents from CHANGELOG.md (or UNRELEASED.md for pre-releases)
-- Build the assets (`node tasks/dist.mjs`) and upload them with `node tasks/release.mjs upload v1.2.3` (needs the `gh` CLI)
+- Build the assets and upload them with `node tasks/release.mjs upload v1.2.3` (needs the `gh` CLI); the `tasks/dist.mjs` asset builder is currently removed - restore it from git history when releasing
 
 ---
 

@@ -10,8 +10,10 @@
 //     answer it), updates the changelog (unless it's a
 //     prerelease), resets UNRELEASED.md and commits.
 //   node tasks/release.mjs upload TAG
-//     Uploads build/{opal,opal-parser}{.js,.min.js,.min.js.gz} (from
-//     `node tasks/dist.mjs`) to the GitHub release TAG (needs the `gh` CLI).
+//     Uploads build/{opal,opal-parser}{.js,.min.js,.min.js.gz} to the
+//     GitHub release TAG (needs the `gh` CLI). The builder,
+//     `tasks/dist.mjs`, is currently removed - restore it from history
+//     when releasing.
 //
 // GITHUB_TOKEN is used for the GitHub API if set.
 import { readFileSync, writeFileSync } from "node:fs";

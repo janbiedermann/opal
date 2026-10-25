@@ -205,7 +205,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   and take the minimum over samples: write a loop harness (a Ruby file that
   calls the method in a nested loop, an `INNER` multiplier raises the
   resolution) and run it with `node exe/opal <harness.rb>`.
-- Other tasks: `node tasks/dist.mjs` (build corelib/stdlib),
+- Other tasks:
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
   code size of the opal/mini, opal/base, opal/full and full-stdlib bundles,
