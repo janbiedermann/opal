@@ -72,8 +72,8 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
 ## Notes
 - The language server (`exe/lsp`, built by `tasks/lsp.mjs`/`tasks/lsp_exe.mjs`
   from the plain-JS tree `lib/opal/language-server/` - the Ruby server
-  and `lib/opal/exe/lsp.rb` were replaced by this port in P8, LSP.md §13;
-  plan in `LSP.md`): the exe is one minified Node program - `tasks/lsp/bundle.mjs`
+  and `lib/opal/exe/lsp.rb` were replaced by this port in P8): the exe is
+  one minified Node program - `tasks/lsp/bundle.mjs`
   inlines the static ESM graph (server + parser + Compiler + the two bake
   payloads) with `lib/opal/compiler/builder/esm_linker.mjs`, then terser.
   Its stdio transport is byte-exact (`fs.readSync` into raw bytes,
@@ -96,7 +96,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   `Object.hasOwn` reads: the ported gems call a real method `constructor`,
   and through a plain `{}` literal that key answers `Object` as if it were
   a record.
-- The language server's corelib/stdlib index (LSP.md §5) is baked at exe
+- The language server's corelib/stdlib index is baked at exe
   BUILD time: `node tasks/language-server/update_baked_index.mjs` runs the
   plain-node bake driver (`indexer/bake.mjs`, the same
   DeclarationListener the live server uses) and regenerates the two
@@ -414,7 +414,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   require still answers built-ins inside. That is how the HTTP transport
   (lib/opal/gems/http.cjs, OPAL_HTTP_TRANSPORT) loads; `new Function` and
   eval'd Workers are unrestricted in a SEA.
-- The gem port (GEMS.md, `stdlib/rubygems/`) requires its files eagerly - no
+- The gem port (the ported gems, `stdlib/rubygems/`) requires its files eagerly - no
   `autoload` - so a compiled bundle can carry them; `tasks/ruby/bundle.mjs`
   bundles `stdlib/rubygems.rb` into `exe/ruby` (1.4MB -> 2.06MB as the port grew) and
   `find_feature` calls `Gem.try_activate` when a path is not on `$LOAD_PATH`,
