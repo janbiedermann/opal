@@ -19,7 +19,7 @@
     "bench": "node tasks/bench.mjs",
     "performance": "node tasks/performance.mjs",
     "codesize": "node tasks/codesize.mjs",
-    "update-fixtures": "node tasks/compiler/update_fixtures.mjs",
+    "compiler-gen-fixtures": "node tasks/compiler/update_fixtures.mjs",
     "build-ruby": "node tasks/ruby.mjs",
     "build-ruby-exe": "node tasks/ruby_exe.mjs",
     "build-gem": "node tasks/gem.mjs",
