@@ -116,15 +116,20 @@ function stat(name) {
   const runTime = new Timing(31, () => sh(`node tmp/performance/asciidoctor_test.js > ${output}`));
 
   const source = readFileSync(join(PERF, "asciidoctor_test.js"), "utf8");
-  console.log(`\n* Minifying AsciiDoctor with ${name}...`);
   return {
     compileTime,
     runTime,
     output: readFileSync(join(ROOT, output), "utf8"),
     size: new Size(statSync(join(PERF, "asciidoctor_test.js")).size),
-    minSize: minifiedSize(source, false),
-    minSizeMangled: minifiedSize(source, true),
+    source,
   };
+}
+
+// the minify pass needs this checkout's terser, which may not exist while
+// the previous ref is checked out; the sources stay in memory meanwhile
+function finishMinify(result) {
+  result.minSize = minifiedSize(result.source, false);
+  result.minSizeMangled = minifiedSize(result.source, true);
 }
 
 function compare() {
@@ -152,6 +157,8 @@ function compare() {
   } finally {
     sh("git checkout --recurse-submodules -");
   }
+  finishMinify(current);
+  finishMinify(previous);
 
   console.log("\n=== Summary ===");
   console.log(`Summary of performance changes between (previous) ${ref} and (current) ${thisRef}:\n`);
@@ -188,6 +195,7 @@ function compare() {
 function current() {
   prepare();
   const result = stat("current");
+  finishMinify(result);
   console.log(`\nCompile time: ${(result.compileTime.best / 1e6).toFixed(3)}s, run time: ${(result.runTime.best / 1e6).toFixed(3)}s`);
   console.log(`Bundle: ${(result.size.size / 1000).toFixed(2)} kB, minified: ${(result.minSize.size / 1000).toFixed(2)} kB, mangled: ${(result.minSizeMangled.size / 1000).toFixed(2)} kB`);
   return 0;
