@@ -8,6 +8,15 @@
 ### Fixed
 -->
 
+### Added
+
+- `stdlib`: the up! network stack - `Net::HTTPServer` (evented HTTP/1.1,
+  HTTP/2, HTTPS and WebSocket server over node.js, with node-cluster
+  workers and pubsub), `Rack::Handler::Up` (Rack 3 handler with the
+  iodine-style `rack.upgrade` WebSocket/pubsub API), and the `tempfile`
+  and `cgi/escape` features; guide in `docs/http_server.md`, smoke
+  drivers in `test/opal/`, rack-gem audit in `test/opal/rack_compat/`
+
 ### Removed
 
 - Remove `Opalfile` support: a project is marked by its `Gemfile` or
