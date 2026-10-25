@@ -39,6 +39,7 @@ klasses = [
       fn();
     }
     catch (e) {}
+    %PrepareFunctionForOptimization(fn);
     %OptimizeFunctionOnNextCall(fn);
     try {
       fn();
