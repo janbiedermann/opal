@@ -88,8 +88,9 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   esm_linker traps that cost a debugging cycle: a `node:` builtin must be
   imported by name (a default import resolves to the missing `.default` of
   the CJS exports -> undefined), the entry .mjs must carry no shebang (it
-  lands inside a module body and terser chokes), and terser drops
-  `console.*` - human output goes through `process.stdout.write`.
+  lands inside a module body and terser chokes), and the bundles minify
+  mangle-only now (see the terser bullet under the committed bundles) -
+  human output still goes through `process.stdout.write`.
   Name-keyed index maps and method buckets need `Object.create(null)` +
   `Object.hasOwn` reads: the ported gems call a real method `constructor`,
   and through a plain `{}` literal that key answers `Object` as if it were
@@ -423,6 +424,13 @@ Opal needs only Node.js (22 or later), git and yarn; no Ruby.
   Rebuild the exes that carry a changed source (`node tasks/{ruby,gem,bundler}.mjs`)
   and commit them in the same commit; corelib/stdlib changes additionally need
   the baked-index re-run above and an `exe/lsp` rebuild.
+- The four exe-bundle tasks minify with terser `{ mangle: true }` only (no
+  compress): the bundle builds roughly halve (ruby and bundler 10s -> 5s,
+  gem 7.5 -> 3.7s, lsp 4.7 -> 2.7s) for +1-5% bytes on the bundles (+0.1%
+  on the 150MB SEA `.exe`). terser's `console.*` removal is a compress
+  side-effect, so bundled `console.*` calls (e.g. stdlib/console.rb)
+  survive and print in the task-built exes; the CLI's own `--minify` and
+  `--compile-to-exe` still compress.
 - `exe/gem` is `tasks/gem.mjs` (bundle in `tasks/gem/bundle.mjs`, single-file
   executable in `tasks/gem_exe.mjs` and `tasks/sea_exe.mjs`, which both `*_exe`
   tasks share): opal, opal/full, thread and rubygems at boot, opal-parser

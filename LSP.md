@@ -629,8 +629,9 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   builtin's default import to a missing `.default` (named imports only),
   `Object.prototype` key names (`constructor`) poison name-keyed record
   maps and method buckets (null-prototype maps + `Object.hasOwn` reads),
-  the entry's shebang parses inside the module bodies, and terser drops
-  `console.*` from the bundle.
+  the entry's shebang parses inside the module bodies, and terser dropped
+  `console.*` from the bundle (the tasks minify mangle-only since, which
+  keeps it).
 - **P8 follow-up - index-on-idle. LANDED (2026-10-24).** didOpen/didChange
   no longer re-index (the re-index was the keystroke's biggest stage after
   the parse, ~17ms at s5); `Index#stale` compares the listener's ParseResult
@@ -928,5 +929,6 @@ immediate repeat is warm at 0.1ms - once per burst, not per keystroke.
   prototype key masquerades as a record list (or `Object` answers as a
   definition).
 - No shebang on the JS entry (esm_linker inlines the body, where `#!` is
-  a syntax error); no `console.*` in the server (terser drops it - the
-  CLI answers through `process.stdout.write`).
+  a syntax error); no `console.*` in the server (the terser compress pass
+  used to drop it - the mangle-only build does not; the CLI answers
+  through `process.stdout.write`).

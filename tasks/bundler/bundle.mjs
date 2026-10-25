@@ -72,6 +72,6 @@ export async function buildBundlerBundle() {
   builder.buildStr(readFileSync(join(ROOT, "lib", "opal", "exe", "bundler.rb"), "utf8"), "lib/opal/exe/bundler.rb");
   builder.buildStr("::Kernel.exit", "(exit)", { no_export: true });
 
-  // the same terser the CLI's --minify/--mangle use
-  return minifyJs(`${builder}`, { minify: true, mangle: true });
+  // terser mangle-only (the compress pass doubles the build for ~5%)
+  return minifyJs(`${builder}`, { mangle: true });
 }

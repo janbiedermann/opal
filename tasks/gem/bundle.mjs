@@ -54,6 +54,6 @@ export async function buildGemBundle() {
   builder.buildStr(readFileSync(join(ROOT, "lib", "opal", "exe", "gem.rb"), "utf8"), "lib/opal/exe/gem.rb");
   builder.buildStr("::Kernel.exit", "(exit)", { no_export: true });
 
-  // the same terser the CLI's --minify/--mangle use
-  return minifyJs(`${builder}`, { minify: true, mangle: true });
+  // terser mangle-only: the compress pass doubles the build for ~5% of size
+  return minifyJs(`${builder}`, { mangle: true });
 }
