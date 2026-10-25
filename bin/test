@@ -1,5 +1,0 @@
-#!/usr/bin/env node
-// Runs the given spec/test files or directories (or suites); see tasks/test.mjs.
-//   bin/test spec/ruby/core/array/flatten_spec.rb spec/opal/core test/opal/test_base64.rb
-process.env.NODE_ENV = "test";
-import("../tasks/test.mjs");

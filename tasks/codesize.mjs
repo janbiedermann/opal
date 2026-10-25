@@ -16,7 +16,8 @@
 // bundle) are reported as failures (informative) and their lines are
 // marked FAIL.
 //
-// The previous ref is built with its own bin/opal, so a ref from before the
+// The previous ref is built with its own bin/opal (exe/opal once that bin
+// is gone), so a ref from before the
 // Node.js toolchain needs Ruby and Bundler.
 import { execSync } from "node:child_process";
 import { mkdirSync, readdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
@@ -32,8 +33,9 @@ const failures = [];
 const sh = (cmd, options = {}) => execSync(cmd, { cwd: ROOT, stdio: "inherit", shell: true, ...options });
 const kb = (n) => (n / 1000).toFixed(2).padStart(9);
 
-// The checked-out ref's own CLI.
+// The checked-out ref's own CLI (exe/opal since bin/opal was removed).
 function opalCommand() {
+  if (!existsSync(join(ROOT, "bin", "opal"))) return "node exe/opal";
   return readFileSync(join(ROOT, "bin", "opal"), "utf8").startsWith("#!/usr/bin/env node")
     ? "node bin/opal"
     : "bundle exec ruby bin/opal";

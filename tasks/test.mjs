@@ -8,7 +8,7 @@
 //
 // Suites: parser, compiler, gems, mspec_opal, mspec_ruby, minitest_cruby,
 // minitest_node; "mspec" and "minitest" name both of theirs. Files and
-// directories run their specs/tests (like bin/test). The suites read the
+// directories run their specs/tests. The suites read the
 // environment variables PATTERN, FILES, RANDOM_SEED, ... (see AGENTS.md).
 import { relative, resolve } from "node:path";
 import { existsSync, statSync } from "node:fs";
@@ -65,7 +65,7 @@ async function main(args) {
   };
 
   if (files.length) {
-    // like bin/test: specs and tests found in the given files/directories
+    // specs and tests found in the given files/directories
     const expanded = files.flatMap((f) => (statSync(f).isDirectory() ? glob(`${f}/**/{*_spec.rb,test_*.rb}`) : [f]));
     const specs = expanded.filter((f) => f.endsWith("_spec.rb"));
     const tests = expanded.filter((f) => !f.endsWith("_spec.rb"));

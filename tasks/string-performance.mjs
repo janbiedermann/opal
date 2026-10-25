@@ -20,7 +20,7 @@ const option = (name) => {
 };
 
 const runner = process.env.RUNNER || "nodejs";
-execSync(`node bin/opal --no-cache -R${runner} ${BENCH}`, {
+execSync(`node exe/opal --no-cache -R${runner} ${BENCH}`, {
   cwd: ROOT,
   stdio: "inherit",
   shell: true,

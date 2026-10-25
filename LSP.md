@@ -588,7 +588,7 @@ Mirrors the `ruby`/`gem`/`bundler` trio exactly:
   declines), defs on other objects, multi-line selections. `only`
   matching compares on dot-separated kind prefixes.
   *Still deferred:* code lens + test discovery for `test/nodejs`
-  Minitest files (`bin/test <file>` commands), and ERB/`.opalerb`
+  Minitest files (`node tasks/test.mjs <file>` commands), and ERB/`.opalerb`
   documents via `prepareErb`.
 - **P7d — first live VS Code session. ✅ LANDED (2026-10-24).** The F5
   smoke test paid for itself: (a) the extension had passed a mixed

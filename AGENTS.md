@@ -47,7 +47,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   - `minitest_node`: integration tests in `test/nodejs`
 - Name suites to run only those (`node tasks/test.mjs mspec_ruby`; `mspec` and
   `minitest` name both of theirs), or pass spec/test files or directories to run
-  just them (`bin/test` does the same). `-R chrome` (or `-R firefox`) runs the
+  just them. `-R chrome` (or `-R firefox`) runs the
   Opal suites on another runner; `safari` only exists on macOS and the other
   suites (`parser`, `compiler`, `minitest_node`) always run on Node.js.
   `RANDOM_SEED` repeats a randomized order.

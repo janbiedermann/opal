@@ -99,8 +99,9 @@ function minifiedSize(source, mangle) {
 }
 
 function stat(name) {
-  // the checked-out ref's own CLI
-  const opal = readFileSync(join(ROOT, "bin", "opal"), "utf8").startsWith("#!/usr/bin/env node") ? "node bin/opal" : "bundle exec ruby bin/opal";
+  // the checked-out ref's own CLI (exe/opal since bin/opal was removed)
+  const opal = !existsSync(join(ROOT, "bin", "opal")) ? "node exe/opal"
+    : readFileSync(join(ROOT, "bin", "opal"), "utf8").startsWith("#!/usr/bin/env node") ? "node bin/opal" : "bundle exec ruby bin/opal";
   console.log(`\n* Checking optimization status with ${name}...`);
   sh(`${opal} tasks/performance/optimization_status.rb > tmp/performance/optstatus_${name}`, { env: { ...process.env, NODE_OPTS: "--allow-natives-syntax" } });
 
