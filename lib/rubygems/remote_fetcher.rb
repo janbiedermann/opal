@@ -435,7 +435,7 @@ class Gem::RemoteFetcher
 
     parts = ["RubyGems/#{Gem::VERSION}", Gem::Platform.local,
       "Ruby/#{ruby_version} (#{RUBY_RELEASE_DATE} #{detail})"]
-    parts << RUBY_ENGINE if RUBY_ENGINE != "ruby"
+    parts << RUBY_ENGINE
     parts.join " "
   end
 
