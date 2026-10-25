@@ -35,8 +35,7 @@
     "test-safari": "node tasks/test.mjs -R safari"
   },
   "dependencies": {
-    "benchmark": "^2.1.4",
-    "terser": "^5.31.6"
+    "benchmark": "^2.1.4"
   },
   "devDependencies": {
     "@ruby/prism": "^1.9.0",

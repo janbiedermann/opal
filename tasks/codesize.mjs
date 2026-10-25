@@ -21,13 +21,12 @@
 import { execSync } from "node:child_process";
 import { mkdirSync, readdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { minifyJs } from "../lib/opal/compiler/cli/minify.mjs";
 import { ROOT } from "./testing/common.mjs";
 
 const CODESIZE = join(ROOT, "tmp", "codesize");
 const ENTRIES = join(CODESIZE, "entries");
-const TERSER = join(ROOT, "node_modules", "terser", "main.js");
 
 const failures = [];
 const sh = (cmd, options = {}) => execSync(cmd, { cwd: ROOT, stdio: "inherit", shell: true, ...options });
@@ -58,10 +57,8 @@ function bundles() {
 }
 
 async function uglify(source, mangle) {
-  const { minify } = await import(pathToFileURL(TERSER).href);
-  const options = mangle ? { compress: true, mangle: true } : { compress: true, mangle: false };
-  const result = await minify(source, options);
-  return result.code;
+  // the vendored terser of the compiler CLI (lib/opal/dependencies)
+  return minifyJs(source, { minify: true, mangle: !!mangle });
 }
 
 // The core bundles are the ones users ship; their growth is held to 1%,
