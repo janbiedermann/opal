@@ -58,8 +58,16 @@ module Reline
     private def prompt_line_for(code, prompt)
       return prompt if code.empty?
       proc_ = prompt_proc
-      return proc_.call(prompt, code.lines.size).to_s if proc_
-      '>'
+      return prompt if proc_.nil?
+      # the Reline contract: the proc gets the chomped Array of lines read
+      # so far (IRB's dynamic_prompt joins "\n" back and parses per line;
+      # unchomped lines would double every newline) and answers an Array of
+      # per-line prompts - Reline takes the one for the line being typed
+      lines_arr = code.lines.map(&:chomp)
+      out = proc_.call(lines_arr)
+      return prompt if out.nil?
+      out = out[lines_arr.size - 1] if out.is_a?(Array)
+      out.to_s
     end
 
     public
@@ -120,7 +128,7 @@ module Reline
         size = %x{
           (function () {
             var p = Opal.platform;
-            if (p.tty_winsize) { var w = p.tty_winsize(1); if (w) return [w[0], w[1]]; }
+            if (p.tty_winsize) { var w = p.tty_winsize(1); if (w && w[0] > 0 && w[1] > 0) return [w[0], w[1]]; }
             return nil;
           })()
         }
