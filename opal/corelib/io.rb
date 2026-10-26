@@ -1022,6 +1022,11 @@ class ::IO
               }
             }
             if (found_sep || bytes_read < read_len || limit <= total_bytes_read) {
+              // A pipe or tty at EOF reads 0 bytes where eof() cannot answer
+              // (it is only exact for File and Opal's own Pipe objects), and
+              // the loop would otherwise hand back an empty line: CRuby's
+              // gets/readline answer nil at end of input.
+              if (total_bytes_read === 0) return ($gvars['_'] = nil);
               let str_end = (found_sep && chomp !== nil && chomp !== false) ? sep_pos : i;
               let str_len = Math.min(limit, str_end);
               line = self.buffer.$get_raw_string(0, str_len, !is_nil(self.ext_enc) ? self.ext_enc : #{::Encoding.default_external}, true);

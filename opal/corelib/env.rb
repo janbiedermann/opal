@@ -100,13 +100,16 @@
     h
   end
 
-  def fetch(name, default_value = nil)
+  def fetch(name, default_value = undefined)
     # If name is the name of an environment variable, returns its value
     name = `$coerce_to_or_raise(#{name}, Opal.String, "to_str")`
-    warn('block supersedes default value argument') if default_value && block_given?
+    # The default defaults to `undefined` so `fetch(key, nil)` answers nil the
+    # way CRuby does instead of raising KeyError: an argument given as nil is
+    # still an argument.
+    warn('block supersedes default value argument') if `default_value !== undefined && typeof default_value !== "undefined"` && block_given?
     return self[name] if key?(name)
     return yield name if block_given?
-    return default_value unless `default_value == nil || default_value == null`
+    return default_value unless `default_value === undefined || typeof default_value === "undefined"`
     raise(::KeyError.new("key not found: #{name.inspect}", receiver: self, key: name))
   end
 
