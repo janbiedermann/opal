@@ -603,6 +603,20 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   `Gem::Source#enforce_trailing_slash` merges for a source given without a
   trailing slash (ruby/spec parses no lone slash, so nothing covers it:
   `spec/opal/stdlib/uri/parse_relative_ref_spec.rb` does).
+- `stdlib/prism.rb` is the Ruby Prism API over the vendored JS parser
+  (`require 'opal/parser/index.mjs'`, `Opal.esm["opal/parser/index"]`) -
+  the parse/lex layer of the IRB port. Its parity gate is
+  `spec/opal/stdlib/prism/*` with fixtures from the *prism 1.9.0 gem*
+  (same series the parser ports; regenerate with
+  `ruby tasks/prism/gen_prism_fixtures.rb`, CRuby needed). Traps that cost
+  a cycle: the parser reports UTF-16 code-unit offsets while C Prism
+  reports UTF-8 bytes - columns are byte-based on both sides, so compute
+  them with a JS `code.slice(from, to)` + `bytesize`, never `code[a...b]`
+  (Opal indexes characters: a surrogate pair shifts it by one); both
+  implementations only report `invalid_yield` at top level when NO scope
+  was pushed, so generator and specs pin every case with `scopes: [[]]`;
+  and the prism.js lint bundle embeds the parser, so it lives in the
+  eslint override alongside opal-parser/opal-builder.
 - `spec/opal/gems/support/http_fixture.rb` restarts its Worker when a call adds
   a route, and a restart means a new port: a spec that registers routes inside
   an example invalidates every port captured earlier in the file. Put all the

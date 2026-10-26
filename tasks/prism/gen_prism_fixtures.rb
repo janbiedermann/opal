@@ -1,0 +1,204 @@
+#!/usr/bin/env ruby
+# Generates spec/opal/stdlib/prism/fixtures.rb from the reference Prism:
+# the prism gem (native CRuby build), pinned to the same 1.9.0 series as
+# the JavaScript port Opal vendors (lib/opal/parser/prism-1.9.0.config.yml).
+#
+# Run with:  ruby tasks/prism/gen_prism_fixtures.rb [out.rb]
+# Requires:  ruby with `gem install prism -v 1.9.0` (or a Ruby whose
+# default prism is 1.9.x). The spec that reads the fixtures is
+# spec/opal/stdlib/prism/prism_spec.rb and runs in Opal itself.
+#
+# Fixture shape per source (the corpus is the CORPUS array below):
+#   { source:, ascii_only:, scopes: [locals],
+#     ast:  [node class names of the top-level statements],
+#     lex:  [[token-type, value, start_line, start_column, end_line, end_column,
+#             start_offset, end_offset], ...],
+#     errors: [[type, message, level,
+#               start_line, start_column, end_line, end_column,
+#               start_offset, end_offset], ...] }
+# Offsets differ between the two implementations (UTF-16 code units in
+# the JS port vs UTF-8 bytes in the C gem) so only columns and lines are
+# pinned for every case; the spec pins offsets for the ASCII cases only.
+
+require 'prism'
+
+if Gem::Version.new(Prism::VERSION) != Gem::Version.new('1.9.0')
+  warn "warning: reference prism is #{Prism::VERSION}, this repo vendors 1.9.0"
+end
+
+CORPUS = [
+  ["a = 1\na + 1"],
+  ["def greet\n  'hello'\nend\ngreet"],
+  ["x = <<~EOS\n  hi\nEOS\n"],
+  ["puts 'あ'", nonascii: true],
+  ["puts '𠀀'", nonascii: true],
+  ["if x then y else z end"],
+  ["begin; rescue A => e; retry; end"],
+  ["a ? b : c"],
+  ["hash = { k: 1, 's' => 2 }"],
+  ["case v\nwhen 1 then :one\nelse :many\nend"],
+  ["while i < 10\n  i += 1\nend"],
+  ["until x > 2 do x += 1 end"],
+  ["a, b = 1, 2"],
+  ["obj&.method(&:sym)"],
+  ['/re#{\'x\'}g/'],
+  ["%w[a b]"],
+  ["%i[a b]"],
+  [":\"quoted sym\""],
+  ['"emb #{1 + 1} tail"'],
+  ["class C < B\n  def m = 42\nend"],
+  ["module M; end"],
+  ["lambda { |a| a }"],
+  ["x = 1 while x < 2"],
+  ["a.b = 1"],
+  ["a[b] = 1"],
+  ["a += 1"],
+  ["a &&= 1"],
+  ["x ||= 1"],
+  ["(@x, $y, @@z, CONST) = [1, 2, 3, 4]"],
+  ["defined?(x)"],
+  ["def f(a, b = 1, *c, d, e: 1, **f, &g); end"],
+  ["return if x"],
+  ["yield 1 if block_given?"],
+  ["a = begin; 1; rescue; 2; ensure; 3; end"],
+  ["unless x\n y\nend"],
+  ["if (x = 1)\n y\nend"],
+  ["# comment only"],
+  ["=begin\nembdoc\n=end\n"],
+  ["1..2"],
+  ["1.."],
+  ["__END__\nDATA data\n"],
+  ["def f\n"],
+  ["\"unterminated"],
+  ["/unterminated"],
+  ["a,\n"],
+  ["p a, %"],
+  ["/\\u"],
+  ["class a"],
+  ["a ? b :"],
+  ["tap(&"],
+  ["def f(a,"],
+  ["1 +\n"],
+  ["puts(1, 2"],
+  ["x\n.y"],
+  ["loop do break end"],
+  ["for i in 1..2 do end"],
+  ["a = 1 if false"],
+  ["def self.m; end"],
+  ["{ 'k' => 1 }"],
+  ["[1, 2, 3]"],
+  ['%q[interpol \#{no}]'],
+  ["alias new_m old_m"],
+  ["BEGIN { 1 }"],
+  ["END { 1 }"],
+  ["$1 if /x/.match?('x')"],
+  ["__FILE__"],
+  ["->(x) { x }"],
+  ["while x do y end"],
+  ["case\nwhen x then y\nend"],
+  ["x += begin\n  1\nend"],
+  ["obj = Struct.new(:a)"],
+  ["a = 1; b = 2\n[a, b]"],
+  ["if x\nelsif y\nelse z\nend"],
+  ["begin\n y\nrescue\n z\nend"],
+  ["raise ArgumentError, 'x'"],
+  ["hash[:k] ||= 1"],
+  ["@arr[0] += 1"],
+  ["CONST ||= 1"],
+  ["x = y = 1"],
+  ["!x"],
+  ["-x"],
+  ["x = -1"],
+  ["x = ~1"],
+  ["?a"],
+  ["1r"],
+  ["1.0i"],
+  ["0b1010"],
+  ["0o17"],
+  ["0xff"],
+  ["1_000"],
+  ["x = :sym"],
+  ["x = :'quoted sym'"],
+  ["x = \"a\"\n     \"b\""],
+  ["<<~EOS\n  \#{1 + 1}\nEOS\n"],
+  ["<<-'RAW'\n  no \#{interp}\nRAW\n"],
+  [":sym, 1"],
+  ["k: 1"],
+  ["obj.m = 1"],
+  ["obj&.m = 1"],
+  ["a = (1; 2)"],
+  ["def m(**) = m(*)"],
+  ["def m(...) = m(...)"],
+  ["x in Integer => y"],
+  ["case x; in Integer => y; end"],
+  ["-> { break }"],
+  ["while true do\n  break\nend"],
+  ["BEGIN"],
+  ["def m\nend\nm"],
+  ["if true then\nend"],
+  ["end"],
+  [")"],
+  ["def f = (1 + )"],
+  ["p(*[1])"],
+  ["p(**{})"],
+]
+
+out_path = ARGV[0] || File.expand_path('../../spec/opal/stdlib/prism/fixtures.rb', __dir__)
+
+def entry_for(source)
+  scopes = []
+
+  lexed = Prism.parse_lex(source, scopes: [scopes])
+  _node, pairs = lexed.value
+
+  ast_nodes = Prism.parse(source, scopes: [scopes]).value.statements&.body&.map { |n| n.class.name } || []
+
+  {
+    ast: ast_nodes,
+    lex: pairs.map { |t, _|
+      loc = t.location
+      [t.type.to_s, t.value, loc.start_line, loc.start_column, loc.end_line, loc.end_column,
+       loc.start_offset, loc.end_offset]
+    },
+    errors: lexed.errors.map { |e|
+      loc = e.location
+      [e.type.to_s, e.message, e.level.to_s,
+       loc.start_line, loc.start_column, loc.end_line, loc.end_column,
+       loc.start_offset, loc.end_offset]
+    },
+    success: lexed.success?,
+  }
+end
+
+entries = CORPUS.map do |(source, _opts)|
+  { source: source, ascii_only: source.ascii_only?, **entry_for(source) }
+end
+
+File.write(out_path, <<~RB)
+  # frozen_string_literal: true
+  # Generated by tasks/prism/gen_prism_fixtures.rb - do not edit.
+  # Reference data from the prism #{Prism::VERSION} gem (CRuby): the behavior
+  # stdlib/prism.rb must reproduce on top of the vendored JS port.
+
+  PRISM_FIXTURES = [
+  RB
+
+entries.each do |e|
+  File.open(out_path, 'a') do |f|
+    f.puts "  {"
+    f.puts "    source: #{e[:source].dump},"
+    f.puts "    ascii_only: #{e[:ascii_only]}, success: #{e[:success]},"
+    f.puts "    ast: #{e[:ast].inspect},"
+    f.puts "    lex: ["
+    e[:lex].each { |row| f.puts "      #{row.inspect}," }
+    f.puts "    ],"
+    f.puts "    errors: ["
+    e[:errors].each { |row| f.puts "      #{row.inspect}," }
+    f.puts "    ]"
+    f.puts "  },"
+  end
+end
+
+File.open(out_path, 'a') { |f| f.puts "].freeze\n" }
+
+puts "wrote #{entries.size} fixtures to #{out_path}"
