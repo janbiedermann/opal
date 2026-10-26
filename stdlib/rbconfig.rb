@@ -17,5 +17,7 @@ module RbConfig
   }
 end
 
-# required for mspec it would appear
-RUBY_EXE = 'exe/opal'
+# required for mspec it would appear - the ruby_exe helper spawns it to run
+# its probe programs, and exe/ruby is the command line's Ruby (CRuby-style
+# options); exe/opal is compiler-only now
+RUBY_EXE = 'exe/ruby'

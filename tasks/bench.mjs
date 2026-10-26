@@ -21,7 +21,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { basename, extname, join, relative } from "node:path";
 import { glob } from "./testing/glob.mjs";
-import { ROOT, OPAL_EXE } from "./testing/common.mjs";
+import { ROOT, DRILL_EXE, ensureDrill } from "./testing/common.mjs";
 import { VERSION } from "../lib/opal/compiler/version.mjs";
 
 const require = createRequire(import.meta.url);
@@ -65,9 +65,10 @@ function runBenchmarks(file, engine) {
   mkdirSync(BENCH_DIR, { recursive: true });
   const script = join(BENCH_DIR, "script.rb");
   writeFileSync(script, program(benchmarks));
+  ensureDrill(); // exe/drill runs the benchmarks (exe/opal only compiles now)
   const cmd = engine === "ruby"
     ? ["ruby", [script]]
-    : [process.execPath, [OPAL_EXE, `-R${engine}`, ...(RUNNER_REQUIRES[engine] || []), "--no-source-map", "--dynamic-require", "ignore", "--missing-require", "ignore", script]];
+    : [process.execPath, [DRILL_EXE, `-R${engine}`, ...(RUNNER_REQUIRES[engine] || []), "--no-source-map", "--dynamic-require", "ignore", "--missing-require", "ignore", script]];
   const result = spawnSync(cmd[0], cmd[1], { cwd: ROOT, encoding: "utf8", maxBuffer: 1 << 28 });
   const out = (result.stdout || "") + (result.stderr || "");
   const results = [...out.matchAll(/^BENCH (.+) (\S+) (\d+)$/gm)].map((m) => ({ name: m[1], seconds: parseFloat(m[2]), loops: parseInt(m[3], 10) }));
@@ -150,8 +151,9 @@ function ips(args) {
   const files = args.length ? args : glob(process.env.FILE || "benchmark-ips/bm_*.rb");
   if (files.length === 0) throw new Error("no files provided");
   console.log(`=== Files: ${files.join(", ")}`);
+  ensureDrill();
   for (const file of files) {
-    const result = spawnSync(process.execPath, [OPAL_EXE, "--dynamic-require", "ignore", "--missing-require", "ignore", "-ropal/platform", `-I${lib}`, "-rbenchmark/ips", "-A", file], { cwd: ROOT, stdio: "inherit" });
+    const result = spawnSync(process.execPath, [DRILL_EXE, "--dynamic-require", "ignore", "--missing-require", "ignore", "-ropal/platform", `-I${lib}`, "-rbenchmark/ips", "-A", file], { cwd: ROOT, stdio: "inherit" });
     if (result.status !== 0) return result.status;
   }
   return 0;

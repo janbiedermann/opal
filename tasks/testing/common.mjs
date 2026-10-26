@@ -1,11 +1,32 @@
 // Helpers shared by the test drivers (tasks/testing/*.mjs).
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { rubyInspect } from "../../lib/opal/compiler/helpers.mjs";
 
 export const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
-export const OPAL_EXE = resolve(ROOT, "exe", "opal");
+export const DRILL_EXE = resolve(ROOT, "exe", "drill");
+
+// exe/drill is a build output: rebuild it once per driver process so the
+// matrix drills with this checkout's toolchain (the compile cache makes the
+// rebuild ~seconds, and the program sources read from the live tree anyway).
+let drillBuilt = false;
+export function ensureDrill() {
+  if (drillBuilt) return;
+  drillBuilt = true;
+  const build = spawnSync(process.execPath, [join(ROOT, "tasks", "drill.mjs")], { stdio: "inherit", cwd: ROOT });
+  if (build.status !== 0) throw new Error("building exe/drill failed");
+}
+
+// exe/ruby likewise: mspec's ruby_exe helper spawns it for its probes
+// (stdlib/rbconfig.rb names it as RUBY_EXE).
+let rubyBuilt = false;
+export function ensureRubyExe() {
+  if (rubyBuilt) return;
+  rubyBuilt = true;
+  const build = spawnSync(process.execPath, [join(ROOT, "tasks", "ruby.mjs")], { stdio: "inherit", cwd: ROOT });
+  if (build.status !== 0) throw new Error("building exe/ruby failed");
+}
 
 // RANDOM_SEED from the environment, or a new one (printed for reruns).
 export function randomSeed(env) {
@@ -37,6 +58,10 @@ export function run(cmd, args, { env = process.env, echo = true, cwd = ROOT } = 
   });
 }
 
+// Runs a program drill-style (the exe used to be exe/opal, which now only
+// compiles): drill builds the bundle and hands it to -R's runner.
 export function runOpal(args, options) {
-  return run(process.execPath, [OPAL_EXE, ...args], options);
+  ensureDrill();
+  ensureRubyExe(); // mspec specs spawn probes through it (the ruby_exe helper)
+  return run(process.execPath, [DRILL_EXE, ...args], options);
 }

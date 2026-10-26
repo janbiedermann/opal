@@ -79,6 +79,10 @@ module RubyCommand
           case arg
           when '--version' then puts version_line; exit 0
           when '--help' then puts usage; exit 0
+          # --enable/--disable (the usual one is --enable=frozen_string_literal,
+          # which mspec's ruby_exe probes pass): accepted and no effect - Opal
+          # string literals are already immutable.
+          when /\A--(enable|disable)(=|\z)/ then nil
           else raise OptionError, "invalid option #{arg}"
           end
         elsif arg.start_with?('-') && arg.length > 1
@@ -198,6 +202,7 @@ module RubyCommand
             -p                         Like -n, but prints $_ after the script
             -0                           Read the input whole ($/ = nil)
             -E a:b                       Accepted and ignored (Opal has one encoding)
+            --enable[=F] / --disable[=F] Accepted and ignored (Opal literals are immutable)
             -                            Read the script from standard input
             --                           Stop option processing
             -h, --help                   Show this message

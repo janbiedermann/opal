@@ -11,7 +11,7 @@
 // The baseline of the current results is in STRING.md.
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { ROOT } from "./testing/common.mjs";
+import { ROOT, ensureDrill } from "./testing/common.mjs";
 
 const BENCH = join(ROOT, "benchmark", "string-performance.rb");
 const option = (name) => {
@@ -20,7 +20,8 @@ const option = (name) => {
 };
 
 const runner = process.env.RUNNER || "nodejs";
-execSync(`node exe/opal --no-cache -R${runner} ${BENCH}`, {
+ensureDrill(); // drill runs the benchmark now (exe/opal only compiles)
+execSync(`node exe/drill --no-cache -R${runner} ${BENCH}`, {
   cwd: ROOT,
   stdio: "inherit",
   shell: true,

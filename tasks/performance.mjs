@@ -101,11 +101,18 @@ function minifiedSize(source, mangle) {
 }
 
 function stat(name) {
-  // the checked-out ref's own CLI (exe/opal since bin/opal was removed)
+  // the checked-out ref's own CLI (exe/opal since bin/opal was removed);
+  // running the probe is exe/opal's before drill arrived and exe/drill's
+  // after - and drill is a build output, so drill-era refs build it first
   const opal = !existsSync(join(ROOT, "bin", "opal")) ? "node exe/opal"
     : readFileSync(join(ROOT, "bin", "opal"), "utf8").startsWith("#!/usr/bin/env node") ? "node bin/opal" : "bundle exec ruby bin/opal";
+  let runCli = opal;
+  if (existsSync(join(ROOT, "lib", "opal", "drill"))) {
+    sh("node tasks/drill.mjs");
+    runCli = "node exe/drill";
+  }
   console.log(`\n* Checking optimization status with ${name}...`);
-  sh(`${opal} tasks/performance/optimization_status.rb > tmp/performance/optstatus_${name}`, { env: { ...process.env, NODE_OPTS: "--allow-natives-syntax" } });
+  sh(`${runCli} tasks/performance/optimization_status.rb > tmp/performance/optstatus_${name}`, { env: { ...process.env, NODE_OPTS: "--allow-natives-syntax" } });
 
   console.log(`\n* Building AsciiDoctor with ${name}...`);
   const build = `${opal} --no-cache -c -Itmp/performance/asciidoctor/lib -Itmp/performance/asciidoctor.js/packages/core/lib -sconcurrent/map -sslim/include tmp/performance/asciidoctor_test.rb > tmp/performance/asciidoctor_test.js`;
