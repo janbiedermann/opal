@@ -585,6 +585,29 @@ if (Opal.platform.name == "node") {
       }
     };
     platform.io_tty_goto = (fd, col, lin) => {};
+    // io/console tty primitives. opal/io/console.rb gates its termios methods
+    // on platform.ioctl; node's driver answers their real work through these:
+    // winsize comes from node's TTY getters (rows/columns), raw mode toggles
+    // the tty stream so fs.readSync(0) hands over one key at a time, and the
+    // reads themselves stay on platform.io_read.
+    platform.ioctl = true;
+    platform.tty_isatty = (fd) => {
+      const channel = fd === 0 ? process.stdin : fd === 1 ? process.stdout : fd === 2 ? process.stderr : null;
+      return !!(channel && channel.isTTY);
+    };
+    platform.tty_winsize = (fd) => {
+      const channel = fd === 0 ? process.stdin : fd === 1 ? process.stdout : fd === 2 ? process.stderr : null;
+      if (!channel || !channel.isTTY) return null;
+      const rows = channel.rows, cols = channel.columns;
+      if (!rows || !cols) return null;
+      return [rows, cols];
+    };
+    platform.tty_raw = (fd, on) => {
+      // setRawMode exists only on the stdin tty; raw output is not a thing.
+      if (fd !== 0 || !process.stdin.isTTY || !process.stdin.setRawMode) return false;
+      process.stdin.setRawMode(!!on);
+      return true;
+    };
     platform.io_write = (fd, io_buffer, buffer_offset, pos, count) => {
       let data = io_buffer.data_view;
       // Also in theory its possible to use fs.writeSync for std*, but in reality that works only half the time and

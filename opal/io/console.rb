@@ -211,11 +211,22 @@ class ::IO
   if `$platform.ioctl`
     def raw(min: nil, time: nil, intr: nil)
       # Yields self within raw mode, and returns the result of the block.
-      yield self
+      # Opal: platforms that answer platform.tty_raw (node) toggle the real
+      # tty raw mode around the block; the rest of this ioctl branch keeps
+      # the yield-only behavior (termios is not otherwise emulated).
+      fd = fileno
+      changed = `$platform.tty_raw ? $platform.tty_raw(#{fd}, true) : false`
+      begin
+        return yield self
+      ensure
+        `$platform.tty_raw(#{fd}, false)` if `changed === true`
+      end
     end
 
     def raw!(min: nil, time: nil, intr: nil)
       # Enables raw mode, and returns io.
+      # Opal: see the raw patch - node toggles the tty via platform.tty_raw.
+      `if ($platform.tty_raw) { $platform.tty_raw(self.$fileno(), true); }`
       self
     end
   else
@@ -243,8 +254,11 @@ class ::IO
   if `$platform.ioctl`
     def winsize
       # Returns console size.
-      # something like: ioctl 0x00005413, buf
-      [25, 80]
+      # Opal: the ioctl placeholder predates the platform tty primitives;
+      # the node driver answers platform.tty_winsize from its TTY getters.
+      size = `$platform.tty_winsize ? $platform.tty_winsize(self.$fileno()) : null`
+      return size unless size == nil
+      raise NotImplementedError, "IO#winsize: not a terminal, or the platform has no tty_winsize"
     end
 
     def winsize=(arr)
