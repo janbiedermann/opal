@@ -598,9 +598,8 @@ if (Opal.platform.name == "node") {
     platform.tty_winsize = (fd) => {
       const channel = fd === 0 ? process.stdin : fd === 1 ? process.stdout : fd === 2 ? process.stderr : null;
       if (!channel || !channel.isTTY) return null;
-      const rows = channel.rows, cols = channel.columns;
-      if (!rows || !cols) return null;
-      return [rows, cols];
+      // A tty with no winsize set answers [0, 0] there, as CRuby's ioctl does.
+      return [channel.rows || 0, channel.columns || 0];
     };
     platform.tty_raw = (fd, on) => {
       // setRawMode exists only on the stdin tty; raw output is not a thing.

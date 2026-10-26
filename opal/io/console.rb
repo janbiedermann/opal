@@ -257,7 +257,7 @@ class ::IO
       # Opal: the ioctl placeholder predates the platform tty primitives;
       # the node driver answers platform.tty_winsize from its TTY getters.
       size = `$platform.tty_winsize ? $platform.tty_winsize(self.$fileno()) : null`
-      return size unless size == nil
+      return size unless `size === null`
       raise NotImplementedError, "IO#winsize: not a terminal, or the platform has no tty_winsize"
     end
 
