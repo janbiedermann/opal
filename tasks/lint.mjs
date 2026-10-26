@@ -46,7 +46,7 @@ async function main() {
   const steps = [
     ["parser:assemble --check", () => run(process.execPath, ["tasks/parser/assemble.mjs", "--check"])],
     ["parser", () => eslint("lib/opal/parser", "spec/lib/parser", "tasks/parser", "benchmark/parser", "exe/potch")],
-    ["compiler", () => eslint("lib/opal/compiler", "lib/opal/language-server", "spec/lib/compiler", "lib/opal/gems", "spec/lib/gems", "tasks/compiler", "tasks/language-server", ...glob("tasks/*.mjs"), "tasks/testing")],
+    ["compiler", () => eslint("lib/opal/compiler", "lib/opal/drill", "lib/opal/language-server", "spec/lib/compiler", "lib/opal/gems", "spec/lib/gems", "tasks/compiler", "tasks/language-server", ...glob("tasks/*.mjs"), "tasks/testing")],
     ["corelib and stdlib", async () => {
       rmSync("tmp/lint", { recursive: true, force: true });
       try {

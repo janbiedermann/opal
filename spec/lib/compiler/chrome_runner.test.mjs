@@ -1,8 +1,8 @@
-// The sandbox handling of the Chrome runner (lib/opal/compiler/cli/runners/
+// The sandbox handling of the Chrome runner (lib/opal/drill/runners/
 // browsers.mjs) - no browser needed.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { chromeSandboxArgs } from "../../../lib/opal/compiler/cli/runners/browsers.mjs";
+import { chromeSandboxArgs } from "../../../lib/opal/drill/runners/browsers.mjs";
 
 describe("chromeSandboxArgs", () => {
   test("leaves the args alone when not root", () => {

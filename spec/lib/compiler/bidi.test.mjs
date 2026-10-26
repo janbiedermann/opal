@@ -1,8 +1,8 @@
-// The BiDi client of the Firefox runner (lib/opal/compiler/cli/runners/
+// The BiDi client of the Firefox runner (lib/opal/drill/runners/
 // bidi_interface.mjs) against a fake transport - no browser needed.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { BiDi, formatArg } from "../../../lib/opal/compiler/cli/runners/bidi_interface.mjs";
+import { BiDi, formatArg } from "../../../lib/opal/drill/runners/bidi_interface.mjs";
 
 // A BiDi instance wired to a fake transport recording the sent messages.
 function fakeBiDi() {

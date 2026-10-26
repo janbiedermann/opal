@@ -17,6 +17,7 @@ const parserFiles = [
 // recommended rules.
 const compilerFiles = [
   "lib/opal/compiler/**/*.mjs",
+  "lib/opal/drill/**/*.mjs",
   "lib/opal/language-server/**/*.mjs",
   "spec/lib/compiler/**/*.mjs",
   "lib/opal/gems/**/*.mjs",
