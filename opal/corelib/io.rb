@@ -646,7 +646,7 @@ class ::IO
       if (!is_nil(nl) && self.binmode) $raise(Opal.ArgumentError, 'newline decorator with binary mode');
       self.write_lsep = nl === 'cr' ? '\r' : (nl === 'crlf' ? '\r\n' : '\n');
 
-      if (self.fd) {
+      if (self.fd != null) { // fd 0 is falsy: $stdin must run this too
         let r = $to_ary($platform.io_open(self.fd, self.flags));
         self.tty = r[0] ?? nil;
         self.pipe = r[1] ?? nil;
@@ -1075,7 +1075,17 @@ class ::IO
       `check_open(other)`
 
       @fd = `$platform.io_open_path(self.path.toString(), self.flags)` if path
-      @tty = `$platform.io_open(self.fd, self.flags)` if @fd
+      if @fd
+        # io_open answers the same [tty, pipe, file] tuple initialize reads
+        # (an x-string cannot sit on an assignment RHS, so mirror the
+        # initialize body; self.tty/self.pipe/self.file are the ivars)
+        %x{
+          var r = $to_ary($platform.io_open(self.fd, self.flags));
+          self.tty = r[0] ?? nil;
+          self.pipe = r[1] ?? nil;
+          self.file = r[2] ?? nil;
+        }
+      end
 
       @autoclose = true
       @close_on_exec = true
