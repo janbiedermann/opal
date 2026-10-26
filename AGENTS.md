@@ -444,9 +444,11 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   parser (fixture gate `spec/opal/stdlib/prism`), the eval bridge is the
   `Binding#irb_vars` flag plus the `irb: true` compile inside opal-parser's
   `Kernel#eval` (irb mode pins `self` to `Opal.top`), and `stdlib/reline.rb`
-  is the tier-1 stub - line reading for IRB, no editing (tier 2 builds on the
-  `platform.tty_*` primitives in the node driver, which also set the
-  `platform.ioctl` marker io/console's termios branches gate on). Traps that
+  is the ported stub - tier-2: a raw-mode line editor over the node driver's
+  `platform.tty_*` primitives, which also set the `platform.ioctl` marker
+  io/console's termios branches gate on (completion menus, C-r search, the
+  dialogs and wide-char cursor columns are still missing; the cooked-mode
+  reader answers pipes). Traps that
   cost a cycle there: vendored optional libraries (rdoc, debug,
   repl_type_completor, stackprof, ext/readline) need
   `raise LoadError unless defined?(X)` guards where upstream wrote
@@ -457,6 +459,15 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   `catch(:IRB_EXIT)` can (eval_input re-raises UncaughtThrowError instead);
   `Proc#parameters` answers `[]` for blocks; and Prism `alias` + `super`
   demands the Visitor's base methods be eager under the *defining* name.
+  For the raw reader: node's stdin fd is **non-blocking**, so
+  `fs.readSync(0)` raises EAGAIN whenever the user has not typed yet -
+  pre-buffered pipe input hides that completely - and the retry loop must
+  sleep synchronously (`Atomics.wait`, not a timer, which would reenter the
+  Opal queue under the read); the Reline `prompt_proc` contract is chomped
+  lines in, an Array of per-line prompts out (index `lines.size - 1`); and
+  Opal's `Process.kill(self, :INT)` raises a bare `Interrupt` *without*
+  running installed `Signal.trap` handlers, so IRB's SIGINT flows
+  (`signal_handle`) need Ruby-level dispatch where the signal would unwind.
 - `exe/gem` is `tasks/gem.mjs` (bundle in `tasks/gem/bundle.mjs`, single-file
   executable in `tasks/gem_exe.mjs` and `tasks/sea_exe.mjs`, which both `*_exe`
   tasks share): opal, opal/full, thread and rubygems at boot, opal-parser
