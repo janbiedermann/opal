@@ -31,7 +31,7 @@ describe 'Reline' do
       Reline.readline('> ').should == 'puts 1+1'
       @out.string.should == '> '
       Reline::HISTORY.to_a.should == ['puts 1+1']
-      Reline.readline('', add_to_history: false).should == 'puts 2+2'
+      Reline.readline('', false).should == 'puts 2+2'
       Reline::HISTORY.to_a.should == ['puts 1+1']
     end
   end

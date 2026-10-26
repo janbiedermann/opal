@@ -32,7 +32,9 @@ module Reline
     # Line reading: one line without the trailing newline, nil at EOF.
     # A real tty on fd 0 gets the raw-mode editor; anything else (pipe,
     # file, StringIO in the specs) reads a cooked line off the input IO.
-    def readline(prompt = '', add_to_history: true)
+    # add_to_history is positional like Reline's/Readline's (IRB calls
+    # Readline.readline(@prompt, false) through the Reline fallback).
+    def readline(prompt = '', add_to_history = true)
       io = input || $stdin
       out = output || $stdout
       if `!!(Opal.platform.tty_raw && Opal.platform.tty_isatty)` && io.respond_to?(:fileno) && io.fileno == 0 && io.tty?
@@ -55,7 +57,7 @@ module Reline
       code = +''
       loop do
         continuation = prompt_line_for(code, prompt)
-        line = readline(continuation, add_to_history: false)
+        line = readline(continuation, false)
         return nil if line.nil?
         code += line + "\n"
         break if check_termination.nil? || check_termination.call(code.dup)
