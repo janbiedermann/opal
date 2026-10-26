@@ -428,15 +428,35 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   `exe/gem` through `tasks/gem.mjs`'s default OUT, the lsp specs rebuild
   `exe/lsp`), and CI runs `npm run build` before the matrix. Changes to `lib/`
   only reach an exe after rebuilding the exes that carry the changed source
-  (`node tasks/{ruby,gem,bundler,lsp}.mjs`); corelib/stdlib changes additionally
+  (`node tasks/{ruby,gem,bundler,lsp,irb}.mjs`); corelib/stdlib changes additionally
   need the baked-index re-run above.
-- The four exe-bundle tasks minify with terser `{ mangle: true }` only (no
+- The exe-bundle tasks minify with terser `{ mangle: true }` only (no
   compress): the bundle builds roughly halve (ruby and bundler 10s -> 5s,
   gem 7.5 -> 3.7s, lsp 4.7 -> 2.7s) for +1-5% bytes on the bundles (+0.1%
   on the 150MB SEA `.exe`). terser's `console.*` removal is a compress
   side-effect, so bundled `console.*` calls (e.g. stdlib/console.rb)
   survive and print in the task-built exes; the CLI's own `--minify` and
   `--compile-to-exe` still compress.
+- IRB port: `stdlib/irb.rb` + `stdlib/irb/**` are vendored from ruby/irb
+  (v1.18.0 series); `exe/irb` is built like `exe/ruby` (`tasks/irb{,_exe}.mjs`,
+  same bundle shape and shared `RuntimeLoader`, `OPAL_PROGRAM = "irb"`).
+  The layers: `stdlib/prism.rb` is the Ruby Prism API over the vendored JS
+  parser (fixture gate `spec/opal/stdlib/prism`), the eval bridge is the
+  `Binding#irb_vars` flag plus the `irb: true` compile inside opal-parser's
+  `Kernel#eval` (irb mode pins `self` to `Opal.top`), and `stdlib/reline.rb`
+  is the tier-1 stub - line reading for IRB, no editing (tier 2 builds on the
+  `platform.tty_*` primitives in the node driver, which also set the
+  `platform.ioctl` marker io/console's termios branches gate on). Traps that
+  cost a cycle there: vendored optional libraries (rdoc, debug,
+  repl_type_completor, stackprof, ext/readline) need
+  `raise LoadError unless defined?(X)` guards where upstream wrote
+  `begin require 'x'; rescue LoadError` - the builder resolves literal
+  requires at build time and a dynamic require that misses at run time is
+  silently skipped; Opal models `throw` as an Exception, so a generic
+  `rescue Exception` catches the `throw :IRB_EXIT` of `exit` before the outer
+  `catch(:IRB_EXIT)` can (eval_input re-raises UncaughtThrowError instead);
+  `Proc#parameters` answers `[]` for blocks; and Prism `alias` + `super`
+  demands the Visitor's base methods be eager under the *defining* name.
 - `exe/gem` is `tasks/gem.mjs` (bundle in `tasks/gem/bundle.mjs`, single-file
   executable in `tasks/gem_exe.mjs` and `tasks/sea_exe.mjs`, which both `*_exe`
   tasks share): opal, opal/full, thread and rubygems at boot, opal-parser
