@@ -531,8 +531,21 @@ describe("the gem command", () => {
     const installed = gemIn(greet.dir, {}, "install", "./greet-1.0.0.gem", "--no-document");
     assert.equal(installed.status, 0, `${installed.out}${installed.err}`);
 
+    // exe/opal is compiler-only: --gem joins the *build's* load paths, and
+    // the self-contained program then runs on node - the gem paths answer
+    // at compile time either way.
     const OPAL = join(OPAL_ROOT, "exe", "opal");
-    let r = run(OPAL, DIR, {}, ["--gem", "greet", "-e", "require 'greet'; puts Greet.hello"]);
+    let probeN = 0;
+    const compileAndRun = (gemArgs, source) => {
+      const src = join(DIR, `gem_probe_${probeN}.rb`);
+      const js = join(DIR, `gem_probe_${probeN}.js`);
+      probeN++;
+      writeFileSync(src, source);
+      const build = spawnSync(process.execPath, [OPAL, ...gemArgs, "-c", "-o", js, src], { cwd: DIR, env: env({}), encoding: "utf8" });
+      const program = spawnSync(process.execPath, [js], { cwd: DIR, encoding: "utf8" });
+      return { out: program.stdout, err: `${build.stderr}${program.stderr}`, status: program.status, build };
+    };
+    let r = compileAndRun(["--gem", "greet"], "require 'greet'; puts Greet.hello");
     assert.equal(r.out.trim(), "greet", `${r.out}${r.err}`);
     assert.equal(r.status, 0, r.err);
 
@@ -542,12 +555,12 @@ describe("the gem command", () => {
     // quietly find another copy.
     assert.equal(gem("compile", "greet").status, 0);
     rmSync(join(DIR, "repo", "gems", "greet-1.0.0", "lib", "greet.rb"));
-    r = run(OPAL, DIR, {}, ["--gem", "greet", "-e", "require 'greet'; puts Greet.hello"]);
+    r = compileAndRun(["--gem", "greet"], "require 'greet'; puts Greet.hello");
     assert.equal(r.out.trim(), "greet", `${r.out}${r.err}`);
     assert.equal(r.status, 0, r.err);
 
     // A name no repository owns warns, and the build runs on.
-    const missing = run(OPAL, DIR, {}, ["--gem", "nosuchgem", "-e", "puts 1"]);
+    const missing = compileAndRun(["--gem", "nosuchgem"], "puts 1");
     assert.match(missing.err, /gem nosuchgem is not installed in the gem repositories/, missing.err);
     assert.equal(missing.out.trim(), "1");
     assert.equal(missing.status, 0, missing.err);

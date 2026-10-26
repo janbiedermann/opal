@@ -1,5 +1,5 @@
 // Bundler's local half over the port's own repository (M8.1b, M8.2): an
-// exe/opal run requires "bundler", parses a fixture Gemfile.lock, and resolves
+// exe/ruby run requires "bundler", parses a fixture Gemfile.lock, and resolves
 // it against the gems `exe gem` installed in the temporary repository, plus a
 // path source whose .gemspec it evaluates - and now a full PubGrub resolution
 // of the Gemfile through Bundler::Definition. The run stays hermetic: a
@@ -12,7 +12,6 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
-const OPAL = join(OPAL_ROOT, "exe", "opal");
 const GEM = join(OPAL_ROOT, "exe", "gem");
 const RUBY = join(OPAL_ROOT, "exe", "ruby");
 const DIR = mkdtempSync(join(tmpdir(), "opal-bundler-"));
@@ -241,7 +240,7 @@ describe("Bundler over a local repository", () => {
   after(() => rmSync(DIR, { recursive: true, force: true }));
 
   test("the local rubygems source indexes the installed repository", () => {
-    const r = run(OPAL, app, {}, [join(DIR, "bundler_probe.rb")]);
+    const r = run(RUBY, app, {}, [join(DIR, "bundler_probe.rb")]);
     assert.equal(r.status, 0, r.err);
     const answer = JSON.parse(r.out.split("\n").filter((line) => line.startsWith("{")).pop());
 
@@ -255,7 +254,7 @@ describe("Bundler over a local repository", () => {
   });
 
   test("the path source loads its gemspec, the SourceMap wires the requirements", () => {
-    const r = run(OPAL, app, {}, [join(DIR, "bundler_probe.rb")]);
+    const r = run(RUBY, app, {}, [join(DIR, "bundler_probe.rb")]);
     assert.equal(r.status, 0, r.err);
     const answer = JSON.parse(r.out.split("\n").filter((line) => line.startsWith("{")).pop());
 
@@ -273,7 +272,7 @@ describe("Bundler over a local repository", () => {
   });
 
   test("PubGrub resolves the Gemfile against the repository, and the lock reads back", () => {
-    const r = run(OPAL, app, {}, [join(DIR, "bundler_resolve_probe.rb")]);
+    const r = run(RUBY, app, {}, [join(DIR, "bundler_resolve_probe.rb")]);
     assert.equal(r.status, 0, r.err);
     const answer = JSON.parse(r.out.split("\n").filter((line) => line.startsWith("{")).pop());
 
@@ -290,7 +289,7 @@ describe("Bundler over a local repository", () => {
   test("the installer installs, binstubs the path gem and writes a readable lock", () => {
     // DEBUG raises the Shell UI level so the debug print_using_message lines
     // are visible, as with upstream's bundle install runs.
-    const r = run(OPAL, app, { DEBUG: "1" }, [join(DIR, "bundler_install_probe.rb")]);
+    const r = run(RUBY, app, { DEBUG: "1" }, [join(DIR, "bundler_install_probe.rb")]);
     assert.equal(r.status, 0, r.err);
     const answer = JSON.parse(r.out.split("\n").filter((line) => line.startsWith("{")).pop());
 

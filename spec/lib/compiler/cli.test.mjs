@@ -2,15 +2,14 @@
 // cli_runners_spec.rb, cli_runners/server_spec.rb and simple_server_spec.rb.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync, chmodSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { CLI } from "../../../lib/opal/compiler/cli/cli.mjs";
 import { parseOptions, InvalidOption, helpText } from "../../../lib/opal/compiler/cli/options.mjs";
-import { RUNNERS } from "../../../lib/opal/drill/runners/index.mjs";
+import { DRILL_OPTIONS } from "../../../lib/opal/drill/options.mjs";
 import { SimpleServer } from "../../../lib/opal/drill/runners/server.mjs";
-import { shellwords } from "../../../lib/opal/drill/runners/system.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
@@ -39,28 +38,9 @@ async function outputOf(options) {
 const compile = (options) => outputOf({ runner: "compiler", skip_opal_require: true, no_exit: true, ...options });
 
 describe("CLI", () => {
-  test("runs a file", async () => {
-    const run = spawnSync(process.execPath, [EXE, "--no-source-map", FILE], { encoding: "utf8" });
-    assert.equal(run.stdout, "hi from opal!\n");
-    assert.equal(run.status, 0);
-  });
-
-  test("the node runner runs the program with the NODE_EXE executable", () => {
-    const dir = mkdtempSync(join(tmpdir(), "opal-node-exe-"));
-    try {
-      const wrapper = join(dir, "marked-node");
-      writeFileSync(wrapper, `#!/bin/sh\necho a marked node\nexec ${process.execPath} "$@"\n`);
-      chmodSync(wrapper, 0o755);
-      const run = spawnSync(process.execPath, [EXE, "--no-source-map", "-Rnode", FILE], { encoding: "utf8", env: { ...process.env, NODE_EXE: wrapper } });
-      assert.equal(run.stdout, "a marked node\nhi from opal!\n", run.stderr);
-      assert.equal(run.status, 0);
-      // (a missing one is reported instead of running the program with node)
-      const missing = spawnSync(process.execPath, [EXE, "--no-source-map", "-Rnode", FILE], { encoding: "utf8", env: { ...process.env, NODE_EXE: join(dir, "no-such-node") } });
-      assert.match(missing.stderr, /no-such-node \(from NODE_EXE\) not found/);
-      assert.notEqual(missing.status, 0);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  test("compiles a file given as the argument", async () => {
+    const { output } = await compile({ argv: [FILE] });
+    assert.ok(output.includes('.$puts("hi from opal!")'));
   });
 
   test("a Node.js executable gets Node.js's platform and no source map", () => {
@@ -126,7 +106,8 @@ describe("CLI", () => {
       writeFileSync(join(dir, "a.rb"), "");
       writeFileSync(join(dir, "b.txt"), "");
       const program = join(dir, "program.js");
-      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program, "-e", 'p Dir.glob("*.{rb,txt}").sort'], { encoding: "utf8" });
+      // (the source arrives through stdin: -e belongs to drill now)
+      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", program], { encoding: "utf8", input: 'p Dir.glob("*.{rb,txt}").sort' });
       assert.equal(build.status, 0, build.stderr);
       const npm = bundleNpmPackages(readFileSync(program, "utf8"), { cwd: dir, nodePath: "" });
       assert.deepEqual([npm.packages, npm.missing], [[], []]);
@@ -147,7 +128,7 @@ describe("CLI", () => {
     const dir = mkdtempSync(join(tmpdir(), "opal-nodejs-platform-"));
     try {
       const out = join(dir, "program.js");
-      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", out, "-e", "puts ARGV.inspect"], { encoding: "utf8" });
+      const build = spawnSync(process.execPath, [EXE, "-rnodejs", "--no-source-map", "-c", "-o", out], { encoding: "utf8", input: "puts ARGV.inspect" });
       assert.equal(build.status, 0, build.stderr);
       const env = { ...process.env };
       delete env.NODE_PATH;
@@ -328,20 +309,34 @@ describe("CLI", () => {
 describe("exe/opal", () => {
   const run = (args, input) => spawnSync(process.execPath, [EXE, ...args], { encoding: "utf8", input, env: { ...process.env, OPAL_CACHE_DISABLE: "1" } });
 
-  test("runs the provided source through pipes", () => {
-    assert.equal(run(["--no-source-map", "-ropal/platform", "-e", "puts gets.reverse"], "foo\n").stdout.trim(), "oof");
-  });
-
   test("compiles the provided source from stdin", () => {
     assert.ok(run(["--no-source-map", "-c", "-E", "-O"], "puts 123\n").stdout.includes("self.$puts(123)"));
   });
 
-  test("passes the program arguments", () => {
-    assert.equal(run(["--no-source-map", "-rnodejs", "-e", "p ARGV", "--", "a", "-b"]).stdout, '["a", "-b"]\n');
+  test("compiles a file given as the argument (it no longer runs)", () => {
+    // (the fixture requires "opal", so the compiled text goes to a file -
+    // stdout would blow spawnSync's maxBuffer)
+    const dir = mkdtempSync(join(tmpdir(), "opal-compile-only-"));
+    try {
+      const out = join(dir, "app.js");
+      const compiled = run(["--no-source-map", "-c", "-E", "-O", "-o", out, FILE]);
+      assert.equal(compiled.status, 0, compiled.stderr);
+      assert.ok(readFileSync(out, "utf8").includes('.$puts("hi from opal!")'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
-  test("returns the program's exit status", () => {
-    assert.equal(run(["-rnodejs", "-e", "exit 3"]).status, 3);
+  test("-e answers the pointer to the runners, not a script", () => {
+    const result = run(["-e", "puts 1"]);
+    assert.equal(result.status, 64);
+    assert.match(result.stderr, /opal: .*this is the compiler.*exe\/ruby/);
+  });
+
+  test("-R answers the pointer to exe/drill", () => {
+    const result = run(["-Rnode", FILE]);
+    assert.equal(result.status, 64);
+    assert.match(result.stderr, /opal: .*test matrix.*exe\/drill/);
   });
 
   test("exits with 64 for invalid options", () => {
@@ -372,9 +367,8 @@ describe("options", () => {
   });
 
   test("parses long options with = or a separate argument, and abbreviations", () => {
-    const { options } = parse(["--output=x.js", "--runner", "node", "--no-source", "--missing-require", "warning"]);
+    const { options } = parse(["--output=x.js", "--no-source", "--missing-require", "warning"]);
     assert.equal(options.output, "x.js");
-    assert.equal(options.runner, "node");
     assert.equal(options.runner_options.no_source_map, true);
     assert.equal(options.missing_require_severity, "warning");
   });
@@ -394,7 +388,7 @@ describe("options", () => {
   });
 
   test("stops at --", () => {
-    assert.deepEqual(parse(["-e", "1", "--", "-c"]).argv, ["-c"]);
+    assert.deepEqual(parse(["-rjson", "--", "-c"]).argv, ["-c"]);
   });
 
   test("--enable accepts the features Opal already has and rejects the rest", () => {
@@ -405,7 +399,10 @@ describe("options", () => {
 
   test("rejects invalid options and values", () => {
     assert.throws(() => parse(["-x"]), InvalidOption);
+    // the run options moved to drill: opal's table doesn't carry them (-e
+    // gets exe/opal's friendly pointer, but parsing itself is the gate)
     assert.throws(() => parse(["--runner", "nope"]), InvalidOption);
+    assert.throws(() => parse(["-Rchrome"]), InvalidOption);
     assert.throws(() => parse(["-e"]), InvalidOption);
     // the --irb leftover of opal-repl is gone: IRB compiles with irb: true
     // in-process (opal-parser's Kernel#eval), the CLI never needed the flag
@@ -422,18 +419,18 @@ describe("options", () => {
   test("the help lists the options", () => {
     const help = helpText();
     assert.ok(help.startsWith("Usage: opal [options] -- [programfile]"));
-    for (const flag of ["--eval SOURCE", "--runner RUNNER", "--dce [OPTIONS]", "--plugin MODULE", "--sexp"]) assert.ok(help.includes(flag), flag);
-  });
-});
-
-describe("runners", () => {
-  test("node is an alias of nodejs", () => {
-    assert.equal(RUNNERS.node, RUNNERS.nodejs);
+    for (const flag of ["--compile-to-exe RUNTIME", "--dce [OPTIONS]", "--plugin MODULE", "--sexp"]) assert.ok(help.includes(flag), flag);
+    // and not the ones drill owns:
+    for (const gone of ["--eval SOURCE", "--runner RUNNER", "--server-port PORT"]) assert.ok(!help.includes(gone), gone);
   });
 
-  test("shellwords splits like a shell", () => {
-    assert.deepEqual(shellwords(`--a "b c" 'd e' f\\ g`), ["--a", "b c", "d e", "f g"]);
-    assert.deepEqual(shellwords(undefined), []);
+  test("drill's table carries the run options opal dropped", () => {
+    const drillParse = (args) => parseOptions(args, { out: () => {}, err: () => {}, exit: (s) => { throw s; } }, DRILL_OPTIONS);
+    const { options } = drillParse(["-e", "puts 1", "-R", "node"]);
+    assert.deepEqual(options.evals, ["puts 1"]);
+    assert.equal(options.runner, "node"); // (the nodejs alias, drill's registry)
+    assert.throws(() => drillParse(["--runner", "nope"]), InvalidOption);
+    assert.throws(() => drillParse(["-c"]), InvalidOption); // (-c is opal's)
   });
 });
 

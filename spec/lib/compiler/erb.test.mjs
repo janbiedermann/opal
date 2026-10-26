@@ -84,7 +84,11 @@ describe("processors", () => {
       builder.build("app.rb");
       assert.ok(builder.toString().includes('"DATA_JS", "in-process"'));
       assert.ok(builder.toString().includes('Opal.modules["data"] = function() {Opal.Object.$const_set("DATA_JS", "'));
-      const result = spawnSync(process.execPath, [join(OPAL_ROOT, "exe", "opal"), "--no-source-map", "-I", dir, join(dir, "app.rb")], { encoding: "utf8", env: { ...process.env, ERB_TEST: "hello", OPAL_CACHE_DISABLE: "1" } });
+      // (exe/opal is compiler-only: compile with it, run the program with node)
+      const compiled = join(dir, "app.js");
+      const build = spawnSync(process.execPath, [join(OPAL_ROOT, "exe", "opal"), "--no-source-map", "-c", "-I", dir, "-o", compiled, join(dir, "app.rb")], { encoding: "utf8", env: { ...process.env, ERB_TEST: "hello", OPAL_CACHE_DISABLE: "1" } });
+      assert.equal(build.status, 0, build.stderr);
+      const result = spawnSync(process.execPath, [compiled], { encoding: "utf8" });
       assert.equal(result.stdout, "[10, 20]\nhello\n");
     } finally {
       rmSync(dir, { recursive: true, force: true });

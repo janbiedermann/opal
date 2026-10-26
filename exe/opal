@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// opal: compile and run Ruby code with Opal (lib/opal/compiler/cli).
+// opal: compiles Ruby to JavaScript (lib/opal/compiler/cli). Running programs
+// lives in exe/drill (lib/opal/drill) and exe/ruby.
 // Error codes are taken from /usr/include/sysexits.h
 
 // Node's on-disk cache of the compiled toolchain modules makes starting
@@ -8,5 +9,5 @@
 process.getBuiltinModule?.("node:module").enableCompileCache?.();
 
 import("../lib/opal/compiler/cli/cli.mjs")
-  .then((cli) => cli.main(process.argv.slice(2)))
+  .then((cli) => cli.opalMain(process.argv.slice(2)))
   .then((status) => { process.exitCode = status; });

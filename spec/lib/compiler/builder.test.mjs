@@ -346,7 +346,11 @@ describe("source encodings", () => {
     try {
       const file = join(dir, "main.rb");
       writeFileSync(file, Buffer.from([...Buffer.from('# encoding: iso-8859-1\np "caf'), 0xe9, ...Buffer.from('".bytes\n')]));
-      const result = spawnSync(process.execPath, [join(OPAL_ROOT, "exe", "opal"), "--no-source-map", file], { encoding: "utf8", env: { ...process.env, OPAL_CACHE_DISABLE: "1" } });
+      // (compiled to a file and run by node: exe/opal is compiler-only now)
+      const compiled = join(dir, "main.js");
+      const build = spawnSync(process.execPath, [join(OPAL_ROOT, "exe", "opal"), "--no-source-map", "-c", "-o", compiled, file], { encoding: "utf8", env: { ...process.env, OPAL_CACHE_DISABLE: "1" } });
+      assert.equal(build.status, 0, build.stderr);
+      const result = spawnSync(process.execPath, [compiled], { encoding: "utf8" });
       assert.equal(result.stdout, "[99, 97, 102, 233]\n");
     } finally {
       rmSync(dir, { recursive: true, force: true });

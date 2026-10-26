@@ -1,4 +1,5 @@
-// A top-level return, BEGIN { } and END { }, run with exe/opal.
+// A top-level return, BEGIN { } and END { }, run with exe/drill (the
+// at-exit semantics live in running the program; exe/opal is compiler-only).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -7,12 +8,20 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 
+// exe/drill is a build output: rebuild it once per spec file, into a private
+// tmp/ OUT (two rebuilds must not truncate one tracked exe).
+const EXE = (() => {
+  const build = spawnSync(process.execPath, [join(OPAL_ROOT, "tasks", "drill.mjs")], { encoding: "utf8", env: { ...process.env, OUT: `tmp/opal-drill-top-level-${process.pid}` } });
+  assert.equal(build.status, 0, build.stderr);
+  return join(OPAL_ROOT, `tmp/opal-drill-top-level-${process.pid}`);
+})();
+
 // Writes the files to a temporary directory and runs the first one.
 function run(files, args = []) {
   const dir = mkdtempSync(join(tmpdir(), "opal-top-level-"));
   try {
     for (const [name, source] of Object.entries(files)) writeFileSync(join(dir, name), source);
-    const result = spawnSync(process.execPath, [join(OPAL_ROOT, "exe", "opal"), "--no-source-map", "-I", dir, ...args, join(dir, Object.keys(files)[0])], { encoding: "utf8", env: { ...process.env, OPAL_CACHE_DISABLE: "1" } });
+    const result = spawnSync(process.execPath, [EXE, "--no-source-map", "-I", dir, ...args, join(dir, Object.keys(files)[0])], { encoding: "utf8", env: { ...process.env } });
     assert.equal(result.stderr.replace(/^warning: .*\n/gm, ""), "");
     return result.stdout;
   } finally {

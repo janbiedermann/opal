@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { VERSION } from "../../../lib/opal/compiler/index.mjs";
 
@@ -28,8 +29,14 @@ test("no other version literal is written in the tree", () => {
 });
 
 test("the runtime answers the version", () => {
+  // the probe runs Ruby: exe/opal is compiler-only, so this reads the
+  // runtime through drill, rebuilt to a private tmp/ OUT (the parallel
+  // spec-file trap: no two rebuilds may truncate one tracked exe)
+  const out = join(fileURLToPath(root), `tmp/opal-drill-version-${process.pid}`);
+  const build = spawnSync(process.execPath, [fileURLToPath(new URL("tasks/drill.mjs", root))], { encoding: "utf8", env: { ...process.env, OUT: `tmp/opal-drill-version-${process.pid}` } });
+  assert.equal(build.status, 0, build.stderr);
   const probe = 'print RUBY_ENGINE_VERSION, "|"; require "opal/version"; print Opal::VERSION';
-  const run = spawnSync(process.execPath, [fileURLToPath(new URL("exe/opal", root)), "--no-cache", "-e", probe], { encoding: "utf8" });
+  const run = spawnSync(process.execPath, [out, "--no-cache", "-e", probe], { encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   assert.equal(run.stdout, `${VERSION}|${VERSION}`);
 });
