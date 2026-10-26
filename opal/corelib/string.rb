@@ -1894,6 +1894,10 @@ class ::String < `String`
     }
   end
 
+  # Symbol#id2name: deprecated since forever but still public in CRuby
+  # (IRB's Context#to_s calls it). Same answer as #name here.
+  alias id2name name
+
   def length
     %x{
       const string = self.valueOf();
