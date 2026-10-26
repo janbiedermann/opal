@@ -48,16 +48,30 @@ $ node tasks/test.mjs spec/ruby/core/string
 $ PATTERN="spec/ruby/core/string/*_spec.rb" node tasks/test.mjs mspec_ruby
 ```
 
-Another way to quickly validate ideas and play with your changes is to use `opal-repl`, a tool similar to `irb`. Running `opal-repl` drops you into an interactive environment with your current version of Opal loaded, including any changes you have made.
+Another way to quickly validate ideas and play with your changes is the interactive `irb` session: `exe/irb` (built by `npm run build` / `node tasks/irb.mjs`) drops you into a full Ruby session with the runtime and stdlib compiled in.
 
 ```
-$ exe/opal-repl
->> 2 + 2
+$ exe/irb
+irb(main):001:0> 2 + 2
 => 4
->>
 ```
 
-When quickly iterating on an idea, even `opal-repl` may feel a bit too heavy, because after making a change in Opal, you must `exit` from `opal-repl` and do `$ exe/opal-repl` again to load Opal with your latest changes. In this case, you can run `opal` with the `-e` option, which executes a piece of code you pass to it once, then returns to the shell. This means that in order to run it again after making another adjustment to Opal, all you have to do is hit the up arrow key on your keyboard and press the enter key. This is the fastest way to go from making a change in Opal to seeing its effect.
+When quickly iterating on an idea, an exe is too heavy: it bundles the
+libraries, so after making a change in Opal you must rebuild it
+(`node tasks/irb.mjs`) to see that change. Instead, run the session
+straight from the working tree through the compiler, which compiles
+everything it loads on each start:
+
+```
+$ node exe/opal -e 'require "irb"; IRB.start'
+```
+
+For an even faster round trip, run `opal` with the `-e` option, which
+executes a piece of code you pass to it once, then returns to the shell.
+This means that in order to run it again after making another adjustment
+to Opal, all you have to do is hit the up arrow key on your keyboard and
+press the enter key. This is the fastest way to go from making a change
+in Opal to seeing its effect.
 
 ```
 $ exe/opal -e "3.times {puts 'hello'}"

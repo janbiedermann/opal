@@ -1,6 +1,5 @@
 // The JS CLI (lib/opal/compiler/cli). Ported from spec/lib/cli_spec.rb,
-// cli_runners_spec.rb, cli_runners/server_spec.rb, simple_server_spec.rb
-// and repl_spec.rb.
+// cli_runners_spec.rb, cli_runners/server_spec.rb and simple_server_spec.rb.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync, chmodSync } from "node:fs";
@@ -12,7 +11,6 @@ import { parseOptions, InvalidOption, helpText } from "../../../lib/opal/compile
 import { RUNNERS } from "../../../lib/opal/compiler/cli/runners/index.mjs";
 import { SimpleServer } from "../../../lib/opal/compiler/cli/runners/server.mjs";
 import { shellwords } from "../../../lib/opal/compiler/cli/runners/system.mjs";
-import { isIncomplete } from "../../../lib/opal/compiler/cli/repl.mjs";
 import { Builder } from "../../../lib/opal/compiler/builder/builder.mjs";
 import { OPAL_ROOT } from "../../../lib/opal/compiler/paths.mjs";
 import { VERSION } from "../../../lib/opal/compiler/version.mjs";
@@ -501,22 +499,5 @@ describe("SimpleServer", () => {
     const app = new SimpleServer({ main: "opal_file" });
     app.appendPath(FIXTURES);
     assert.ok(app.call("/assets/opal_file.js")[2].includes('.$puts("hi from opal!")'));
-  });
-});
-
-describe("REPL", () => {
-  test("recognizes incomplete input", () => {
-    for (const code of ["def foo", '"abc', "[1,", "foo(", "class A", "1 +", "{a: ", "foo do |x|", "if x", "%w(a", "<<~E\nabc"]) {
-      assert.ok(isIncomplete(code), code);
-    }
-    for (const code of ["1)", "end", "puts 1", "def foo; end"]) assert.ok(!isIncomplete(code), code);
-  });
-
-  test("evaluates user inputs", () => {
-    const input = ["puts 5", "a = 1", "a += 1", "a + 3", '"#{a} + 3"', "def m", "  :x", "end"].join("\n") + "\n";
-    const result = spawnSync(process.execPath, [join(OPAL_ROOT, "exe", "opal-repl")], { input, encoding: "utf8", env: { ...process.env, HOME: tmpdir() } });
-    const output = result.stdout.replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
-    for (const expected of ["5\n=> nil", "=> 1", "=> 2", "=> 5", '=> "2 + 3"', '=> "m"']) assert.ok(output.includes(expected), expected);
-    assert.equal(result.status, 0);
   });
 });
