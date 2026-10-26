@@ -175,9 +175,15 @@ module Prism
       @context = context
     end
 
-    # "IfNode" -> :if_node
+    # "IfNode" -> :if_node, "XStringNode" -> :x_string_node: the Prism gem's
+    # underscore split, both lower/digit-to-upper and acronym-to-word
+    # boundaries (the first rule alone answers :xstring_node and the node
+    # then escapes the visit_x_string_node overrides that name it).
     def type
-      @type ||= `#{@pojo}.type`.gsub(/([a-z0-9])([A-Z])/) { "#{$1}_#{$2}" }.downcase.to_sym
+      @type ||= `#{@pojo}.type`
+        .gsub(/([a-z0-9])([A-Z])/) { "#{$1}_#{$2}" }
+        .gsub(/([A-Z]+)([A-Z][a-z])/) { "#{$1}_#{$2}" }
+        .downcase.to_sym
     end
 
     def location
@@ -258,16 +264,74 @@ module Prism
     super
   end
 
+  # Every node type the parser can emit, in the snake_case the visitor
+  # methods dispatch on - the list of the vendored parser's node converters
+  # (lib/opal/parser/convert.mjs) underscore-split like the Prism gem does.
+  # Regenerate it if the parser is updated.
+  NODE_TYPES = %w[
+    alias_global_variable_node alias_method_node alternation_pattern_node and_node
+    arguments_node array_node array_pattern_node assoc_node assoc_splat_node
+    back_reference_read_node begin_node block_node block_argument_node
+    block_local_variable_node block_parameter_node block_parameters_node
+    break_node call_node call_and_write_node call_operator_write_node
+    call_or_write_node call_target_node capture_pattern_node case_node
+    case_match_node class_node class_variable_and_write_node
+    class_variable_operator_write_node class_variable_or_write_node
+    class_variable_read_node class_variable_target_node class_variable_write_node
+    constant_and_write_node constant_operator_write_node constant_or_write_node
+    constant_path_node constant_path_and_write_node
+    constant_path_operator_write_node constant_path_or_write_node
+    constant_path_target_node constant_path_write_node constant_read_node
+    constant_target_node constant_write_node def_node defined_node else_node
+    embedded_statements_node embedded_variable_node ensure_node false_node
+    find_pattern_node flip_flop_node float_node for_node
+    forwarding_arguments_node forwarding_parameter_node forwarding_super_node
+    global_variable_and_write_node global_variable_operator_write_node
+    global_variable_or_write_node global_variable_read_node
+    global_variable_target_node global_variable_write_node hash_node
+    hash_pattern_node if_node imaginary_node implicit_node implicit_rest_node
+    in_node index_and_write_node index_operator_write_node index_or_write_node
+    index_target_node instance_variable_and_write_node
+    instance_variable_operator_write_node instance_variable_or_write_node
+    instance_variable_read_node instance_variable_target_node
+    instance_variable_write_node integer_node interpolated_match_last_line_node
+    interpolated_regular_expression_node interpolated_string_node
+    interpolated_symbol_node interpolated_x_string_node
+    it_local_variable_read_node it_parameters_node keyword_hash_node
+    keyword_rest_parameter_node lambda_node local_variable_and_write_node
+    local_variable_operator_write_node local_variable_or_write_node
+    local_variable_read_node local_variable_target_node local_variable_write_node
+    match_last_line_node match_predicate_node match_required_node
+    match_write_node missing_node module_node multi_target_node
+    multi_write_node next_node nil_node no_keywords_parameter_node
+    numbered_parameters_node numbered_reference_read_node
+    optional_keyword_parameter_node optional_parameter_node or_node
+    parameters_node parentheses_node pinned_expression_node
+    pinned_variable_node post_execution_node pre_execution_node program_node
+    range_node rational_node redo_node regular_expression_node
+    required_keyword_parameter_node required_parameter_node rescue_node
+    rescue_modifier_node rest_parameter_node retry_node return_node self_node
+    shareable_constant_node singleton_class_node source_encoding_node
+    source_file_node source_line_node splat_node statements_node string_node
+    super_node symbol_node true_node undef_node unless_node until_node
+    when_node while_node x_string_node yield_node
+  ].freeze
+  private_constant :NODE_TYPES
+
   class Visitor
-    # Prism dispatches accept() to visit_<type>_node; the base methods are
-    # created the first time a node type is visited, so subclass overrides
-    # calling `super` find them and unknown node types recurse.
+    # Prism dispatches accept() to visit_<type>_node. The recursive base
+    # method for every node type lives on Visitor from load time, so a
+    # subclass override calling `super` always finds its parent - including
+    # when reached under an alias name, where `super` binds the *defining*
+    # method's name (IRB's NestingVisitor aliases visit_x_string_node to
+    # visit_interpolated_x_string_node, whose super would miss a gate keyed
+    # only on the dispatched name).
+    NODE_TYPES.each do |type|
+      define_method(:"visit_#{type}") { |node| visit_child_nodes(node) }
+    end
+
     def visit(node)
-      mid = :"visit_#{node.type}"
-      unless Visitor.method_defined?(mid)
-        Visitor.send(:define_method, mid) { |child| visit_child_nodes(child) }
-      end
-      send(mid, node)
+      send(:"visit_#{node.type}", node)
     end
 
     def visit_all(nodes)
