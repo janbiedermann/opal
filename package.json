@@ -3,9 +3,11 @@
   "private": true,
   "scripts": {
     "bench": "node tasks/bench.mjs",
-    "build": "npm run build-parser && npm run compiler-gen-fixtures && npm run lsp-gen-index-sources && npm run build-ruby && npm run build-gem && npm run build-bundler && npm run build-lsp && npm run build-irb && npm run build-ruby-exe && npm run build-gem-exe && npm run build-bundler-exe && npm run build-lsp-exe && npm run build-irb-exe",
+    "build": "npm run build-parser && npm run compiler-gen-fixtures && npm run lsp-gen-index-sources && npm run build-ruby && npm run build-gem && npm run build-bundler && npm run build-lsp && npm run build-irb && npm run build-drill && npm run build-ruby-exe && npm run build-gem-exe && npm run build-bundler-exe && npm run build-lsp-exe && npm run build-irb-exe && npm run build-drill-exe",
     "build-bundler": "node tasks/bundler.mjs",
     "build-bundler-exe": "node tasks/bundler_exe.mjs",
+    "build-drill": "node tasks/drill.mjs",
+    "build-drill-exe": "node tasks/drill_exe.mjs",
     "build-gem": "node tasks/gem.mjs",
     "build-gem-exe": "node tasks/gem_exe.mjs",
     "build-irb": "node tasks/irb.mjs",

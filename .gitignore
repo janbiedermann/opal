@@ -29,6 +29,7 @@ spec/rubyspec
 /exe/bundler
 /exe/lsp
 /exe/irb
+/exe/drill
 /lib/opal/parser/parser.mjs
 /lib/opal/parser/convert.mjs
 /lib/opal/parser/field_order.mjs
