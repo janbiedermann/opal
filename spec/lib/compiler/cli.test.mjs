@@ -407,6 +407,9 @@ describe("options", () => {
     assert.throws(() => parse(["-x"]), InvalidOption);
     assert.throws(() => parse(["--runner", "nope"]), InvalidOption);
     assert.throws(() => parse(["-e"]), InvalidOption);
+    // the --irb leftover of opal-repl is gone: IRB compiles with irb: true
+    // in-process (opal-parser's Kernel#eval), the CLI never needed the flag
+    assert.throws(() => parse(["--irb"]), InvalidOption);
   });
 
   test("-v prints the version and turns on verbose mode", () => {
