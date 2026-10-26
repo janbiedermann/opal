@@ -71,9 +71,11 @@ export default [
   // its ES2022 code; everything else Opal generates stays ES2021. The
   // compiler and parser sources are linted with their own rules (the parser
   // and compiler lint steps), so the rules they don't use are off here.
-  // stdlib/prism.rb embeds the parser through its esm require (prism.js).
+  // stdlib/prism.rb embeds the parser through its esm require (prism.js),
+  // and stdlib/irb.rb links the whole parser/compiler through opal-parser
+  // (irb.js).
   {
-    files: ["**/opal-parser.js", "**/opal-builder.js", "**/prism.js"],
+    files: ["**/opal-parser.js", "**/opal-builder.js", "**/prism.js", "**/irb.js"],
     languageOptions: { ecmaVersion: 2024 },
     linterOptions: { reportUnusedDisableDirectives: "off" },
     rules: {
