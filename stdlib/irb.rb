@@ -319,6 +319,17 @@ module IRB
         yield parse_input(code), @line_no
         @line_no += code.count("\n")
       rescue RubyLex::TerminateLineInput
+      rescue Interrupt
+        # Opal port: ^C in raw mode cannot arrive as a SIGINT to the trap
+        # Irb#run installs (no line-discipline signal in raw reads, and
+        # Opal's self-Process.kill raises a bare Interrupt without running
+        # traps), so dispatch signal_handle here - the status is IN_INPUT,
+        # whose answer is the TerminateLineInput the loop above rescues.
+        begin
+          signal_handle
+        rescue RubyLex::TerminateLineInput
+          retry
+        end
       end
     end
 
