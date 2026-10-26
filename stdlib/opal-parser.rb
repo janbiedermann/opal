@@ -163,6 +163,29 @@ end
 module Kernel
   def eval(str, binding = nil, file = nil, line = nil)
     str = `Opal.coerce_to_or_raise(#{str}, Opal.String, "to_str")`
+    if binding && binding.irb_vars
+      # The irb bridge (TOPLEVEL_BINDING and dups): compile with the
+      # compiler's irb: option so top-level locals live in Opal.irb_vars
+      # and persist across evals, and run the resulting
+      # `(function (Opal, self) { ... })(Opal, self);` (irb mode pins self
+      # to Opal.top, which for TOPLEVEL_BINDING *is* the receiver; a custom
+      # IRB __MAIN__ keeps its object but not its scope). The line argument
+      # is honored by padding newlines: the compiler takes no line offset,
+      # and the source shift moves the line table the same way (backtraces
+      # included).
+      source = line && line > 1 ? ("\n" * (line - 1)) + str : str
+      compiling_options = __OPAL_COMPILER_CONFIG__.merge(file: file || '(eval)', irb: true)
+      compiler = Opal::Compiler.new(source, compiling_options)
+      code = compiler.compile
+      code += compiler.source_map.to_data_uri_comment unless compiling_options[:no_source_map]
+      recv = binding.receiver
+      fname = file || '(eval)'
+      # sourceURL names the Function frames `(irb):N` in backtraces like
+      # CRuby eval does; the sourceMappingURL comment above is for tooling.
+      %x{
+        return new Function("self", "return " + String(code) + "\n//# sourceURL=" + fname)(recv)
+      }
+    end
     default_eval_options = { file: file || '(eval)', eval: true }
     compiling_options = __OPAL_COMPILER_CONFIG__.merge(default_eval_options)
     # the code can use and assign the binding's local variables
