@@ -13,11 +13,14 @@ $ cd opal
 $ npm run setup
 ```
 
-`exe/opal` is the command line interface (add `exe/` to your `PATH` to call it
-as `opal`):
+`exe/` holds the commands (add it to your `PATH` to call them as `ruby`,
+`irb`, `opal`, ...): `exe/ruby` runs Ruby programs with the familiar CRuby
+options (`-e`, scripts, `-I`, `-r`), `exe/irb` starts the interactive shell,
+`exe/opal` compiles Ruby to JavaScript, and `exe/drill` runs programs through
+Opal's runners (`-R nodejs`, `chrome`, `firefox`, `server`) for testing.
 
 ```
-$ exe/opal -e "[1, 2, 3].each { |a| puts a }"
+$ exe/ruby -e "[1, 2, 3].each { |a| puts a }"
 1
 2
 3
@@ -44,7 +47,7 @@ This relies on the Opal load path: `opal/`, `stdlib/` and `lib/` of Opal itself,
 Opal uses a load path to create a set of locations from which Opal can require files. To add a directory to it, pass it to the CLI:
 
 ```
-$ exe/opal -I ../my_lib app.rb
+$ exe/ruby -I ../my_lib app.rb
 ```
 
 or to the builder:

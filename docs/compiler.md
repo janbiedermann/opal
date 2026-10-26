@@ -21,7 +21,7 @@ The compiler can be broken down into 3 separate stages:
 The [opal parser][parser] is a JavaScript port of
 [Prism](https://github.com/ruby/prism), the parser of CRuby. It returns
 Prism's syntax tree as plain objects (see [the parser](parser.md));
-`opal --sexp -e '...'` prints it.
+`echo '...' | opal --sexp` prints it.
 
 ### Transforms
 

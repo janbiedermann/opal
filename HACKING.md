@@ -59,14 +59,16 @@ irb(main):001:0> 2 + 2
 When quickly iterating on an idea, an exe is too heavy: it bundles the
 libraries, so after making a change in Opal you must rebuild it
 (`node tasks/irb.mjs`) to see that change. Instead, run the session
-straight from the working tree through the compiler, which compiles
-everything it loads on each start:
+straight from the working tree through `exe/drill`: it compiles the Ruby
+libraries it loads (corelib, stdlib and `lib/`) from the working tree on
+each start, so only changes to the parser, compiler or CLI need a rebuild
+(`node tasks/drill.mjs`):
 
 ```
-$ node exe/opal -e 'require "irb"; IRB.start'
+$ exe/drill -e 'require "irb"; IRB.start'
 ```
 
-For an even faster round trip, run `opal` with the `-e` option, which
+For an even faster round trip, run `exe/drill` with the `-e` option, which
 executes a piece of code you pass to it once, then returns to the shell.
 This means that in order to run it again after making another adjustment
 to Opal, all you have to do is hit the up arrow key on your keyboard and
@@ -74,7 +76,7 @@ press the enter key. This is the fastest way to go from making a change
 in Opal to seeing its effect.
 
 ```
-$ exe/opal -e "3.times {puts 'hello'}"
+$ exe/drill -e "3.times {puts 'hello'}"
 hello
 hello
 hello
@@ -163,7 +165,7 @@ Comparison of the Asciidoctor (a real-life Opal application) compile and run:
 
 ## Parser and compiler
 
-Opal's parser is a JavaScript port of [Prism](https://github.com/ruby/prism) in `lib/opal/parser` (see `docs/parser.md`). The compiler, builder and CLI are in `lib/opal/compiler`. `exe/opal --sexp -e '...'` prints the syntax tree of some code, and `spec/lib/fixtures/compiler` holds examples of compiled code (regenerate the expected outputs with `node tasks/compiler/update_fixtures.mjs` and review the diff).
+Opal's parser is a JavaScript port of [Prism](https://github.com/ruby/prism) in `lib/opal/parser` (see `docs/parser.md`). The compiler, builder and CLI are in `lib/opal/compiler`, the test runners and drill's CLI in `lib/opal/drill`. `exe/opal --sexp < some_code.rb` prints the syntax tree of some code, and `spec/lib/fixtures/compiler` holds examples of compiled code (regenerate the expected outputs with `node tasks/compiler/update_fixtures.mjs` and review the diff).
 
 ## Profiling
 

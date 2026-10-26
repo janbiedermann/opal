@@ -194,8 +194,8 @@ Opal.queue(function(Opal) {
 
 **TIP:**
 
-you can see the compiled code with this command: `opal --compile --no-exit --no-opal --eval 'puts "foo"'`
-or, more briefly: `opal -cEO -e 'puts "foo"'`
+you can see the compiled code with this command: `echo 'puts "foo"' | opal --compile --no-exit --no-opal`
+or, more briefly: `echo 'puts "foo"' | opal -cEO`
 
 
 ### Using compiled sources

@@ -6,19 +6,21 @@ First of all, make sure that you have Chrome, at least version 59.0, installed o
 
 ## Using the runners
 
-To run your code using headless Chrome, use `-R chrome` (`--runner chrome`) option:
+Running programs from the command line is the job of `exe/drill` (build it with
+`npm run build-drill`, or `node tasks/drill.mjs` from an Opal checkout); `exe/opal`
+only compiles. To run your code using headless Chrome, use `-R chrome` (`--runner chrome`) option:
 
-    $ opal -Rchrome -e "puts 'Hello, Opal'"
+    $ drill -Rchrome -e "puts 'Hello, Opal'"
     Hello, Opal
 
 To run your code using headless Firefox, use `-R firefox` (`--runner firefox`) option:
 
-    $ opal -Rfirefox -e "puts 'Hello, Opal'"
+    $ drill -Rfirefox -e "puts 'Hello, Opal'"
     Hello, Opal
 
 The runner also listens for any exceptions and prints formatted stracktraces back to your console:
 
-    $ opal -Rchrome -e "
+    $ drill -Rchrome -e "
     def raising_method
       raise 'test error'
     end
@@ -34,10 +36,10 @@ The runner also listens for any exceptions and prints formatted stracktraces bac
 
 By default headless browser runner explicitly sets exit code to 1 when there was any error in the code.
 
-    $ opal -Rchrome -e "42"; echo $?
+    $ drill -Rchrome -e "42"; echo $?
     0
 
-    $ opal -Rchrome -e "raise 'error'"; echo $?
+    $ drill -Rchrome -e "raise 'error'"; echo $?
     RuntimeError: error
       from <internal:corelib/kerne…>:2693:7:in `<main>'
       from -e:1:1:in `undefined'
@@ -45,10 +47,10 @@ By default headless browser runner explicitly sets exit code to 1 when there was
 
 You can change final exit code by using `Kernel#exit`, but make sure to require `opal/platform` in your code.
 
-    $ opal -Rchrome -ropal/platform -e "exit(0)"; echo $?
+    $ drill -Rchrome -ropal/platform -e "exit(0)"; echo $?
     0
 
-    $ opal -Rchrome -ropal/platform -e "exit(1)"; echo $?
+    $ drill -Rchrome -ropal/platform -e "exit(1)"; echo $?
     1
 
 ## Known limitations
@@ -56,18 +58,18 @@ You can change final exit code by using `Kernel#exit`, but make sure to require 
 1. When you call `console.log(one, two, three)` from your code headless chrome prints only the first passed object.
    The reason behind it is the format of the message that chrome sends to the runner.
    Opal intentionally uses a simplified method from Chrome API (`Console.messageAdded`) to catch `console.log` invocations.
-   (Check `lib/opal/compiler/cli/runners/browsers.mjs` to get more information)
+   (Check `lib/opal/drill/runners/browsers.mjs` to get more information)
 
 ## Internals
 
 ### Chrome
 
-Under the hood when you call `opal -Rchrome -e 'your code'` Opal uses the Chrome runner defined in
-`lib/opal/compiler/cli/runners/browsers.mjs`. This runner tries to connect to `localhost:9222` (9222 is a default port for a headless chrome server)
+Under the hood when you call `drill -Rchrome -e 'your code'` Opal uses the Chrome runner defined in
+`lib/opal/drill/runners/browsers.mjs`. This runner tries to connect to `localhost:9222` (9222 is a default port for a headless chrome server)
 or runs the server on its own. It detects your platform and uses a default path to the Chrome executable,
 but you can override it by specifying `GOOGLE_CHROME_BINARY` environment variable.
 
-When the server is up and running it passes the prepared directory to `lib/opal/compiler/cli/runners/cdp_interface.mjs`
+When the server is up and running it passes the prepared directory to `lib/opal/drill/runners/cdp_interface.mjs`
 as a subprocess. `cdp_interface.mjs` does the main job: it serves the compiled code over HTTP, drives Chrome over
 the Chrome DevTools Protocol (CDP), catches errors and forwards console messages.
 
@@ -78,7 +80,7 @@ connection to a lingering Chrome at port 9222)
 or runs the server on its own. It detects your platform and uses a default path to the Firefox executable,
 but you can override it by specifying `MOZILLA_FIREFOX_BINARY` environment variable.
 
-When the server is up and running it passes the prepared directory to `lib/opal/compiler/cli/runners/bidi_interface.mjs`
+When the server is up and running it passes the prepared directory to `lib/opal/drill/runners/bidi_interface.mjs`
 as a subprocess. `bidi_interface.mjs` does the main job: it serves the compiled code over HTTP and drives Firefox
 directly over the WebDriver BiDi protocol (the standard successor of CDP, served by Firefox itself at
 `ws://127.0.0.1:PORT/session`, no driver needed; see https://w3c.github.io/webdriver-bidi/).
@@ -94,7 +96,7 @@ If you want to change a default browser port or your browser server is running o
 you can override default values by specifying `OPAL_CDP_HOST` and `OPAL_CDP_PORT` environment variables
 (`OPAL_BIDI_HOST` and `OPAL_BIDI_PORT` for the Firefox runner; the `OPAL_CDP_*` names are accepted there too):
 
-      $ OPAL_CDP_HOST=10.10.10.10 CHROME_PORT=8080 opal -Rchrome -e "puts 42"
+      $ OPAL_CDP_HOST=10.10.10.10 CHROME_PORT=8080 drill -Rchrome -e "puts 42"
       Connecting to 10.10.10.10:8080...
       42
 
@@ -105,7 +107,7 @@ NOTE: `OPAL_CDP_HOST` requires a chrome or firefox server to be started. You can
 
 If you need to pass additional CLI options to the Chrome executable you can do so by setting the `CHROME_OPTS` environment variable:
 
-      $ CHROME_OPTS="--window-size=412,732" opal -Rchrome -e "puts 42"
+      $ CHROME_OPTS="--window-size=412,732" drill -Rchrome -e "puts 42"
       42
 
 Docker users may need `CHROME_OPTS="--no-sandbox"` due to the user namespaces limitations.

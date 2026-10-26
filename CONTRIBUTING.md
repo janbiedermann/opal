@@ -20,7 +20,7 @@ What follows is a quick checklist you can before sending issues or pull-requests
 
 3.  The best issues have steps to reproduce the error. Common ways to do that are:
     - A snippet of Ruby code
-    - A CLI command with its output, e.g. `opal -ve 'p String != Symbol' # => false'`
+    - A CLI command with its output, e.g. `ruby -ve 'p String != Symbol' # => false'`
 
 
 ## Submitting a Pull Request

@@ -17,9 +17,16 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   - `lib/opal/parser/` is Opal's built-in Ruby parser: a JS port of Prism
     1.9. See `docs/parser.md`.
   - `lib/opal/compiler/` is the compiler (`index.mjs`, `nodes/`,
-    `transforms/`), the builder (`builder/`) and the CLI with its runners
-    (`cli/runners/`: `nodejs.mjs`, `browsers.mjs` for Chrome and Firefox,
-    `cdp_interface.mjs`, `bidi_interface.mjs`, ...). `exe/opal` runs the CLI.
+    `transforms/`), the builder (`builder/`) and the compile-only CLI
+    (`cli/`: `cli.mjs`, `options.mjs`, `exe_compiler.mjs` for
+    `--compile-to-exe`). `exe/opal` runs it and only emits JavaScript;
+    `-e` and the `-R` runners there are answered with a pointer.
+  - `lib/opal/drill/` is the running CLI (`cli.mjs`, `options.mjs`,
+    `paths.mjs`) with the runtime runners (`runners/`: `nodejs.mjs`,
+    `browsers.mjs` for Chrome and Firefox, `cdp_interface.mjs`,
+    `bidi_interface.mjs`, ...). `exe/drill` runs it - the test matrix and
+    working-tree probes; `lib/opal/exe/drill.rb` is its bundle program
+    entry. drill imports the compiler, never the other way.
   - `lib/opal/dependencies/` only holds support files (`node_modules` with
     `chrome-remote-interface` and `terser`, the source-map shims), not the
     runners.
@@ -29,7 +36,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   - `opal/` offers entry points like `base.rb`, `mini.rb` and `full.rb` for
     loading subsets of the runtime.
 - `stdlib/` contains Opal's standard library implementation.
-- `spec/` and `test/` host the test suites: `spec/lib/{parser,compiler}`
+- `spec/` and `test/` host the test suites: `spec/lib/{parser,compiler,drill,gems}`
   (`node --test`), `spec/opal` and `spec/ruby` (MSpec), `test/` (Minitest).
 - `examples/` shows sample applications.
 - `docs/` provides documentation for contributors and users.
@@ -40,6 +47,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   40 seconds; ensure it passes before committing:
   - `parser`: the parser specs (`spec/lib/parser/*.test.mjs`, about 8,500 cases)
   - `compiler`: the compiler, builder and CLI specs (`spec/lib/compiler`)
+  - `drill`: the exe/drill specs (`spec/lib/drill`)
   - `mspec_opal`: the Opal-specific specs under `spec/opal`
   - `mspec_ruby`: the ruby/spec compatibility suite (`PATTERN=<glob>` limits
     the run, `RUBYSPECS=true` with it only takes files of `spec/selection/common`)
@@ -50,7 +58,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   `minitest` name both of theirs), or pass spec/test files or directories to run
   just them. `-R chrome` (or `-R firefox`) runs the
   Opal suites on another runner; `safari` only exists on macOS and the other
-  suites (`parser`, `compiler`, `minitest_node`) always run on Node.js.
+  suites (`parser`, `compiler`, `drill`, `minitest_node`) always run on Node.js.
   `RANDOM_SEED` repeats a randomized order.
 
 ## Linting
@@ -196,7 +204,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   so object spread keeps its speed. Bisect by loading one corelib file at a time
   into the same process, and measure with small probe scripts: a Ruby file that
   requires the corelib files under test and times the construct, run with
-  `node exe/opal <probe.rb>` (write them under tmp/, they are throwaway).
+  `node exe/drill <probe.rb>` (write them under tmp/, they are throwaway).
 - Do not run a before/after comparison with `git stash push <file>`: when that
   file already matches HEAD the push is a no-op, both runs then measure the same
   code, and the following `git stash pop` applies an unrelated older stash entry
@@ -207,7 +215,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   quantum is 333 ns per call at 3,000 iterations. Time 20k-30k calls per sample
   and take the minimum over samples: write a loop harness (a Ruby file that
   calls the method in a nested loop, an `INNER` multiplier raises the
-  resolution) and run it with `node exe/opal <harness.rb>`.
+  resolution) and run it with `node exe/drill <harness.rb>`.
 - Other tasks:
   `node tasks/bench.mjs` (benchmarks), `node tasks/performance.mjs`
   (performance comparison with master), `node tasks/codesize.mjs` (generated
@@ -226,7 +234,9 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   standalone Node program bundling opal, opal-parser and the whole stdlib
   and lib/ as requirable modules, which loads, compiles and runs the
   given script in its own runtime. It supports -e -c -I -r -w -W -v -d -n -p
-  -0 -E - `--` -h --version; a script's runtime requires answer from the
+  -0 -E - `--` --enable[=F] --disable[=F] -h --version (the two long ones are
+  accepted and ignored: Opal literals are immutable, and mspec's frozen-string-
+  literal probes pass them); a script's runtime requires answer from the
   bundle's module table first, and `Opal.platform.load_file` runs only on
   a miss - it resolves installed gems and -I paths against $LOAD_PATH and
   the cwd. It caches compiled JS at runtime (like the builder's FileCache, but
@@ -421,15 +431,42 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   so a feature that no gem owns must raise LoadError, not the ENOENT
   `Opal.platform.load_file` raises (Opal compiles `require` to the runtime, so
   upstream's `core_ext/kernel_require.rb` hook has no Ruby-level hook point).
-- The `exe/ruby`, `exe/gem`, `exe/bundler` and `exe/lsp` bundles are generated
+- The `exe/ruby`, `exe/gem`, `exe/bundler`, `exe/drill`, `exe/irb` and `exe/lsp`
+  bundles are generated
   build outputs: gitignored, never committed, produced by `npm run build`
   (which `npm run setup` runs). The `.exe` files were already gitignored.
   Suites that spawn an exe rebuild it in place first (the `gems` suite rebuilds
   `exe/gem` through `tasks/gem.mjs`'s default OUT, the lsp specs rebuild
   `exe/lsp`), and CI runs `npm run build` before the matrix. Changes to `lib/`
   only reach an exe after rebuilding the exes that carry the changed source
-  (`node tasks/{ruby,gem,bundler,lsp,irb}.mjs`); corelib/stdlib changes additionally
+  (`node tasks/{ruby,gem,bundler,drill,lsp,irb}.mjs`); corelib/stdlib changes additionally
   need the baked-index re-run above.
+- `exe/drill` (the run exe: `tasks/drill.mjs` + `tasks/drill/bundle.mjs` +
+  `tasks/drill_exe.mjs`, program entry `lib/opal/exe/drill.rb`, core
+  `lib/opal/drill/cli.mjs`) is what runs programs from the command line: the
+  test matrix (`tasks/testing/common.mjs`'s `runOpal` spawns it and
+  `ensureDrill()`/`ensureRubyExe()` keep both exes fresh) and working-tree
+  probes. Its bundle boots like exe/ruby's but also embeds the *Ruby sources*
+  of opal/ and stdlib/ (gzip -> base64 constants), unpacked once into
+  `~/.cache/opal-drill/sources-<key>` - sources, not precompiled JS, so the
+  Builder keeps its build-time autoload/ERB handling. A tree beside the exe
+  wins over the payload (disk-first): `drill/paths.mjs`'s `drillHome()` walks
+  up <=4 directories from `process.execPath` then `argv[1]` (in a SEA argv[1]
+  is the first program arg), so an in-checkout exe/drill compiles live edits;
+  away from a checkout it unpacks the payload (lib/ is not embedded: a
+  relocated drill cannot `require 'opal-parser'`). Spec files that need it
+  rebuild a private copy with `OUT=tmp/...` (the task joins OUT to ROOT):
+  parallel `node --test` files must not truncate one tracked exe. Its
+  FileCache entries carry the bundle's baked `OPAL_COMPILER_KEY` digest, so
+  they can't go stale the way the toolchain's `~/.cache/opal-js` can. mspec's
+  `ruby_exe` helper spawns `RUBY_EXE` - stdlib/rbconfig.rb names `exe/ruby`
+  for its probe programs (exe/opal ran them before the split).
+- A bundle that links `lib/opal/compiler/cli/exe_compiler.mjs` must not carry
+  the string `NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2` literally in its
+  source: `node --build-sea` scans the payload for that sentinel and refuses
+  one that already contains it. exe_compiler assembles it at runtime
+  (`"NODE_SEA_" + "FUSE_" + "fce6..."`), mangle-only terser keeps it that way -
+  keep the split.
 - The exe-bundle tasks minify with terser `{ mangle: true }` only (no
   compress): the bundle builds roughly halve (ruby and bundler 10s -> 5s,
   gem 7.5 -> 3.7s, lsp 4.7 -> 2.7s) for +1-5% bytes on the bundles (+0.1%
@@ -687,7 +724,7 @@ Opal needs only Node.js (22 or later), git and npm; no Ruby.
   NotImplementedError at run time, and they sat in `SpecFetcher`'s name
   suggestion and in `Gem::YAMLSerializer`'s folded plain scalars (a real
   `metadata.gz` wraps a long summary onto the next line). A bundle's stack
-  frames are byte offsets, so reproduce with `node exe/opal <probe.rb>` running
+  frames are byte offsets, so reproduce with `node exe/drill <probe.rb>` running
   `Gem::DependencyInstaller.new(domain: :both).install("thread_safe")` — that
   answers a Ruby backtrace.
 - An installed gemspec is stub format here (`# stub:` header, no `files:`),

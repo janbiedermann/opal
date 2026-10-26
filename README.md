@@ -163,8 +163,11 @@ What code is supposed to run where?
 
 The `lib/opal` directory holds the **parser**, Opal's Ruby parser (a JavaScript
 port of [Prism](https://github.com/ruby/prism)), and the **compiler**, which
-compiles Ruby into JavaScript, with the **builder** and the `opal` **CLI**
-(`exe/opal`). The compiler is also built ready for the browser into
+compiles Ruby into JavaScript, with the **builder** and the CLIs: `exe/opal`
+produces JavaScript, `exe/drill` runs programs through the builders and
+runners (`-R nodejs`, `chrome`, `firefox`, `server`) for testing, and
+`exe/ruby`/`exe/irb` run programs and the interactive shell. The compiler is
+also built ready for the browser into
 `opal-parser.js` to allow compilation in any JavaScript environment.
 
 ### opal/

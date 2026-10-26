@@ -39,7 +39,7 @@ Now, we get almost the same output, except that our entrypoint is named `index.m
 As in the default mode, instead of outputting your compiled program to a directory, you can use a runner, like `node` (node that not all the runners are supported yet):
 
 ```bash
-opal --esm --directory -Rnode my_program.rb
+drill --esm --directory -Rnode my_program.rb
 ```
 
 This command should simply output the following:

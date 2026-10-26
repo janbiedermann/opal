@@ -13,10 +13,10 @@ $ opal --compile --no-source-map app.rb    # without
 $ opal --compile -P app.js.map app.rb      # also writes the map to a file
 ```
 
-When running code (`opal app.rb`, the default nodejs runner, or `-R chrome`
+When running code (`drill app.rb`, the default nodejs runner, or `-R chrome`
 etc.), the source maps are used for the backtraces.
 
-`opal --debug-source-map -e 'puts 123'` prints a link to a source map
+`echo 'puts 123' | opal --debug-source-map` prints a link to a source map
 visualization of the compiled code.
 
 ## The builder
@@ -36,7 +36,8 @@ In [directory mode](directory_mode.md) each file gets its own `.map` file.
 
 ## The server runner
 
-`opal -R server app.rb` serves the program with its source map embedded.
+`opal -R server app.rb` (with `exe/drill`, the running CLI) serves the program
+with its source map embedded.
 
 ## The compiler
 
